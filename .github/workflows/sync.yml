@@ -1,0 +1,17 @@
+name: Sheet sync
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: POST internal sync
+        run: |
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header "X-Sync-Token: ${{ secrets.SYNC_TOKEN }}" \
+            "${{ secrets.SYNC_URL }}/internal/sync"

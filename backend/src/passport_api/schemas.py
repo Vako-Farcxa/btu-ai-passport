@@ -24,3 +24,12 @@ class Skill(BaseModel):
     skill: str
     badge: str
     awarded_on: str | None
+
+
+class SyncResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    status: Literal["completed", "skipped", "failed"]
+    rows_read: int
+    versions_created: int
+    error: str | None = None

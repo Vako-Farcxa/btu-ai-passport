@@ -8,6 +8,8 @@ class Settings(BaseSettings):
     supabase_service_role_key: str = ""
     sync_token: str = ""
     cors_origins: list[str] = ["http://localhost:3000"]
+    sheet_id: str = ""
+    google_service_account_json: str = ""
 
 
 settings = Settings()
