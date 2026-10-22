@@ -1,8 +1,10 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { messages } from '@/i18n/messages'
 import {
+  downloadPassportPdf,
   explainPassportError,
+  passportPdfPath,
   renderPassportLines,
   type PassportResponse,
 } from '@/lib/api/passport'
@@ -80,4 +82,54 @@ describe('passport view', () => {
     expect(text).toContain(messages.ka.passportId)
     expect(text).not.toContain(otherPassportId)
   })
+
+  it('requests the selected language and keeps pdf_not_ready off the empty state', async () => {
+    expect(passportPdfPath(2, 'ka')).toBe('/me/passport/versions/2/pdf?lang=ka')
+    expect(explainPassportError('pdf_not_ready', 'en')).toBe(
+      messages.en.pdfNotReady,
+    )
+    expect(explainPassportError('pdf_not_ready', 'ka')).toBe(
+      messages.ka.pdfNotReady,
+    )
+    expect(messages.en.pdfNotReady).not.toBe(messages.en.emptyPassport)
+    expect(messages.ka.pdfNotReady).not.toBe(messages.ka.emptyPassport)
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 409,
+        blob: async () => new Blob(),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        blob: async () => new Blob(['%PDF-1.4'], { type: 'application/pdf' }),
+      })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(downloadPassportPdf('token', 2, 'en')).rejects.toMatchObject({
+      code: 'pdf_not_ready',
+    })
+    const file = await downloadPassportPdf('token', 2, 'ka')
+    expect(await file.text()).toContain('%PDF-1.4')
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      'http://localhost:8000/me/passport/versions/2/pdf?lang=en',
+      expect.objectContaining({
+        headers: { Authorization: 'Bearer token' },
+      }),
+    )
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      'http://localhost:8000/me/passport/versions/2/pdf?lang=ka',
+      expect.objectContaining({
+        headers: { Authorization: 'Bearer token' },
+      }),
+    )
+  })
+})
+
+afterEach(() => {
+  vi.unstubAllGlobals()
 })

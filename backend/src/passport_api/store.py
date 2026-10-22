@@ -18,6 +18,8 @@ class StoredVersion:
     tx_hash: str | None
     issued_at: str
     skills: tuple[Skill, ...]
+    pdf_en_path: str | None = None
+    pdf_ka_path: str | None = None
 
 
 class VersionStore(Protocol):

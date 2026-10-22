@@ -1,30 +1,62 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 
 import { LocaleSwitcher } from '@/components/locale-switcher'
 import { SignInButton } from '@/components/sign-in-button'
-import { messages } from '@/i18n/messages'
+import { messages, type Locale } from '@/i18n/messages'
 import { useLocale } from '@/i18n/use-locale'
-import { explainPassportError, orderedVersions } from '@/lib/api/passport'
+import {
+  downloadPassportPdf,
+  explainPassportError,
+  orderedVersions,
+  PassportRequestError,
+} from '@/lib/api/passport'
 import { useMyPassport } from '@/lib/api/use-passport'
 import type { PassportVersion } from '@/lib/api/types'
+import { readAccessToken } from '@/lib/supabase/client'
 
 const linkClass =
   'underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#10243e]'
 
+const buttonClass =
+  'w-fit rounded-md px-2 py-1 text-sm underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#10243e]'
+
 export default function PassportPage() {
   const [locale, setLocale] = useLocale()
   const session = useMyPassport()
+  const [pdfNotice, setPdfNotice] = useState<string | null>(null)
   const copy = messages[locale]
 
   useEffect(() => {
     document.documentElement.lang = locale
   }, [locale])
-
   const passport = session.kind === 'ready' ? session.body.passport : null
   const versions = session.kind === 'ready' ? orderedVersions(session.body) : []
   const current = versions.find((version) => version.is_current) ?? versions[0]
+
+  async function onDownload(version: number) {
+    setPdfNotice(null)
+    try {
+      const token = await readAccessToken()
+      if (!token) {
+        setPdfNotice(copy.signInRequired)
+        return
+      }
+      const file = await downloadPassportPdf(token, version, locale)
+      const url = URL.createObjectURL(file)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `passport-v${version}-${locale}.pdf`
+      document.body.append(link)
+      link.click()
+      link.remove()
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+    } catch (error) {
+      const code = error instanceof PassportRequestError ? error.code : 'error'
+      setPdfNotice(explainPassportError(code, locale))
+    }
+  }
 
   return (
     <main className="mx-auto flex w-full max-w-xl flex-1 flex-col gap-8 px-6 py-16 text-[#10243e]">
@@ -59,6 +91,7 @@ export default function PassportPage() {
             {': '}
             {current.version}
           </p>
+          {pdfNotice ? <p role="alert">{pdfNotice}</p> : null}
           <div className="flex flex-col gap-3">
             <h2 className="text-xl font-semibold">{copy.history}</h2>
             <ol className="flex flex-col gap-4">
@@ -72,6 +105,13 @@ export default function PassportPage() {
                     {version.is_current ? ` · ${copy.currentVersion}` : ''}
                   </h3>
                   <VersionFacts locale={locale} version={version} />
+                  <button
+                    type="button"
+                    className={buttonClass}
+                    onClick={() => void onDownload(version.version)}
+                  >
+                    {copy.downloadPdf}
+                  </button>
                 </li>
               ))}
             </ol>
@@ -95,7 +135,7 @@ function VersionFacts({
   locale,
   version,
 }: {
-  locale: 'en' | 'ka'
+  locale: Locale
   version: PassportVersion
 }) {
   const copy = messages[locale]

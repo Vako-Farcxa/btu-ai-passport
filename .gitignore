@@ -21,3 +21,5 @@ Thumbs.db
 *.tmp
 *.swp
 .idea/
+.vscode/
+backend/var/

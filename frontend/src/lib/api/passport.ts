@@ -7,7 +7,8 @@ import {
 
 export type { PassportResponse } from '@/lib/api/types'
 
-export type PassportErrorCode = 'domain_not_allowed' | 'unauthorized' | 'error'
+export type PassportErrorCode =
+  'domain_not_allowed' | 'unauthorized' | 'pdf_not_ready' | 'error'
 
 export class PassportRequestError extends Error {
   readonly code: PassportErrorCode
@@ -26,7 +27,30 @@ export function explainPassportError(
   const copy = messages[locale]
   if (code === 'domain_not_allowed') return copy.domainNotAllowed
   if (code === 'unauthorized') return copy.signInRequired
+  if (code === 'pdf_not_ready') return copy.pdfNotReady
   return copy.passportError
+}
+
+export function passportPdfPath(version: number, lang: Locale): string {
+  return `/me/passport/versions/${version}/pdf?lang=${lang}`
+}
+
+export async function downloadPassportPdf(
+  token: string,
+  version: number,
+  lang: Locale,
+): Promise<Blob> {
+  const base = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
+  const response = await fetch(`${base}${passportPdfPath(version, lang)}`, {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: 'no-store',
+  })
+  if (response.status === 409) throw new PassportRequestError('pdf_not_ready')
+  if (response.status === 403)
+    throw new PassportRequestError('domain_not_allowed')
+  if (response.status === 401) throw new PassportRequestError('unauthorized')
+  if (!response.ok) throw new PassportRequestError('error')
+  return response.blob()
 }
 
 export function orderedVersions(body: PassportResponse): PassportVersion[] {

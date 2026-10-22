@@ -32,6 +32,8 @@ type Copy = {
   history: string
   verificationCode: string
   versionLabel: string
+  downloadPdf: string
+  pdfNotReady: string
 }
 
 export const messages: Record<Locale, Copy> = {
@@ -73,6 +75,8 @@ export const messages: Record<Locale, Copy> = {
     history: 'Version history',
     verificationCode: 'Verification code',
     versionLabel: 'Version',
+    downloadPdf: 'Download PDF',
+    pdfNotReady: "This version's PDF is not ready yet.",
   },
   ka: {
     title: 'პასპორტის შემოწმება',
@@ -112,6 +116,8 @@ export const messages: Record<Locale, Copy> = {
     history: 'ვერსიების ისტორია',
     verificationCode: 'ვერიფიკაციის კოდი',
     versionLabel: 'ვერსია',
+    downloadPdf: 'PDF-ის ჩამოტვირთვა',
+    pdfNotReady: 'ამ ვერსიის PDF ჯერ მზად არ არის.',
   },
 }
 

@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     cors_origins: list[str] = ["http://localhost:3000"]
     sheet_id: str = ""
     google_service_account_json: str = ""
+    pdf_storage_dir: str = ""
 
 
 settings = Settings()

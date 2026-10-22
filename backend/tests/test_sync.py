@@ -163,15 +163,15 @@ def test_disappeared_email_leaves_the_old_passport() -> None:
     assert any(version.passport_id == grace_id for version in store.versions)
 
 
-def test_new_version_stays_pending_without_pdfs() -> None:
+def test_new_version_stays_pending_with_both_pdfs() -> None:
     store = MemorySyncStore()
     run_sync(
         store, FakeSheet([sheet_row("ada@btu.edu.ge", "Ada", "Python", "Foundation", "2025-01-15")])
     )
     version = store.versions[0]
     assert version.anchor_status == "pending"
-    assert version.pdf_en_path is None
-    assert version.pdf_ka_path is None
+    assert version.pdf_en_path == f"{version.passport_id}/v{version.version_number}/en.pdf"
+    assert version.pdf_ka_path == f"{version.passport_id}/v{version.version_number}/ka.pdf"
     assert version.tx_hash is None
     assert VERIFICATION_CODE.fullmatch(version.verification_code)
     assert HASH.fullmatch(version.verification_id_hash)
@@ -322,7 +322,7 @@ def test_authorized_sync_returns_the_contract_body(monkeypatch: pytest.MonkeyPat
     assert overlapping.reads == 0
 
 
-def test_sync_does_not_import_pdf_or_chain() -> None:
+def test_sync_imports_pdf_and_does_not_import_chain() -> None:
     source = (REPO_ROOT / "backend" / "src" / "passport_api" / "sync.py").read_text()
     tree = ast.parse(source)
     imported: set[str] = set()
@@ -331,7 +331,7 @@ def test_sync_does_not_import_pdf_or_chain() -> None:
             imported.add(node.module)
         if isinstance(node, ast.Import):
             imported.update(alias.name for alias in node.names)
-    assert "passport_api.pdf" not in imported
+    assert "passport_api.pdf" in imported
     assert "passport_api.chain" not in imported
 
 

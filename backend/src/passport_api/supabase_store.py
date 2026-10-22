@@ -15,7 +15,7 @@ class SupabaseStore:
             .table("passport_versions")
             .select(
                 "student_id, version_number, holder_name, verification_code, "
-                "anchor_status, tx_hash, issued_at, "
+                "anchor_status, tx_hash, issued_at, pdf_en_path, pdf_ka_path, "
                 "skill_entries(skill, badge, awarded_on, position), "
                 "students(email, full_name, passport_id)"
             )
@@ -50,7 +50,7 @@ class SupabaseStore:
             .select(
                 "email, full_name, passport_id, "
                 "passport_versions(version_number, holder_name, verification_code, "
-                "anchor_status, tx_hash, issued_at, "
+                "anchor_status, tx_hash, issued_at, pdf_en_path, pdf_ka_path, "
                 "skill_entries(skill, badge, awarded_on, position))"
             )
             .eq("email", email.strip().lower())
@@ -100,6 +100,8 @@ def _version_from_row(row: dict[str, object]) -> StoredVersion:
     )
     tx_hash = row["tx_hash"]
     issued_at = row.get("issued_at")
+    pdf_en_path = row.get("pdf_en_path")
+    pdf_ka_path = row.get("pdf_ka_path")
     return StoredVersion(
         passport_id=str(student["passport_id"]),
         email=str(student["email"]),
@@ -111,4 +113,6 @@ def _version_from_row(row: dict[str, object]) -> StoredVersion:
         tx_hash=None if tx_hash is None else str(tx_hash),
         issued_at="1970-01-01T00:00:00Z" if issued_at is None else str(issued_at),
         skills=skills,
+        pdf_en_path=None if pdf_en_path is None else str(pdf_en_path),
+        pdf_ka_path=None if pdf_ka_path is None else str(pdf_ka_path),
     )

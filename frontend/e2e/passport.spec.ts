@@ -107,7 +107,9 @@ test('a signed-in student cannot open another passport', async ({ page }) => {
   await expect(page.getByText('Machine Learning')).toBeVisible()
   await expect(page.getByText(OTHER_ID)).toHaveCount(0)
   await expect(page.getByText(OTHER_CODE)).toHaveCount(0)
-  await expect(page.getByRole('button', { name: /download/i })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Download PDF' })).toHaveCount(
+    2,
+  )
 
   await page.getByRole('button', { name: 'ქართული' }).click()
   await expect(page.getByText('პასპორტის ID')).toBeVisible()
@@ -116,4 +118,54 @@ test('a signed-in student cannot open another passport', async ({ page }) => {
   await page.goto(`/passport/${OTHER_ID}`)
   await expect(page.getByText(OTHER_CODE)).toHaveCount(0)
   await expect(page.getByText('Nino Beridze')).toHaveCount(0)
+})
+
+test('a student downloads the PDF for the selected language', async ({
+  page,
+}) => {
+  await page.route(API, async (route) => {
+    await route.fulfill({ json: caller })
+  })
+  await page.route('**/me/passport/versions/**/pdf**', async (route) => {
+    const url = new URL(route.request().url())
+    expect(route.request().headers().authorization).toBe('Bearer test-token')
+    if (url.searchParams.get('lang') === 'ka') {
+      await route.fulfill({
+        status: 409,
+        contentType: 'application/json',
+        body: JSON.stringify({ code: 'pdf_not_ready' }),
+      })
+      return
+    }
+    expect(url.pathname).toBe('/me/passport/versions/2/pdf')
+    expect(url.searchParams.get('lang')).toBe('en')
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/pdf',
+      body: Buffer.from('%PDF-1.4\n'),
+    })
+  })
+
+  await page.goto('/passport')
+  const downloadPromise = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Download PDF' }).first().click()
+  await expect((await downloadPromise).suggestedFilename()).toBe(
+    'passport-v2-en.pdf',
+  )
+  await expect(page.getByText(OWN_ID)).toBeVisible()
+  await expect(page.getByText('No passport is available yet.')).toHaveCount(0)
+
+  await page.getByRole('button', { name: 'ქართული' }).click()
+  await page.getByRole('button', { name: 'PDF-ის ჩამოტვირთვა' }).first().click()
+  await expect(
+    page
+      .getByRole('alert')
+      .filter({ hasText: 'ამ ვერსიის PDF ჯერ მზად არ არის.' }),
+  ).toBeVisible()
+  await expect(page.getByText('პასპორტის ID')).toBeVisible()
+  await expect(page.getByText(OWN_ID)).toBeVisible()
+  await expect(
+    page.getByText('პასპორტი ჯერ არ არის ხელმისაწვდომი.'),
+  ).toHaveCount(0)
+  await expect(page.getByText(OTHER_ID)).toHaveCount(0)
 })

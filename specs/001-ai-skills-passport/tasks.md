@@ -128,14 +128,14 @@
 
 ### Tests
 
-- [ ] T033 [P] [US1] Write failing pytest in `backend/tests/test_pdf.py`. Filling uses canonical fields `holder_name`, `passport_id`, `version`, `issued_on`, `verification_code`, `skill_{n}_name`, `skill_{n}_badge`, and `skill_{n}_date`. Overflow skills are appended, not dropped. Georgian text is drawn with the TTF from `backend/assets/fonts/`. Skill wording is copied, not translated. Re-running fill for the same version overwrites the same storage paths `{passport_id}/v{version_number}/en.pdf` and `ka.pdf`.
+- [X] T033 [P] [US1] Write failing pytest in `backend/tests/test_pdf.py`. Filling uses canonical fields `holder_name`, `passport_id`, `version`, `issued_on`, `verification_code`, `skill_{n}_name`, `skill_{n}_badge`, and `skill_{n}_date`. Overflow skills are appended, not dropped. Georgian text is drawn with the TTF from `backend/assets/fonts/`. Skill wording is copied, not translated. Re-running fill for the same version overwrites the same storage paths `{passport_id}/v{version_number}/en.pdf` and `ka.pdf`.
 
 ### Implementation
 
-- [ ] T034 [US1] Implement `backend/src/passport_api/pdf.py` with pypdf for AcroForm fill and reportlab for overflow pages. Read the field map from `backend/assets/templates/fields.json` for `passport-en.pdf` and `passport-ka.pdf`. Upload to the private `passports` bucket and set `pdf_en_path` and `pdf_ka_path`.
-- [ ] T035 [US1] After a version insert, and when those paths are null on a later sync, call the PDF step from `backend/src/passport_api/sync.py`. Still do not call the chain.
-- [ ] T036 [US2] Add `GET /me/passport/versions/{version}/pdf?lang=en|ka` to `backend/src/passport_api/api/me.py`. Owner and `btu.edu.ge` checks apply. Missing version is `404` `version_not_found`. Null path is `409` `pdf_not_ready`. Stream `application/pdf`.
-- [ ] T037 [US2] Add a download control to `frontend/src/app/passport/page.tsx` that requests the PDF for the selected locale and surfaces `pdf_not_ready` without treating it as an empty passport
+- [X] T034 [US1] Implement `backend/src/passport_api/pdf.py` with pypdf for AcroForm fill and reportlab for overflow pages. Read the field map from `backend/assets/templates/fields.json` for `passport-en.pdf` and `passport-ka.pdf`. Upload to the private `passports` bucket and set `pdf_en_path` and `pdf_ka_path`.
+- [X] T035 [US1] After a version insert, and when those paths are null on a later sync, call the PDF step from `backend/src/passport_api/sync.py`. Still do not call the chain.
+- [X] T036 [US2] Add `GET /me/passport/versions/{version}/pdf?lang=en|ka` to `backend/src/passport_api/api/me.py`. Owner and `btu.edu.ge` checks apply. Missing version is `404` `version_not_found`. Null path is `409` `pdf_not_ready`. Stream `application/pdf`.
+- [X] T037 [US2] Add a download control to `frontend/src/app/passport/page.tsx` that requests the PDF for the selected locale and surfaces `pdf_not_ready` without treating it as an empty passport
 
 **Checkpoint**: Versions now have both PDFs. Anchoring is still pending, so sheet-issued codes still verify as `error`.
 

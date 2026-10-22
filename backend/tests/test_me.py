@@ -1,5 +1,6 @@
 import json
 import time
+from pathlib import Path
 
 import jwt
 import pytest
@@ -8,6 +9,9 @@ from fastapi.testclient import TestClient
 from jwt.algorithms import RSAAlgorithm
 
 from passport_api.main import app
+from passport_api.pdf import LocalPdfStorage
+from passport_api.settings import settings
+from passport_api.store import MemoryStore, StoredVersion
 
 client = TestClient(app)
 
@@ -117,3 +121,101 @@ def test_expired_or_wrong_key_is_unauthorized(monkeypatch: pytest.MonkeyPatch) -
     assert expired.json() == {"code": "unauthorized"}
     assert foreign.status_code == 401
     assert foreign.json() == {"code": "unauthorized"}
+
+
+def _stored(
+    *,
+    email: str,
+    passport_id: str,
+    version: int,
+    code: str,
+    pdf_en_path: str | None,
+    pdf_ka_path: str | None,
+) -> StoredVersion:
+    return StoredVersion(
+        passport_id=passport_id,
+        email=email,
+        full_name="Nino Beridze",
+        version=version,
+        holder_name="Nino Beridze",
+        verification_code=code,
+        anchor_status="pending",
+        tx_hash=None,
+        issued_at="2025-06-01T00:00:00Z",
+        skills=(),
+        pdf_en_path=pdf_en_path,
+        pdf_ka_path=pdf_ka_path,
+    )
+
+
+def test_owner_downloads_one_language_and_cannot_read_another_student(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _use_test_jwks(monkeypatch)
+    monkeypatch.setattr(settings, "pdf_storage_dir", str(tmp_path))
+    monkeypatch.setattr(settings, "supabase_url", "")
+    monkeypatch.setattr(settings, "supabase_service_role_key", "")
+    own_en = "BTU-A1B2C3D4E5/v2/en.pdf"
+    own_ka = "BTU-A1B2C3D4E5/v2/ka.pdf"
+    other_en = "BTU-V2W3X4Y5Z6/v1/en.pdf"
+    storage = LocalPdfStorage(tmp_path)
+    storage.put(own_en, b"%PDF-1.4\nowner-en")
+    storage.put(own_ka, b"%PDF-1.4\nowner-ka")
+    storage.put(other_en, b"%PDF-1.4\nother-student")
+    store = MemoryStore(
+        (
+            _stored(
+                email="demo.student@btu.edu.ge",
+                passport_id="BTU-A1B2C3D4E5",
+                version=2,
+                code="A1B2-C3D4-E5F6-G7H8",
+                pdf_en_path=own_en,
+                pdf_ka_path=own_ka,
+            ),
+            _stored(
+                email="demo.student@btu.edu.ge",
+                passport_id="BTU-A1B2C3D4E5",
+                version=1,
+                code="K9M2-N3P4-Q5R6-S7T8",
+                pdf_en_path=None,
+                pdf_ka_path=None,
+            ),
+            _stored(
+                email="error.student@btu.edu.ge",
+                passport_id="BTU-V2W3X4Y5Z6",
+                version=1,
+                code="V2W3-X4Y5-Z6A7-B8C9",
+                pdf_en_path=other_en,
+                pdf_ka_path=other_en,
+            ),
+        )
+    )
+    monkeypatch.setattr("passport_api.api.me.get_store", lambda: store)
+    headers = {"Authorization": f"Bearer {_token('demo.student@btu.edu.ge')}"}
+    english = client.get("/me/passport/versions/2/pdf?lang=en", headers=headers)
+    georgian = client.get("/me/passport/versions/2/pdf?lang=ka", headers=headers)
+    missing = client.get("/me/passport/versions/1/pdf?lang=en", headers=headers)
+    other = client.get(
+        "/me/passport/versions/2/pdf?lang=en",
+        headers={"Authorization": f"Bearer {_token('error.student@btu.edu.ge')}"},
+    )
+    refused = client.get(
+        "/me/passport/versions/2/pdf?lang=en",
+        headers={"Authorization": f"Bearer {_token('other@gmail.com')}"},
+    )
+    anonymous = client.get("/me/passport/versions/2/pdf?lang=en")
+    assert english.status_code == 200
+    assert english.headers["content-type"].startswith("application/pdf")
+    assert english.content == b"%PDF-1.4\nowner-en"
+    assert georgian.status_code == 200
+    assert georgian.content == b"%PDF-1.4\nowner-ka"
+    assert b"other-student" not in english.content
+    assert missing.status_code == 409
+    assert missing.json() == {"code": "pdf_not_ready"}
+    assert other.status_code == 404
+    assert other.json() == {"code": "version_not_found"}
+    assert refused.status_code == 403
+    assert refused.json() == {"code": "domain_not_allowed"}
+    assert anonymous.status_code == 401
+    assert anonymous.json() == {"code": "unauthorized"}

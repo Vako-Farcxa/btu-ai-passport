@@ -19,6 +19,7 @@ from passport_api.fingerprint import (
     skill_fingerprint,
     verification_id_hash,
 )
+from passport_api.pdf import PassportPdf, get_storage, publish_pdfs
 from passport_api.schemas import Skill, SyncResult
 from passport_api.settings import settings
 
@@ -55,6 +56,18 @@ class VersionRecord:
     pdf_en_path: str | None
     pdf_ka_path: str | None
     tx_hash: str | None
+    issued_at: str
+    skills: tuple[Skill, ...]
+
+
+@dataclass(frozen=True)
+class PendingPdf:
+    email: str
+    passport_id: str
+    version_number: int
+    holder_name: str
+    verification_code: str
+    issued_at: str
     skills: tuple[Skill, ...]
 
 
@@ -116,6 +129,12 @@ class SyncStore(Protocol):
     def taken_verification_codes(self) -> set[str]: ...
 
     def taken_content_hashes(self) -> set[str]: ...
+
+    def pending_pdfs(self) -> list[PendingPdf]: ...
+
+    def save_pdf_paths(
+        self, email: str, version_number: int, en_path: str, ka_path: str
+    ) -> None: ...
 
 
 class FakeSheet:
@@ -229,6 +248,29 @@ class MemorySyncStore:
     def taken_content_hashes(self) -> set[str]:
         return {version.content_hash for version in self.versions}
 
+    def pending_pdfs(self) -> list[PendingPdf]:
+        return [
+            PendingPdf(
+                email=version.email,
+                passport_id=version.passport_id,
+                version_number=version.version_number,
+                holder_name=version.holder_name,
+                verification_code=version.verification_code,
+                issued_at=version.issued_at,
+                skills=version.skills,
+            )
+            for version in self.versions
+            if version.pdf_en_path is None or version.pdf_ka_path is None
+        ]
+
+    def save_pdf_paths(self, email: str, version_number: int, en_path: str, ka_path: str) -> None:
+        for version in self.versions:
+            if version.email == email and version.version_number == version_number:
+                version.pdf_en_path = en_path
+                version.pdf_ka_path = ka_path
+                return
+        raise RuntimeError("version_missing")
+
     def _close(self, status: str, rows_read: int, versions_created: int, error: str | None) -> None:
         for run in reversed(self.runs):
             if run.status == "running":
@@ -338,6 +380,7 @@ class SupabaseSyncStore:
                     "skill_fingerprint": version.skill_fingerprint,
                     "content_hash": version.content_hash,
                     "anchor_status": "pending",
+                    "issued_at": version.issued_at,
                 }
             )
             .execute()
@@ -377,6 +420,48 @@ class SupabaseSyncStore:
     def taken_content_hashes(self) -> set[str]:
         response = get_supabase().table("passport_versions").select("content_hash").execute()
         return {str(row["content_hash"]) for row in _table_rows(response.data)}
+
+    def pending_pdfs(self) -> list[PendingPdf]:
+        response = (
+            get_supabase()
+            .table("passport_versions")
+            .select(
+                "version_number, holder_name, verification_code, issued_at, "
+                "skill_entries(skill, badge, awarded_on, position), "
+                "students(email, passport_id)"
+            )
+            .or_("pdf_en_path.is.null,pdf_ka_path.is.null")
+            .execute()
+        )
+        pending: list[PendingPdf] = []
+        for row in _table_rows(response.data):
+            student = _student_embed(row.get("students"))
+            if student is None:
+                continue
+            issued_at = row.get("issued_at")
+            pending.append(
+                PendingPdf(
+                    email=str(student["email"]),
+                    passport_id=str(student["passport_id"]),
+                    version_number=_as_int(row["version_number"]),
+                    holder_name=str(row["holder_name"]),
+                    verification_code=str(row["verification_code"]),
+                    issued_at=_now() if issued_at is None else str(issued_at),
+                    skills=_skills_from_rows(row.get("skill_entries")),
+                )
+            )
+        return pending
+
+    def save_pdf_paths(self, email: str, version_number: int, en_path: str, ka_path: str) -> None:
+        student_id = self._student_id(email)
+        (
+            get_supabase()
+            .table("passport_versions")
+            .update({"pdf_en_path": en_path, "pdf_ka_path": ka_path})
+            .eq("student_id", student_id)
+            .eq("version_number", version_number)
+            .execute()
+        )
 
     def _student_id(self, email: str) -> str:
         response = (
@@ -432,7 +517,8 @@ def _issue_versions(store: SyncStore, raw_rows: list[dict[str, object]]) -> int:
     codes = store.taken_verification_codes()
     content_hashes = store.taken_content_hashes()
     created = 0
-    for email, group in _group_rows(raw_rows).items():
+    groups = _group_rows(raw_rows)
+    for email, group in groups.items():
         skills = tuple(
             canonical_skills(
                 [
@@ -481,6 +567,7 @@ def _issue_versions(store: SyncStore, raw_rows: list[dict[str, object]]) -> int:
                 _record_key(email, fact.skill, fact.badge, fact.raw_awarded_on),
                 email,
             )
+    _fill_pending_pdfs(store, set(groups))
     return created
 
 
@@ -520,8 +607,48 @@ def _insert_version(
             pdf_en_path=None,
             pdf_ka_path=None,
             tx_hash=None,
+            issued_at=_now(),
             skills=skills,
         )
+    )
+
+
+def _fill_pending_pdfs(store: SyncStore, emails: set[str]) -> None:
+    storage = get_storage()
+    for pending in store.pending_pdfs():
+        if pending.email not in emails:
+            continue
+        en_path, ka_path = publish_pdfs(
+            PassportPdf(
+                holder_name=pending.holder_name,
+                passport_id=pending.passport_id,
+                version=pending.version_number,
+                issued_on=pending.issued_at[:10],
+                verification_code=pending.verification_code,
+                skills=pending.skills,
+            ),
+            storage,
+        )
+        store.save_pdf_paths(pending.email, pending.version_number, en_path, ka_path)
+
+
+def _student_embed(value: object) -> dict[str, object] | None:
+    if isinstance(value, list):
+        value = value[0] if value else None
+    if isinstance(value, dict):
+        return cast(dict[str, object], value)
+    return None
+
+
+def _skills_from_rows(value: object) -> tuple[Skill, ...]:
+    ordered = sorted(_nested_rows(value), key=lambda item: _as_int(item.get("position", 0)))
+    return tuple(
+        Skill(
+            skill=str(item["skill"]),
+            badge=str(item["badge"]),
+            awarded_on=None if item.get("awarded_on") is None else str(item["awarded_on"]),
+        )
+        for item in ordered
     )
 
 

@@ -1,9 +1,12 @@
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Header
+from fastapi.responses import Response
 
 from passport_api.auth import email_from_authorization
 from passport_api.demo_data import DEMO_VERSIONS
+from passport_api.errors import APIError
+from passport_api.pdf import get_storage
 from passport_api.schemas import Anchor, Passport, PassportResponse, PassportVersion
 from passport_api.settings import settings
 from passport_api.store import MemoryStore, StoredVersion
@@ -55,3 +58,32 @@ def my_passport(
 ) -> PassportResponse:
     email = email_from_authorization(authorization)
     return passport_response(get_store().versions_for_email(email))
+
+
+@router.get("/me/passport/versions/{version}/pdf")
+def download_passport_pdf(
+    version: int,
+    lang: Literal["en", "ka"],
+    authorization: Annotated[str | None, Header()] = None,
+) -> Response:
+    if version < 1:
+        raise APIError(404, "version_not_found")
+    email = email_from_authorization(authorization)
+    match = next(
+        (item for item in get_store().versions_for_email(email) if item.version == version),
+        None,
+    )
+    if match is None:
+        raise APIError(404, "version_not_found")
+    path = match.pdf_en_path if lang == "en" else match.pdf_ka_path
+    if path is None:
+        raise APIError(409, "pdf_not_ready")
+    data = get_storage().get(path)
+    if data is None:
+        raise APIError(409, "pdf_not_ready")
+    filename = f"{match.passport_id}-v{version}-{lang}.pdf"
+    return Response(
+        content=data,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
