@@ -14,6 +14,7 @@ DEMO_VERSIONS: tuple[StoredVersion, ...] = (
         verification_code="K9M2-N3P4-Q5R6-S7T8",
         anchor_status="confirmed",
         tx_hash=TX_OLDER,
+        issued_at="2025-01-15T00:00:00Z",
         skills=(Skill(skill="Python", badge="Foundation", awarded_on="2025-01-15"),),
     ),
     StoredVersion(
@@ -25,6 +26,7 @@ DEMO_VERSIONS: tuple[StoredVersion, ...] = (
         verification_code="A1B2-C3D4-E5F6-G7H8",
         anchor_status="confirmed",
         tx_hash=TX_CURRENT,
+        issued_at="2025-06-01T00:00:00Z",
         skills=(Skill(skill="Machine Learning", badge="Stamp", awarded_on="2025-06-01"),),
     ),
     StoredVersion(
@@ -36,6 +38,7 @@ DEMO_VERSIONS: tuple[StoredVersion, ...] = (
         verification_code="V2W3-X4Y5-Z6A7-B8C9",
         anchor_status="pending",
         tx_hash=None,
+        issued_at="2025-03-01T00:00:00Z",
         skills=(Skill(skill="Prompting", badge="", awarded_on=None),),
     ),
 )

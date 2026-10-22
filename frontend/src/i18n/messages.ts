@@ -15,6 +15,23 @@ type Copy = {
   transaction: string
   language: string
   outcomes: Record<Outcome, string>
+  homeTitle: string
+  homeIntro: string
+  signIn: string
+  signInUnavailable: string
+  verifyLink: string
+  openPassport: string
+  domainNotAllowed: string
+  emptyPassport: string
+  loading: string
+  signInRequired: string
+  passportError: string
+  passportTitle: string
+  passportId: string
+  currentVersion: string
+  history: string
+  verificationCode: string
+  versionLabel: string
 }
 
 export const messages: Record<Locale, Copy> = {
@@ -37,6 +54,25 @@ export const messages: Record<Locale, Copy> = {
       not_found: 'Not found',
       error: 'Error',
     },
+    homeTitle: 'BTU AI Skills Passport',
+    homeIntro:
+      'Sign in with your btu.edu.ge Google account, or check a verification code.',
+    signIn: 'Sign in with Google',
+    signInUnavailable: 'Google sign-in is not configured yet.',
+    verifyLink: 'Verify a code',
+    openPassport: 'Open passport',
+    domainNotAllowed:
+      'This Google account is not a btu.edu.ge address. No passport is available.',
+    emptyPassport: 'No passport is available yet.',
+    loading: 'Loading',
+    signInRequired: 'Sign in to see your passport.',
+    passportError: 'The passport could not be loaded.',
+    passportTitle: 'Your passport',
+    passportId: 'Passport ID',
+    currentVersion: 'Current version',
+    history: 'Version history',
+    verificationCode: 'Verification code',
+    versionLabel: 'Version',
   },
   ka: {
     title: 'პასპორტის შემოწმება',
@@ -57,6 +93,25 @@ export const messages: Record<Locale, Copy> = {
       not_found: 'ვერ მოიძებნა',
       error: 'შეცდომა',
     },
+    homeTitle: 'BTU-ის AI უნარების პასპორტი',
+    homeIntro:
+      'შედით btu.edu.ge Google ანგარიშით, ან შეამოწმეთ ვერიფიკაციის კოდი.',
+    signIn: 'Google-ით შესვლა',
+    signInUnavailable: 'Google-ით შესვლა ჯერ არ არის კონფიგურირებული.',
+    verifyLink: 'კოდის შემოწმება',
+    openPassport: 'პასპორტის გახსნა',
+    domainNotAllowed:
+      'ეს Google ანგარიში არ არის btu.edu.ge მისამართი. პასპორტი მიუწვდომელია.',
+    emptyPassport: 'პასპორტი ჯერ არ არის ხელმისაწვდომი.',
+    loading: 'იტვირთება',
+    signInRequired: 'პასპორტის სანახავად შედით ანგარიშში.',
+    passportError: 'პასპორტის ჩატვირთვა ვერ მოხერხდა.',
+    passportTitle: 'თქვენი პასპორტი',
+    passportId: 'პასპორტის ID',
+    currentVersion: 'მიმდინარე ვერსია',
+    history: 'ვერსიების ისტორია',
+    verificationCode: 'ვერიფიკაციის კოდი',
+    versionLabel: 'ვერსია',
   },
 }
 

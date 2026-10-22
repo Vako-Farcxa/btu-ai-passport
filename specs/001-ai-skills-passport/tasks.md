@@ -104,17 +104,17 @@
 
 ### Tests for User Story 2
 
-- [ ] T025 [P] [US2] Write failing pytest in `backend/tests/test_me.py`. `GET /me/passport` with a valid `btu.edu.ge` token returns that email's passport only, newest version first, including `verification_code`. No row returns `200` and `"passport": null`. A token whose email does not end with `@btu.edu.ge` returns `403` `domain_not_allowed`. Missing or invalid bearer returns `401` `unauthorized`.
-- [ ] T026 [P] [US2] Write failing vitest in `frontend/src/lib/api/passport.test.ts` for the empty body, the `403` explanation, and rendering the caller's versions without another student's passport id
+- [X] T025 [P] [US2] Write failing pytest in `backend/tests/test_me.py`. `GET /me/passport` with a valid `btu.edu.ge` token returns that email's passport only, newest version first, including `verification_code`. No row returns `200` and `"passport": null`. A token whose email does not end with `@btu.edu.ge` returns `403` `domain_not_allowed`. Missing or invalid bearer returns `401` `unauthorized`.
+- [X] T026 [P] [US2] Write failing vitest in `frontend/src/lib/api/passport.test.ts` for the empty body, the `403` explanation, and rendering the caller's versions without another student's passport id
 
 ### Implementation for User Story 2
 
-- [ ] T027 [US2] Verify the Supabase JWT from the JWKS in `backend/src/passport_api/auth.py`, then reject any email that does not end with `@btu.edu.ge`
-- [ ] T028 [P] [US2] Add Supabase browser and server clients in `frontend/src/lib/supabase/client.ts` and `frontend/src/lib/supabase/server.ts`, starting Google sign-in with `hd=btu.edu.ge` as a hint only
-- [ ] T029 [US2] Implement `GET /me/passport` in `backend/src/passport_api/api/me.py` per the OpenAPI `PassportResponse` schema and register it in `backend/src/passport_api/main.py`
-- [ ] T030 [US2] Build `frontend/src/app/passport/page.tsx` with loading, empty, error, passport id, current version, history, and the owner's verification code. Include the locale switcher. Skill text stays as stored. No download button yet.
-- [ ] T031 [US2] Replace the starter content in `frontend/src/app/page.tsx` with BTU sign-in and a link to `/verify`. Show the domain refusal message when the API returns `domain_not_allowed`.
-- [ ] T032 [US2] Add `frontend/e2e/passport.spec.ts` for the empty state, a refused non-BTU session, and a signed-in student who cannot navigate to another passport
+- [X] T027 [US2] Verify the Supabase JWT from the JWKS in `backend/src/passport_api/auth.py`, then reject any email that does not end with `@btu.edu.ge`
+- [X] T028 [P] [US2] Add Supabase browser and server clients in `frontend/src/lib/supabase/client.ts` and `frontend/src/lib/supabase/server.ts`, starting Google sign-in with `hd=btu.edu.ge` as a hint only
+- [X] T029 [US2] Implement `GET /me/passport` in `backend/src/passport_api/api/me.py` per the OpenAPI `PassportResponse` schema and register it in `backend/src/passport_api/main.py`
+- [X] T030 [US2] Build `frontend/src/app/passport/page.tsx` with loading, empty, error, passport id, current version, history, and the owner's verification code. Include the locale switcher. Skill text stays as stored. No download button yet.
+- [X] T031 [US2] Replace the starter content in `frontend/src/app/page.tsx` with BTU sign-in and a link to `/verify`. Show the domain refusal message when the API returns `domain_not_allowed`.
+- [X] T032 [US2] Add `frontend/e2e/passport.spec.ts` for the empty state, a refused non-BTU session, and a signed-in student who cannot navigate to another passport
 
 **Checkpoint**: Student sign-in and history work beside the already finished verify page.
 

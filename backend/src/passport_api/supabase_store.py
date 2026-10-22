@@ -15,7 +15,8 @@ class SupabaseStore:
             .table("passport_versions")
             .select(
                 "student_id, version_number, holder_name, verification_code, "
-                "anchor_status, tx_hash, skill_entries(skill, badge, awarded_on, position), "
+                "anchor_status, tx_hash, issued_at, "
+                "skill_entries(skill, badge, awarded_on, position), "
                 "students(email, full_name, passport_id)"
             )
             .eq("verification_code", normalized)
@@ -42,6 +43,40 @@ class SupabaseStore:
         versions = cast(list[dict[str, object]], rows[0]["passport_versions"])
         return max(int(cast(int, version["version_number"])) for version in versions)
 
+    def versions_for_email(self, email: str) -> tuple[StoredVersion, ...]:
+        response = (
+            get_supabase()
+            .table("students")
+            .select(
+                "email, full_name, passport_id, "
+                "passport_versions(version_number, holder_name, verification_code, "
+                "anchor_status, tx_hash, issued_at, "
+                "skill_entries(skill, badge, awarded_on, position))"
+            )
+            .eq("email", email.strip().lower())
+            .limit(1)
+            .execute()
+        )
+        rows = cast(list[dict[str, object]], response.data)
+        if not rows:
+            return ()
+        student = rows[0]
+        nested = student.get("passport_versions")
+        if not isinstance(nested, list):
+            return ()
+        versions: list[StoredVersion] = []
+        for item in nested:
+            if not isinstance(item, dict):
+                continue
+            row = cast(dict[str, object], dict(item))
+            row["students"] = {
+                "email": student.get("email"),
+                "full_name": student.get("full_name"),
+                "passport_id": student.get("passport_id"),
+            }
+            versions.append(_version_from_row(row))
+        return tuple(versions)
+
 
 def _anchor_status(value: str) -> AnchorStatus:
     if value == "pending":
@@ -64,6 +99,7 @@ def _version_from_row(row: dict[str, object]) -> StoredVersion:
         for item in ordered
     )
     tx_hash = row["tx_hash"]
+    issued_at = row.get("issued_at")
     return StoredVersion(
         passport_id=str(student["passport_id"]),
         email=str(student["email"]),
@@ -73,5 +109,6 @@ def _version_from_row(row: dict[str, object]) -> StoredVersion:
         verification_code=str(row["verification_code"]),
         anchor_status=_anchor_status(str(row["anchor_status"])),
         tx_hash=None if tx_hash is None else str(tx_hash),
+        issued_at="1970-01-01T00:00:00Z" if issued_at is None else str(issued_at),
         skills=skills,
     )

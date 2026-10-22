@@ -21,8 +21,32 @@ export const verifyResultSchema = z.discriminatedUnion('outcome', [
   z.object({ outcome: z.literal('error') }),
 ])
 
+export const passportVersionSchema = z.object({
+  version: z.number().int().positive(),
+  issued_at: z.string(),
+  is_current: z.boolean(),
+  holder_name: z.string(),
+  verification_code: z.string(),
+  skills: z.array(skillSchema),
+  anchor: z.object({
+    status: z.enum(['pending', 'confirmed', 'failed']),
+    tx_url: z.string().url().nullable(),
+  }),
+})
+
+export const passportResponseSchema = z.object({
+  passport: z
+    .object({
+      passport_id: z.string(),
+      versions: z.array(passportVersionSchema),
+    })
+    .nullable(),
+})
+
 export type Skill = z.infer<typeof skillSchema>
 export type VerifyResult = z.infer<typeof verifyResultSchema>
+export type PassportResponse = z.infer<typeof passportResponseSchema>
+export type PassportVersion = z.infer<typeof passportVersionSchema>
 
 export class VerifyInputError extends Error {
   constructor() {

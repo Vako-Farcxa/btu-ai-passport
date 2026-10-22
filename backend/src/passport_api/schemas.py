@@ -26,6 +26,38 @@ class Skill(BaseModel):
     awarded_on: str | None
 
 
+class Anchor(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    status: Literal["pending", "confirmed", "failed"]
+    tx_url: str | None
+
+
+class PassportVersion(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    version: int
+    issued_at: str
+    is_current: bool
+    holder_name: str
+    verification_code: str
+    skills: list[Skill]
+    anchor: Anchor
+
+
+class Passport(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    passport_id: str
+    versions: list[PassportVersion]
+
+
+class PassportResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    passport: Passport | None
+
+
 class SyncResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

@@ -16,6 +16,7 @@ class StoredVersion:
     verification_code: str
     anchor_status: AnchorStatus
     tx_hash: str | None
+    issued_at: str
     skills: tuple[Skill, ...]
 
 
@@ -55,3 +56,7 @@ class MemoryStore:
 
     def version_count(self) -> int:
         return len(self._versions)
+
+    def versions_for_email(self, email: str) -> tuple[StoredVersion, ...]:
+        needle = email.strip().lower()
+        return tuple(version for version in self._versions if version.email.lower() == needle)

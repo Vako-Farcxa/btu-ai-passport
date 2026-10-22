@@ -1,0 +1,73 @@
+from typing import Any, cast
+
+import httpx
+import jwt
+from jwt import PyJWK
+from jwt.exceptions import PyJWTError
+
+from passport_api.errors import APIError
+from passport_api.settings import settings
+
+_ALGORITHMS = ["RS256", "ES256"]
+
+
+def fetch_jwks() -> dict[str, object]:
+    base = settings.supabase_url.rstrip("/")
+    if not base:
+        raise APIError(401, "unauthorized")
+    try:
+        response = httpx.get(f"{base}/auth/v1/.well-known/jwks.json", timeout=5.0)
+        response.raise_for_status()
+    except httpx.HTTPError as exc:
+        raise APIError(401, "unauthorized") from exc
+    payload = response.json()
+    if not isinstance(payload, dict):
+        raise APIError(401, "unauthorized")
+    return cast(dict[str, object], payload)
+
+
+def email_from_authorization(authorization: str | None) -> str:
+    token = _bearer_token(authorization)
+    email = _verified_email(token)
+    if not email.lower().endswith("@btu.edu.ge"):
+        raise APIError(403, "domain_not_allowed")
+    return email.strip().lower()
+
+
+def _bearer_token(authorization: str | None) -> str:
+    if authorization is None:
+        raise APIError(401, "unauthorized")
+    scheme, _, rest = authorization.partition(" ")
+    if scheme.lower() != "bearer" or rest.strip() == "":
+        raise APIError(401, "unauthorized")
+    return rest.strip()
+
+
+def _verified_email(token: str) -> str:
+    try:
+        header = jwt.get_unverified_header(token)
+        kid = header.get("kid")
+        jwk = _matching_jwk(kid if isinstance(kid, str) else None)
+        payload = jwt.decode(
+            token,
+            PyJWK.from_dict(cast(dict[str, Any], jwk)).key,
+            algorithms=_ALGORITHMS,
+            audience="authenticated",
+            options={"require": ["exp", "email"]},
+        )
+    except PyJWTError as exc:
+        raise APIError(401, "unauthorized") from exc
+    email = payload.get("email")
+    if not isinstance(email, str) or email.strip() == "":
+        raise APIError(401, "unauthorized")
+    return email.strip()
+
+
+def _matching_jwk(kid: str | None) -> dict[str, object]:
+    keys = fetch_jwks().get("keys")
+    if not isinstance(keys, list) or kid is None:
+        raise APIError(401, "unauthorized")
+    for key in keys:
+        if isinstance(key, dict) and key.get("kid") == kid:
+            return cast(dict[str, object], key)
+    raise APIError(401, "unauthorized")
