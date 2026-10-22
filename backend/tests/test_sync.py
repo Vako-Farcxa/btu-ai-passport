@@ -322,7 +322,7 @@ def test_authorized_sync_returns_the_contract_body(monkeypatch: pytest.MonkeyPat
     assert overlapping.reads == 0
 
 
-def test_sync_imports_pdf_and_does_not_import_chain() -> None:
+def test_sync_imports_pdf_and_chain() -> None:
     source = (REPO_ROOT / "backend" / "src" / "passport_api" / "sync.py").read_text()
     tree = ast.parse(source)
     imported: set[str] = set()
@@ -332,7 +332,7 @@ def test_sync_imports_pdf_and_does_not_import_chain() -> None:
         if isinstance(node, ast.Import):
             imported.update(alias.name for alias in node.names)
     assert "passport_api.pdf" in imported
-    assert "passport_api.chain" not in imported
+    assert "passport_api.chain" in imported
 
 
 def test_main_starts_no_background_sync() -> None:

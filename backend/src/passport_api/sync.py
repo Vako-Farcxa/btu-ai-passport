@@ -11,6 +11,7 @@ import gspread
 from gspread.auth import READONLY_SCOPES
 from postgrest.exceptions import APIError
 
+from passport_api.chain import AnchorChain, chain_from_settings, publish_anchor
 from passport_api.db import get_supabase
 from passport_api.fingerprint import (
     canonical_skills,
@@ -58,6 +59,7 @@ class VersionRecord:
     tx_hash: str | None
     issued_at: str
     skills: tuple[Skill, ...]
+    anchored_at: str | None = None
 
 
 @dataclass(frozen=True)
@@ -134,6 +136,18 @@ class SyncStore(Protocol):
 
     def save_pdf_paths(
         self, email: str, version_number: int, en_path: str, ka_path: str
+    ) -> None: ...
+
+    def pending_anchors(self) -> list[VersionRecord]: ...
+
+    def save_anchor(
+        self,
+        email: str,
+        version_number: int,
+        *,
+        status: str,
+        tx_hash: str | None,
+        anchored_at: str | None,
     ) -> None: ...
 
 
@@ -268,6 +282,26 @@ class MemorySyncStore:
             if version.email == email and version.version_number == version_number:
                 version.pdf_en_path = en_path
                 version.pdf_ka_path = ka_path
+                return
+        raise RuntimeError("version_missing")
+
+    def pending_anchors(self) -> list[VersionRecord]:
+        return [version for version in self.versions if version.anchor_status != "confirmed"]
+
+    def save_anchor(
+        self,
+        email: str,
+        version_number: int,
+        *,
+        status: str,
+        tx_hash: str | None,
+        anchored_at: str | None,
+    ) -> None:
+        for version in self.versions:
+            if version.email == email and version.version_number == version_number:
+                version.anchor_status = status
+                version.tx_hash = tx_hash
+                version.anchored_at = anchored_at
                 return
         raise RuntimeError("version_missing")
 
@@ -463,6 +497,73 @@ class SupabaseSyncStore:
             .execute()
         )
 
+    def pending_anchors(self) -> list[VersionRecord]:
+        response = (
+            get_supabase()
+            .table("passport_versions")
+            .select(
+                "version_number, holder_name, verification_code, verification_id_hash, "
+                "skill_fingerprint, content_hash, anchor_status, tx_hash, anchored_at, issued_at, "
+                "skill_entries(skill, badge, awarded_on, position), "
+                "students(email, passport_id)"
+            )
+            .neq("anchor_status", "confirmed")
+            .execute()
+        )
+        pending: list[VersionRecord] = []
+        for row in _table_rows(response.data):
+            student = _student_embed(row.get("students"))
+            if student is None:
+                continue
+            issued_at = row.get("issued_at")
+            tx_hash = row.get("tx_hash")
+            anchored_at = row.get("anchored_at")
+            pending.append(
+                VersionRecord(
+                    passport_id=str(student["passport_id"]),
+                    email=str(student["email"]),
+                    version_number=_as_int(row["version_number"]),
+                    holder_name=str(row["holder_name"]),
+                    verification_code=str(row["verification_code"]),
+                    verification_id_hash=str(row["verification_id_hash"]),
+                    skill_fingerprint=str(row["skill_fingerprint"]),
+                    content_hash=str(row["content_hash"]),
+                    anchor_status=str(row["anchor_status"]),
+                    pdf_en_path=None,
+                    pdf_ka_path=None,
+                    tx_hash=None if tx_hash is None else str(tx_hash),
+                    issued_at=_now() if issued_at is None else str(issued_at),
+                    skills=_skills_from_rows(row.get("skill_entries")),
+                    anchored_at=None if anchored_at is None else str(anchored_at),
+                )
+            )
+        return pending
+
+    def save_anchor(
+        self,
+        email: str,
+        version_number: int,
+        *,
+        status: str,
+        tx_hash: str | None,
+        anchored_at: str | None,
+    ) -> None:
+        student_id = self._student_id(email)
+        (
+            get_supabase()
+            .table("passport_versions")
+            .update(
+                {
+                    "anchor_status": status,
+                    "tx_hash": tx_hash,
+                    "anchored_at": anchored_at,
+                }
+            )
+            .eq("student_id", student_id)
+            .eq("version_number", version_number)
+            .execute()
+        )
+
     def _student_id(self, email: str) -> str:
         response = (
             get_supabase().table("students").select("id").eq("email", email).limit(1).execute()
@@ -493,7 +594,7 @@ class SupabaseSyncStore:
         self._running_id = None
 
 
-def run_sync(store: SyncStore, sheet: Sheet) -> SyncResult:
+def run_sync(store: SyncStore, sheet: Sheet, chain: AnchorChain | None = None) -> SyncResult:
     if not store.try_acquire():
         store.record_skipped()
         return SyncResult(status="skipped", rows_read=0, versions_created=0, error=None)
@@ -504,14 +605,16 @@ def run_sync(store: SyncStore, sheet: Sheet) -> SyncResult:
         return SyncResult(
             status="failed", rows_read=0, versions_created=0, error="sheet_unavailable"
         )
-    created = _issue_versions(store, raw_rows)
+    created = _issue_versions(store, raw_rows, chain)
     store.finish(len(raw_rows), created)
     return SyncResult(
         status="completed", rows_read=len(raw_rows), versions_created=created, error=None
     )
 
 
-def _issue_versions(store: SyncStore, raw_rows: list[dict[str, object]]) -> int:
+def _issue_versions(
+    store: SyncStore, raw_rows: list[dict[str, object]], chain: AnchorChain | None
+) -> int:
     states = store.current_students()
     passport_ids = store.taken_passport_ids()
     codes = store.taken_verification_codes()
@@ -567,7 +670,9 @@ def _issue_versions(store: SyncStore, raw_rows: list[dict[str, object]]) -> int:
                 _record_key(email, fact.skill, fact.badge, fact.raw_awarded_on),
                 email,
             )
-    _fill_pending_pdfs(store, set(groups))
+    emails = set(groups)
+    _fill_pending_pdfs(store, emails)
+    _anchor_pending(store, emails, chain)
     return created
 
 
@@ -630,6 +735,28 @@ def _fill_pending_pdfs(store: SyncStore, emails: set[str]) -> None:
             storage,
         )
         store.save_pdf_paths(pending.email, pending.version_number, en_path, ka_path)
+
+
+def _anchor_pending(store: SyncStore, emails: set[str], chain: AnchorChain | None) -> None:
+    client = chain if chain is not None else chain_from_settings()
+    if client is None:
+        return
+    now = _now()
+    for pending in store.pending_anchors():
+        if pending.email not in emails:
+            continue
+        try:
+            publish_anchor(pending, client, now=now)
+        except Exception:
+            pending.anchor_status = "failed"
+            pending.anchored_at = None
+        store.save_anchor(
+            pending.email,
+            pending.version_number,
+            status=pending.anchor_status,
+            tx_hash=pending.tx_hash,
+            anchored_at=pending.anchored_at,
+        )
 
 
 def _student_embed(value: object) -> dict[str, object] | None:

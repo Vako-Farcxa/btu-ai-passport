@@ -11,6 +11,9 @@ class Settings(BaseSettings):
     sheet_id: str = ""
     google_service_account_json: str = ""
     pdf_storage_dir: str = ""
+    amoy_rpc_url: str = ""
+    anchor_contract_address: str = ""
+    btu_issuer_private_key: str = ""
 
 
 settings = Settings()

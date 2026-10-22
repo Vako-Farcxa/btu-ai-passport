@@ -149,14 +149,14 @@
 
 ### Tests
 
-- [ ] T038 [P] [US1] Write failing pytest in `backend/tests/test_chain.py`. The payload is two `bytes32` values and no name, email, or skill string. A second anchor of the same `verification_id_hash` is not sent when the contract slot is filled. `anchor_status` moves `pending` → `confirmed` on a successful receipt, `pending` → `failed` on a failed send, and `failed` → `confirmed` only after a later success. `tx_url` is `https://amoy.polygonscan.com/tx/{tx_hash}`.
+- [X] T038 [P] [US1] Write failing pytest in `backend/tests/test_chain.py`. The payload is two `bytes32` values and no name, email, or skill string. A second anchor of the same `verification_id_hash` is not sent when the contract slot is filled. `anchor_status` moves `pending` → `confirmed` on a successful receipt, `pending` → `failed` on a failed send, and `failed` → `confirmed` only after a later success. `tx_url` is `https://amoy.polygonscan.com/tx/{tx_hash}`.
 
 ### Implementation
 
-- [ ] T039 [US1] Add chain settings `AMOY_RPC_URL`, `ANCHOR_CONTRACT_ADDRESS`, and `BTU_ISSUER_PRIVATE_KEY` to `backend/src/passport_api/settings.py`. Keep them out of `frontend/.env.example`.
-- [ ] T040 [US1] Implement `backend/src/passport_api/chain.py` with web3.py against chain id 80002, loading the ABI from `backend/assets/PassportAnchor.json`. Sender must be the issuer. Persist `tx_hash`, `anchor_status`, and `anchored_at` on the version.
-- [ ] T041 [US1] Add `backend/scripts/deploy_anchor.py` that deploys `specs/001-ai-skills-passport/contracts/PassportAnchor.sol` from the issuer wallet (issuer is `msg.sender`) and writes `backend/assets/PassportAnchor.json` (ABI and bytecode). The running API does not compile Solidity.
-- [ ] T042 [US1] From `backend/src/passport_api/sync.py`, after the version row exists, poll a known `tx_hash` or send one anchor when the contract slot is empty. Do not create a second version for the same `skill_fingerprint`. Confirmed versions then satisfy `valid` / `outdated` in `backend/src/passport_api/verify.py`.
+- [X] T039 [US1] Add chain settings `AMOY_RPC_URL`, `ANCHOR_CONTRACT_ADDRESS`, and `BTU_ISSUER_PRIVATE_KEY` to `backend/src/passport_api/settings.py`. Keep them out of `frontend/.env.example`.
+- [X] T040 [US1] Implement `backend/src/passport_api/chain.py` with web3.py against chain id 80002, loading the ABI from `backend/assets/PassportAnchor.json`. Sender must be the issuer. Persist `tx_hash`, `anchor_status`, and `anchored_at` on the version.
+- [X] T041 [US1] Add `backend/scripts/deploy_anchor.py` that deploys `specs/001-ai-skills-passport/contracts/PassportAnchor.sol` from the issuer wallet (issuer is `msg.sender`) and writes `backend/assets/PassportAnchor.json` (ABI and bytecode). The running API does not compile Solidity.
+- [X] T042 [US1] From `backend/src/passport_api/sync.py`, after the version row exists, poll a known `tx_hash` or send one anchor when the contract slot is empty. Do not create a second version for the same `skill_fingerprint`. Confirmed versions then satisfy `valid` / `outdated` in `backend/src/passport_api/verify.py`.
 
 **Checkpoint**: Sheet-issued versions verify with a real Amoy link. Personal data remains off-chain.
 

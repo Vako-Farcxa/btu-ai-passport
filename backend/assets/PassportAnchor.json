@@ -1,0 +1,54 @@
+{
+  "contractName": "PassportAnchor",
+  "abi": [
+    {
+      "type": "constructor",
+      "inputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "issuer",
+      "inputs": [],
+      "outputs": [{ "name": "", "type": "address" }],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "anchors",
+      "inputs": [{ "name": "verificationIdHash", "type": "bytes32" }],
+      "outputs": [{ "name": "", "type": "bytes32" }],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "anchor",
+      "inputs": [
+        { "name": "contentHash", "type": "bytes32" },
+        { "name": "verificationIdHash", "type": "bytes32" }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "event",
+      "name": "Anchored",
+      "inputs": [
+        { "name": "contentHash", "type": "bytes32", "indexed": true },
+        { "name": "verificationIdHash", "type": "bytes32", "indexed": true }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "error",
+      "name": "NotIssuer",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "AlreadyAnchored",
+      "inputs": []
+    }
+  ],
+  "bytecode": "0x"
+}

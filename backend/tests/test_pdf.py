@@ -1,7 +1,7 @@
 import re
-import sys
 from io import BytesIO
 from pathlib import Path
+from typing import Literal
 
 import pytest
 from pypdf import PdfReader
@@ -81,8 +81,11 @@ def _expected(document: PassportPdf, slots: int) -> dict[str, str]:
 
 def test_fill_uses_canonical_fields_and_appends_overflow() -> None:
     document = _document()
-    for template in ("passport-en.pdf", "passport-ka.pdf"):
-        lang = "en" if template.startswith("passport-en") else "ka"
+    cases: tuple[tuple[Literal["en", "ka"], str], ...] = (
+        ("en", "passport-en.pdf"),
+        ("ka", "passport-ka.pdf"),
+    )
+    for lang, template in cases:
         reader = PdfReader(BytesIO(render_pdf(lang, document)))
         field_map = _field_map(template)
         slots = _slots(field_map)
@@ -162,7 +165,6 @@ def test_sync_writes_pdfs_and_retries_only_missing_paths(
     ka_text = "\n".join(page.extract_text() or "" for page in PdfReader(ka_path).pages)
     assert ENGLISH_SKILL in ka_text
     assert OVERFLOW_SKILL in ka_text
-    assert "passport_api.chain" not in sys.modules
     en_file = tmp_path / f"{ada.passport_id}/v1/en.pdf"
     ada.pdf_en_path = None
     ada.pdf_ka_path = None
@@ -174,7 +176,9 @@ def test_sync_writes_pdfs_and_retries_only_missing_paths(
     assert again.versions_created == 0
     assert ada.pdf_en_path == f"{ada.passport_id}/v1/en.pdf"
     assert ada.pdf_ka_path == f"{ada.passport_id}/v1/ka.pdf"
-    assert (tmp_path / ada.pdf_ka_path).is_file()
+    ka_written = ada.pdf_ka_path
+    assert ka_written is not None
+    assert (tmp_path / ka_written).is_file()
     assert grace.pdf_en_path is None
     assert grace.pdf_ka_path is None
 

@@ -13,7 +13,7 @@
 
 ## Definition of done (run, fix every error, then report what you ran)
 - Frontend (`cd frontend`): `npm run check` (types, lint, format, unit tests); `npm run e2e` for UI changes, and click through it with the Playwright MCP.
-- Backend (`cd backend`): `uv run ruff format . && uv run ruff check . && uv run mypy src && uv run pytest`.
+- Backend (`cd backend`): `uv run ruff format . && uv run ruff check . && uv run mypy . && uv run pytest`.
 - Never claim something works without running it.
 
 ## Quality bar
