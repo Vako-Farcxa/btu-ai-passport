@@ -22,7 +22,7 @@ def test_error_body_accepts_contract_codes() -> None:
 
 def test_error_body_rejects_unknown_code() -> None:
     with pytest.raises(ValidationError):
-        ErrorBody(code="nope")  # type: ignore[arg-type]
+        ErrorBody(code="nope")
 
 
 def test_skill_keeps_empty_badge_and_null_date() -> None:

@@ -2,6 +2,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from passport_api.api.verify import router as verify_router
 from passport_api.errors import APIError
 from passport_api.schemas import ErrorBody
 from passport_api.settings import settings
@@ -15,6 +16,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(verify_router)
 
 
 @app.exception_handler(APIError)
