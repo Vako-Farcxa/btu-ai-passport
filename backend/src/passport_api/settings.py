@@ -14,6 +14,21 @@ class Settings(BaseSettings):
     amoy_rpc_url: str = ""
     anchor_contract_address: str = ""
     btu_issuer_private_key: str = ""
+    # Comma-separated email domains accepted for sign-in and sheet rows.
+    allowed_email_domains: str = "btu.edu.ge"
 
 
 settings = Settings()
+
+
+def allowed_domains() -> list[str]:
+    return [
+        part.strip().lower().lstrip("@")
+        for part in settings.allowed_email_domains.split(",")
+        if part.strip()
+    ]
+
+
+def email_domain_allowed(email: str) -> bool:
+    _, at, domain = email.strip().lower().rpartition("@")
+    return bool(at) and domain in allowed_domains()

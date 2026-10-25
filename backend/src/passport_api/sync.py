@@ -1,5 +1,6 @@
 import hashlib
 import json
+import logging
 import secrets
 import unicodedata
 from collections.abc import Callable
@@ -8,7 +9,6 @@ from datetime import UTC, datetime
 from typing import Any, Protocol, cast
 
 import gspread
-from gspread.auth import READONLY_SCOPES
 from postgrest.exceptions import APIError
 
 from passport_api.chain import AnchorChain, chain_from_settings, publish_anchor
@@ -22,18 +22,86 @@ from passport_api.fingerprint import (
 )
 from passport_api.pdf import PassportPdf, get_storage, publish_pdfs
 from passport_api.schemas import Skill, SyncResult
-from passport_api.settings import settings
+from passport_api.settings import email_domain_allowed, settings
 
+_log = logging.getLogger(__name__)
 _ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
-_COLUMNS = ("email", "full_name", "skill", "badge", "awarded_on")
+_COLUMNS = ("email", "full_name", "skill", "badge", "awarded_on", "passport_id")
+_SHEETS_SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
+# Header aliases, lowercased. The first name in each tuple is the old 5-column format.
+_ALIASES: dict[str, tuple[str, ...]] = {
+    "email": ("email", "btu email (test)", "btu email", "student email"),
+    "full_name": ("full_name", "full name"),
+    "first_name": ("first name", "first_name"),
+    "last_name": ("last name", "last_name"),
+    "skill": ("skill", "skill name", "skill_name"),
+    "badge": ("badge", "badge/stamp code", "badge code", "stamp code"),
+    "awarded_on": ("awarded_on", "date earned", "date_earned"),
+    "passport_id": ("passport_id", "passport id (existing)", "passport id"),
+    "skill_category": ("skill category", "skill_category"),
+}
+# Sync output columns written back by the service (official sheet Q-T, plus G).
+STATUS_SYNCED = "SYNCED"
+STATUS_FAILED = "FAILED"
+_WRITE_COLUMNS: dict[str, tuple[str, ...]] = {
+    "status": ("passport sync status",),
+    "version": ("synced passport version",),
+    "synced_at": ("synced at (utc)", "synced at"),
+    "error": ("sync error / notes", "sync error"),
+    "passport_id": _ALIASES["passport_id"][1:],
+}
+_CATEGORY_BADGES = {
+    "ai skill": "BDG-AI-001",
+    "ai applied skill": "BDG-AI-002",
+    "ai advanced skill": "BDG-AI-003",
+}
 
 
 class SheetUnavailableError(Exception):
     pass
 
 
+@dataclass(frozen=True)
+class RowOutcome:
+    """Sync result for one data row, by its index in read_rows()."""
+
+    index: int
+    status: str
+    version: str
+    synced_at: str
+    error: str
+    passport_id: str
+
+
 class Sheet(Protocol):
     def read_rows(self) -> list[dict[str, object]]: ...
+
+    def write_back(self, outcomes: list[RowOutcome]) -> None: ...
+
+
+def find_header_row(values: list[list[object]]) -> int | None:
+    """Index of the first row that has an email column, or None."""
+    for index, row in enumerate(values):
+        names = {_cell(cell).lower() for cell in row}
+        if names & set(_ALIASES["email"]):
+            return index
+    return None
+
+
+def records_from_values(values: list[list[object]]) -> tuple[list[str], list[dict[str, object]]]:
+    """Header and data records from a raw grid. Title rows above the header are skipped."""
+    header_index = find_header_row(values)
+    if header_index is None:
+        return [], []
+    header = [_cell(cell) for cell in values[header_index]]
+    records: list[dict[str, object]] = []
+    for row in values[header_index + 1 :]:
+        record: dict[str, object] = {}
+        for position, name in enumerate(header):
+            if name:
+                record[name] = row[position] if position < len(row) else ""
+        records.append(record)
+    return header, records
 
 
 @dataclass
@@ -103,6 +171,8 @@ class _SkillFact:
 class _EmailGroup:
     full_name: str
     rows: list[_SkillFact]
+    indexes: list[int]
+    passport_id: str = ""
 
 
 class SyncStore(Protocol):
@@ -160,6 +230,7 @@ class FakeSheet:
         self._rows = [] if rows is None else rows
         self._error = error
         self.reads = 0
+        self.writes: list[list[RowOutcome]] = []
 
     def read_rows(self) -> list[dict[str, object]]:
         self.reads += 1
@@ -167,8 +238,16 @@ class FakeSheet:
             raise self._error
         return [dict(row) for row in self._rows]
 
+    def write_back(self, outcomes: list[RowOutcome]) -> None:
+        self.writes.append(list(outcomes))
+
 
 class GspreadSheet:
+    def __init__(self) -> None:
+        self._worksheet: Any = None
+        self._header: list[str] = []
+        self._first_data_row = 0
+
     def read_rows(self) -> list[dict[str, object]]:
         if not settings.sheet_id or not settings.google_service_account_json:
             raise SheetUnavailableError("sheet_not_configured")
@@ -180,14 +259,56 @@ class GspreadSheet:
             raise SheetUnavailableError("sheet_not_configured")
         info = cast(dict[str, Any], parsed)
         try:
-            client = gspread.service_account_from_dict(info, scopes=READONLY_SCOPES)
+            client = gspread.service_account_from_dict(info, scopes=_SHEETS_SCOPES)
             worksheet = client.open_by_key(settings.sheet_id).get_worksheet(0)
-            records = worksheet.get_all_records(default_blank="")
+            values = worksheet.get_all_values()
         except SheetUnavailableError:
             raise
         except Exception as exc:
             raise SheetUnavailableError("sheet_unavailable") from exc
-        return [dict(record) for record in records]
+        grid = cast(list[list[object]], values)
+        header_index = find_header_row(grid)
+        header, records = records_from_values(grid)
+        self._worksheet = worksheet
+        self._header = header
+        self._first_data_row = 0 if header_index is None else header_index + 2
+        return records
+
+    def write_back(self, outcomes: list[RowOutcome]) -> None:
+        if self._worksheet is None or not outcomes:
+            return
+        updates = write_back_ranges(self._header, self._first_data_row, outcomes)
+        if updates:
+            self._worksheet.batch_update(updates, value_input_option="RAW")
+
+
+def write_back_ranges(
+    header: list[str], first_data_row: int, outcomes: list[RowOutcome]
+) -> list[dict[str, object]]:
+    """A1 updates for the sync output columns that exist in this header."""
+    lowered = [name.strip().lower() for name in header]
+    columns: dict[str, int] = {}
+    for field, names in _WRITE_COLUMNS.items():
+        for position, name in enumerate(lowered):
+            if name in names:
+                columns[field] = position
+                break
+    updates: list[dict[str, object]] = []
+    for outcome in outcomes:
+        row_number = first_data_row + outcome.index
+        values = {
+            "status": outcome.status,
+            "version": outcome.version,
+            "synced_at": outcome.synced_at,
+            "error": outcome.error,
+            "passport_id": outcome.passport_id,
+        }
+        for field, position in columns.items():
+            if field == "passport_id" and not outcome.passport_id:
+                continue
+            cell = gspread.utils.rowcol_to_a1(row_number, position + 1)
+            updates.append({"range": cell, "values": [[values[field]]]})
+    return updates
 
 
 class MemorySyncStore:
@@ -605,22 +726,41 @@ def run_sync(store: SyncStore, sheet: Sheet, chain: AnchorChain | None = None) -
         return SyncResult(
             status="failed", rows_read=0, versions_created=0, error="sheet_unavailable"
         )
-    created = _issue_versions(store, raw_rows, chain)
+    outcomes: list[RowOutcome] = []
+    created = _issue_versions(store, raw_rows, chain, outcomes)
     store.finish(len(raw_rows), created)
+    try:
+        sheet.write_back(sorted(outcomes, key=lambda outcome: outcome.index))
+    except Exception:
+        # Write-back is best effort. The passport ledger is already saved.
+        _log.warning("sheet_write_back_failed", exc_info=True)
     return SyncResult(
         status="completed", rows_read=len(raw_rows), versions_created=created, error=None
     )
 
 
 def _issue_versions(
-    store: SyncStore, raw_rows: list[dict[str, object]], chain: AnchorChain | None
+    store: SyncStore,
+    raw_rows: list[dict[str, object]],
+    chain: AnchorChain | None,
+    outcomes: list[RowOutcome] | None = None,
 ) -> int:
+    results: list[RowOutcome] = [] if outcomes is None else outcomes
+    synced_at = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
+
+    def fail(indexes: list[int], error: str, passport_id: str = "") -> None:
+        for index in indexes:
+            results.append(RowOutcome(index, STATUS_FAILED, "", synced_at, error, passport_id))
+
     states = store.current_students()
     passport_ids = store.taken_passport_ids()
     codes = store.taken_verification_codes()
     content_hashes = store.taken_content_hashes()
     created = 0
-    groups = _group_rows(raw_rows)
+    groups, failures = _group_rows(raw_rows)
+    for index, error in failures.items():
+        fail([index], error)
+    synced: set[str] = set()
     for email, group in groups.items():
         skills = tuple(
             canonical_skills(
@@ -634,8 +774,16 @@ def _issue_versions(
         state = states.get(email)
         if state is None:
             if not group.full_name:
+                fail(group.indexes, "missing_full_name")
                 continue
-            passport_id = _mint(passport_ids, 10, _format_passport_id)
+            if group.passport_id and group.passport_id in passport_ids:
+                fail(group.indexes, "passport_id_taken")
+                continue
+            if group.passport_id:
+                passport_id = group.passport_id
+                passport_ids.add(passport_id)
+            else:
+                passport_id = _mint(passport_ids, 10, _format_passport_id)
             holder = group.full_name
             version_number = 1
             store.insert_student(email, holder, passport_id)
@@ -670,7 +818,12 @@ def _issue_versions(
                 _record_key(email, fact.skill, fact.badge, fact.raw_awarded_on),
                 email,
             )
-    emails = set(groups)
+        synced.add(email)
+        for index in group.indexes:
+            results.append(
+                RowOutcome(index, STATUS_SYNCED, f"V{version_number}", synced_at, "", passport_id)
+            )
+    emails = synced
     _fill_pending_pdfs(store, emails)
     _anchor_pending(store, emails, chain)
     return created
@@ -779,13 +932,26 @@ def _skills_from_rows(value: object) -> tuple[Skill, ...]:
     )
 
 
-def _group_rows(raw_rows: list[dict[str, object]]) -> dict[str, _EmailGroup]:
+def _group_rows(
+    raw_rows: list[dict[str, object]],
+) -> tuple[dict[str, _EmailGroup], dict[int, str]]:
     groups: dict[str, _EmailGroup] = {}
-    for raw in raw_rows:
+    failures: dict[int, str] = {}
+    for index, raw in enumerate(raw_rows):
         row = _normalize_row(raw)
         email = row["email"].lower()
         skill = row["skill"]
-        if not email or not skill or not email.endswith("@btu.edu.ge"):
+        if not email and not skill:
+            # Blank line or a note below the data. Not a record.
+            continue
+        if not email:
+            failures[index] = "missing_email"
+            continue
+        if not skill:
+            failures[index] = "missing_skill"
+            continue
+        if not email_domain_allowed(email):
+            failures[index] = "email_domain_not_allowed"
             continue
         fact = _SkillFact(
             skill=skill,
@@ -795,20 +961,37 @@ def _group_rows(raw_rows: list[dict[str, object]]) -> dict[str, _EmailGroup]:
         )
         group = groups.get(email)
         if group is None:
-            groups[email] = _EmailGroup(full_name=row["full_name"], rows=[fact])
+            groups[email] = _EmailGroup(
+                full_name=row["full_name"],
+                rows=[fact],
+                indexes=[index],
+                passport_id=row["passport_id"].upper(),
+            )
             continue
         if row["full_name"]:
             group.full_name = row["full_name"]
+        if row["passport_id"] and not group.passport_id:
+            group.passport_id = row["passport_id"].upper()
         group.rows.append(fact)
-    return groups
+        group.indexes.append(index)
+    return groups, failures
 
 
 def _normalize_row(row: dict[str, object]) -> dict[str, str]:
-    normalized = dict.fromkeys(_COLUMNS, "")
+    found: dict[str, str] = {}
     for key, value in row.items():
         name = str(key).strip().lower()
-        if name in normalized:
-            normalized[name] = _cell(value)
+        for field, names in _ALIASES.items():
+            if name in names and field not in found:
+                found[field] = _cell(value)
+    normalized = {column: found.get(column, "") for column in _COLUMNS}
+    if not normalized["full_name"]:
+        parts = (found.get("first_name", ""), found.get("last_name", ""))
+        normalized["full_name"] = " ".join(part for part in parts if part)
+    badge = normalized["badge"]
+    if badge.startswith("=") or (not badge and found.get("skill_category")):
+        # Official sheet: badge is a formula of the category. Use the computed code.
+        normalized["badge"] = _CATEGORY_BADGES.get(found.get("skill_category", "").lower(), "")
     return normalized
 
 

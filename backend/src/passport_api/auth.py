@@ -6,7 +6,7 @@ from jwt import PyJWK
 from jwt.exceptions import PyJWTError
 
 from passport_api.errors import APIError
-from passport_api.settings import settings
+from passport_api.settings import email_domain_allowed, settings
 
 _ALGORITHMS = ["RS256", "ES256"]
 
@@ -29,7 +29,7 @@ def fetch_jwks() -> dict[str, object]:
 def email_from_authorization(authorization: str | None) -> str:
     token = _bearer_token(authorization)
     email = _verified_email(token)
-    if not email.lower().endswith("@btu.edu.ge"):
+    if not email_domain_allowed(email):
         raise APIError(403, "domain_not_allowed")
     return email.strip().lower()
 
