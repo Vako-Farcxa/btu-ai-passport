@@ -5,8 +5,8 @@ from typing import Any, Protocol, cast
 from eth_account import Account
 from eth_typing import HexStr
 from web3 import Web3
-from web3.middleware import ExtraDataToPOAMiddleware
 from web3.exceptions import TransactionNotFound
+from web3.middleware import ExtraDataToPOAMiddleware
 
 from passport_api.settings import settings
 
