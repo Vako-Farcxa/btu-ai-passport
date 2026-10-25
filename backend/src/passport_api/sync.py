@@ -727,7 +727,13 @@ def run_sync(store: SyncStore, sheet: Sheet, chain: AnchorChain | None = None) -
             status="failed", rows_read=0, versions_created=0, error="sheet_unavailable"
         )
     outcomes: list[RowOutcome] = []
-    created = _issue_versions(store, raw_rows, chain, outcomes)
+    try:
+        created = _issue_versions(store, raw_rows, chain, outcomes)
+    except Exception:
+        # Release the run lock so the next scheduled sync is not blocked.
+        _log.exception("sync_failed")
+        store.abort()
+        raise
     store.finish(len(raw_rows), created)
     try:
         sheet.write_back(sorted(outcomes, key=lambda outcome: outcome.index))
