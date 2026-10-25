@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { LocaleSwitcher } from '@/components/locale-switcher'
 import { SignInButton } from '@/components/sign-in-button'
+import { entrance } from '@/components/entrance'
 import { messages, type Locale } from '@/i18n/messages'
 import { useLocale } from '@/i18n/use-locale'
 import {
@@ -27,10 +28,13 @@ export default function PassportPage() {
   const session = useMyPassport()
   const [pdfNotice, setPdfNotice] = useState<string | null>(null)
   const copy = messages[locale]
+  const ref = useRef<HTMLElement | null>(null)
 
   useEffect(() => {
     document.documentElement.lang = locale
+    entrance(ref.current!)
   }, [locale])
+
   const passport = session.kind === 'ready' ? session.body.passport : null
   const versions = session.kind === 'ready' ? orderedVersions(session.body) : []
   const current = versions.find((version) => version.is_current) ?? versions[0]
@@ -59,7 +63,10 @@ export default function PassportPage() {
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-xl flex-1 flex-col gap-8 px-6 py-16 text-[#10243e]">
+    <main
+      ref={ref}
+      className="mx-auto flex w-full max-w-xl flex-1 flex-col gap-8 px-6 py-16 text-[#10243e]"
+    >
       <header className="flex flex-col gap-4">
         <LocaleSwitcher locale={locale} onChange={setLocale} />
         <div className="flex flex-col gap-2">

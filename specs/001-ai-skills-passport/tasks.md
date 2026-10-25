@@ -166,9 +166,9 @@
 
 **Purpose**: Motion, reduced motion, and the quickstart commands
 
-- [ ] T043 [P] Add `frontend/src/components/entrance.tsx` and use it only from `frontend/src/app/page.tsx` and `frontend/src/app/passport/page.tsx`. GSAP may animate `opacity` and `transform` only. Skip it when `prefers-reduced-motion: reduce`. `frontend/src/app/verify/page.tsx` must not import it.
-- [ ] T044 [P] Add `frontend/e2e/motion.spec.ts` to tab through sign-in and verify without a pointer, and to confirm the entrance does not run under reduced motion
-- [ ] T045 Run the backend and frontend commands in `specs/001-ai-skills-passport/quickstart.md` and fix any failure in the files those commands report
+- [X] T043 [P] Add `frontend/src/components/entrance.tsx` and use it only from `frontend/src/app/page.tsx` and `frontend/src/app/passport/page.tsx`. GSAP may animate `opacity` and `transform` only. Skip it when `prefers-reduced-motion: reduce`. `frontend/src/app/verify/page.tsx` must not import it.
+- [X] T044 [P] Add `frontend/e2e/motion.spec.ts` to tab through sign-in and verify without a pointer, and to confirm the entrance does not run under reduced motion
+- [X] T045 Run the backend and frontend commands in `specs/001-ai-skills-passport/quickstart.md` and fix any failure in the files those commands report
 
 ---
 

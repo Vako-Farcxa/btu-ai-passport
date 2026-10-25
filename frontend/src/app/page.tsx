@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 
 import { LocaleSwitcher } from '@/components/locale-switcher'
 import { SignInButton } from '@/components/sign-in-button'
+import { entrance } from '@/components/entrance'
 import { messages } from '@/i18n/messages'
 import { useLocale } from '@/i18n/use-locale'
 import { explainPassportError } from '@/lib/api/passport'
@@ -16,13 +17,18 @@ export default function Home() {
   const [locale, setLocale] = useLocale()
   const session = useMyPassport()
   const copy = messages[locale]
+  const ref = useRef<HTMLElement | null>(null)
 
   useEffect(() => {
     document.documentElement.lang = locale
+    entrance(ref.current!)
   }, [locale])
 
   return (
-    <main className="mx-auto flex w-full max-w-xl flex-1 flex-col gap-8 px-6 py-16 text-[#10243e]">
+    <main
+      ref={ref}
+      className="mx-auto flex w-full max-w-xl flex-1 flex-col gap-8 px-6 py-16 text-[#10243e]"
+    >
       <header className="flex flex-col gap-4">
         <LocaleSwitcher locale={locale} onChange={setLocale} />
         <div className="flex flex-col gap-2">
