@@ -897,13 +897,14 @@ def _fill_pending_pdfs(store: SyncStore, emails: set[str]) -> None:
 
 
 def _anchor_pending(store: SyncStore, emails: set[str], chain: AnchorChain | None) -> None:
+    # Every unconfirmed version is retried on each run, not only rows that changed,
+    # so a failed anchor recovers on the next scheduled sync.
+    del emails
     client = chain if chain is not None else chain_from_settings()
     if client is None:
         return
     now = _now()
     for pending in store.pending_anchors():
-        if pending.email not in emails:
-            continue
         try:
             publish_anchor(pending, client, now=now)
         except Exception:

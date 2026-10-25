@@ -217,3 +217,45 @@ def test_allowed_domains_setting(monkeypatch: pytest.MonkeyPatch) -> None:
     assert not email_domain_allowed("ada@evilbtu.edu.ge")
     monkeypatch.setattr(settings, "allowed_email_domains", "btu.edu.ge,@example.org")
     assert email_domain_allowed("btu-t-0001@example.org")
+
+
+def test_failed_anchor_is_retried_without_row_change() -> None:
+    from passport_api.sync import MemorySyncStore, _anchor_pending
+
+    store = MemorySyncStore()
+    calls: list[str] = []
+
+    class Version:
+        email = "a@example.org"
+        version_number = 1
+        content_hash = "0x" + "11" * 32
+        verification_id_hash = "0x" + "22" * 32
+        anchor_status = "failed"
+        tx_hash = None
+        anchored_at = None
+
+    pending = Version()
+    store.pending_anchors = lambda: [pending]  # type: ignore[method-assign,list-item]
+    store.save_anchor = lambda *a, **k: calls.append(k["status"])  # type: ignore[method-assign]
+
+    class Chain:
+        def chain_id(self) -> int:
+            return 80002
+
+        def issuer_address(self) -> str:
+            return "0xabc"
+
+        def sender_address(self) -> str:
+            return "0xabc"
+
+        def stored_content(self, _h: bytes) -> bytes:
+            return bytes(32)
+
+        def send_anchor(self, _d: bytes) -> str:
+            return "0xtx"
+
+        def receipt_succeeded(self, _t: str) -> bool | None:
+            return True
+
+    _anchor_pending(store, set(), Chain())
+    assert calls == ["confirmed"]
