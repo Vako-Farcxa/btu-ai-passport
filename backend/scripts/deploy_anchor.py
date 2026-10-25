@@ -12,6 +12,7 @@ from typing import Protocol, cast
 
 from eth_account import Account
 from web3 import Web3
+from web3.middleware import ExtraDataToPOAMiddleware
 
 REPO = Path(__file__).resolve().parents[2]
 CONTRACT = REPO / "specs" / "001-ai-skills-passport" / "contracts" / "PassportAnchor.sol"
@@ -118,6 +119,8 @@ def main() -> None:
     if not (settings.amoy_rpc_url and settings.btu_issuer_private_key):
         raise SystemExit("Set AMOY_RPC_URL and BTU_ISSUER_PRIVATE_KEY before deploying")
     w3 = Web3(Web3.HTTPProvider(settings.amoy_rpc_url))
+    # Polygon is a proof-of-authority chain with long block extraData.
+    w3.middleware_onion.inject(ExtraDataToPOAMiddleware, layer=0)
     if w3.eth.chain_id != 80002:
         raise SystemExit("expected chain id 80002")
     address = deploy_and_write(

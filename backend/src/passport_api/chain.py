@@ -5,6 +5,7 @@ from typing import Any, Protocol, cast
 from eth_account import Account
 from eth_typing import HexStr
 from web3 import Web3
+from web3.middleware import ExtraDataToPOAMiddleware
 from web3.exceptions import TransactionNotFound
 
 from passport_api.settings import settings
@@ -97,6 +98,8 @@ def chain_from_settings() -> AnchorChain | None:
 class Web3AnchorChain:
     def __init__(self, rpc_url: str, contract_address: str, private_key: str) -> None:
         self._w3 = Web3(Web3.HTTPProvider(rpc_url))
+        # Polygon is a proof-of-authority chain with long block extraData.
+        self._w3.middleware_onion.inject(ExtraDataToPOAMiddleware, layer=0)
         self._account = Account.from_key(private_key)
         self._contract = self._w3.eth.contract(
             address=Web3.to_checksum_address(contract_address),

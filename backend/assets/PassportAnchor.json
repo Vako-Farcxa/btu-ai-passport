@@ -2,53 +2,89 @@
   "contractName": "PassportAnchor",
   "abi": [
     {
-      "type": "constructor",
       "inputs": [],
-      "stateMutability": "nonpayable"
+      "stateMutability": "nonpayable",
+      "type": "constructor"
     },
     {
-      "type": "function",
-      "name": "issuer",
       "inputs": [],
-      "outputs": [{ "name": "", "type": "address" }],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "anchors",
-      "inputs": [{ "name": "verificationIdHash", "type": "bytes32" }],
-      "outputs": [{ "name": "", "type": "bytes32" }],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "anchor",
-      "inputs": [
-        { "name": "contentHash", "type": "bytes32" },
-        { "name": "verificationIdHash", "type": "bytes32" }
-      ],
-      "outputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "event",
-      "name": "Anchored",
-      "inputs": [
-        { "name": "contentHash", "type": "bytes32", "indexed": true },
-        { "name": "verificationIdHash", "type": "bytes32", "indexed": true }
-      ],
-      "anonymous": false
-    },
-    {
-      "type": "error",
-      "name": "NotIssuer",
-      "inputs": []
-    },
-    {
-      "type": "error",
       "name": "AlreadyAnchored",
-      "inputs": []
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "NotIssuer",
+      "type": "error"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "bytes32",
+          "name": "contentHash",
+          "type": "bytes32"
+        },
+        {
+          "indexed": true,
+          "internalType": "bytes32",
+          "name": "verificationIdHash",
+          "type": "bytes32"
+        }
+      ],
+      "name": "Anchored",
+      "type": "event"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "contentHash",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "bytes32",
+          "name": "verificationIdHash",
+          "type": "bytes32"
+        }
+      ],
+      "name": "anchor",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "verificationIdHash",
+          "type": "bytes32"
+        }
+      ],
+      "name": "anchors",
+      "outputs": [
+        {
+          "internalType": "bytes32",
+          "name": "contentHash",
+          "type": "bytes32"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "issuer",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
     }
   ],
-  "bytecode": "0x"
+  "bytecode": "0x60a0604052348015600e575f80fd5b503373ffffffffffffffffffffffffffffffffffffffff1660808173ffffffffffffffffffffffffffffffffffffffff16815250506080516103526100605f395f818160af015260d301526103525ff3fe608060405234801561000f575f80fd5b506004361061003f575f3560e01c80631d14384814610043578063a21f3c6a14610061578063b01b6d531461007d575b5f80fd5b61004b6100ad565b604051610058919061023b565b60405180910390f35b61007b6004803603810190610076919061028b565b6100d1565b005b610097600480360381019061009291906102c9565b6101e8565b6040516100a49190610303565b60405180910390f35b7f000000000000000000000000000000000000000000000000000000000000000081565b7f000000000000000000000000000000000000000000000000000000000000000073ffffffffffffffffffffffffffffffffffffffff163373ffffffffffffffffffffffffffffffffffffffff1614610156576040517f54ec506300000000000000000000000000000000000000000000000000000000815260040160405180910390fd5b5f801b5f808381526020019081526020015f2054146101a1576040517fa0094ce300000000000000000000000000000000000000000000000000000000815260040160405180910390fd5b815f808381526020019081526020015f208190555080827fa34b8972ff170527846956acf8a20640ac6f8829b9c748bb92ccccddd797c1f860405160405180910390a35050565b5f602052805f5260405f205f915090505481565b5f73ffffffffffffffffffffffffffffffffffffffff82169050919050565b5f610225826101fc565b9050919050565b6102358161021b565b82525050565b5f60208201905061024e5f83018461022c565b92915050565b5f80fd5b5f819050919050565b61026a81610258565b8114610274575f80fd5b50565b5f8135905061028581610261565b92915050565b5f80604083850312156102a1576102a0610254565b5b5f6102ae85828601610277565b92505060206102bf85828601610277565b9150509250929050565b5f602082840312156102de576102dd610254565b5b5f6102eb84828501610277565b91505092915050565b6102fd81610258565b82525050565b5f6020820190506103165f8301846102f4565b9291505056fea264697066735822122062fd88293dec2cefb274e0e487e9f0d40c57a5a77f4784e90988f6a7dae57c7d64736f6c634300081a0033"
 }
