@@ -729,7 +729,8 @@ def run_sync(store: SyncStore, sheet: Sheet, chain: AnchorChain | None = None) -
         return SyncResult(status="skipped", rows_read=0, versions_created=0, error=None)
     try:
         raw_rows = sheet.read_rows()
-    except Exception:
+    except Exception as exc:
+        print(f"sheet_read_failed: {type(exc).__name__}: {exc}", flush=True)
         store.abort()
         return SyncResult(
             status="failed", rows_read=0, versions_created=0, error="sheet_unavailable"
