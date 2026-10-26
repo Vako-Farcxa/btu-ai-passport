@@ -58,7 +58,12 @@ def test_btu_token_returns_only_that_passport_newest_first(
     assert versions[0]["verification_code"] == "A1B2-C3D4-E5F6-G7H8"
     assert versions[0]["holder_name"] == "Nino Beridze"
     assert versions[0]["skills"] == [
-        {"skill": "Machine Learning", "badge": "Stamp", "awarded_on": "2025-06-01"},
+        {
+            "skill": "Machine Learning",
+            "badge": "Stamp",
+            "awarded_on": "2025-06-01",
+            "description": "",
+        },
     ]
     assert "BTU-V2W3X4Y5Z6" not in response.text
     assert "error.student@btu.edu.ge" not in response.text

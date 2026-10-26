@@ -26,7 +26,7 @@ from passport_api.settings import email_domain_allowed, settings
 
 _log = logging.getLogger(__name__)
 _ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
-_COLUMNS = ("email", "full_name", "skill", "badge", "awarded_on", "passport_id")
+_COLUMNS = ("email", "full_name", "skill", "badge", "awarded_on", "passport_id", "description")
 _SHEETS_SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 # Header aliases, lowercased. The first name in each tuple is the old 5-column format.
 _ALIASES: dict[str, tuple[str, ...]] = {
@@ -39,6 +39,7 @@ _ALIASES: dict[str, tuple[str, ...]] = {
     "awarded_on": ("awarded_on", "date earned", "date_earned"),
     "passport_id": ("passport_id", "passport id (existing)", "passport id"),
     "skill_category": ("skill category", "skill_category"),
+    "description": ("skill description", "skill_description", "description"),
 }
 # Sync output columns written back by the service (official sheet Q-T, plus G).
 STATUS_SYNCED = "SYNCED"
@@ -165,6 +166,7 @@ class _SkillFact:
     badge: str
     awarded_on: str | None
     raw_awarded_on: str
+    description: str = ""
 
 
 @dataclass
@@ -550,6 +552,7 @@ class SupabaseSyncStore:
                 "skill": skill.skill,
                 "badge": skill.badge,
                 "awarded_on": skill.awarded_on,
+                "description": skill.description,
                 "position": position,
             }
             for position, skill in enumerate(version.skills, start=1)
@@ -582,7 +585,7 @@ class SupabaseSyncStore:
             .table("passport_versions")
             .select(
                 "version_number, holder_name, verification_code, issued_at, "
-                "skill_entries(skill, badge, awarded_on, position), "
+                "skill_entries(skill, badge, awarded_on, description, position), "
                 "students(email, passport_id)"
             )
             .or_("pdf_en_path.is.null,pdf_ka_path.is.null")
@@ -625,7 +628,7 @@ class SupabaseSyncStore:
             .select(
                 "version_number, holder_name, verification_code, verification_id_hash, "
                 "skill_fingerprint, content_hash, anchor_status, tx_hash, anchored_at, issued_at, "
-                "skill_entries(skill, badge, awarded_on, position), "
+                "skill_entries(skill, badge, awarded_on, description, position), "
                 "students(email, passport_id)"
             )
             .neq("anchor_status", "confirmed")
@@ -771,7 +774,12 @@ def _issue_versions(
         skills = tuple(
             canonical_skills(
                 [
-                    Skill(skill=fact.skill, badge=fact.badge, awarded_on=fact.awarded_on)
+                    Skill(
+                        skill=fact.skill,
+                        badge=fact.badge,
+                        awarded_on=fact.awarded_on,
+                        description=fact.description,
+                    )
                     for fact in group.rows
                 ]
             )
@@ -934,6 +942,7 @@ def _skills_from_rows(value: object) -> tuple[Skill, ...]:
             skill=str(item["skill"]),
             badge=str(item["badge"]),
             awarded_on=None if item.get("awarded_on") is None else str(item["awarded_on"]),
+            description=str(item.get("description") or ""),
         )
         for item in ordered
     )
@@ -965,6 +974,7 @@ def _group_rows(
             badge=row["badge"],
             awarded_on=normalize_awarded_on(row["awarded_on"]),
             raw_awarded_on=row["awarded_on"],
+            description=row["description"],
         )
         group = groups.get(email)
         if group is None:

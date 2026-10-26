@@ -16,7 +16,7 @@ class SupabaseStore:
             .select(
                 "student_id, version_number, holder_name, verification_code, "
                 "anchor_status, tx_hash, issued_at, pdf_en_path, pdf_ka_path, "
-                "skill_entries(skill, badge, awarded_on, position), "
+                "skill_entries(skill, badge, awarded_on, description, position), "
                 "students(email, full_name, passport_id)"
             )
             .eq("verification_code", normalized)
@@ -51,7 +51,7 @@ class SupabaseStore:
                 "email, full_name, passport_id, "
                 "passport_versions(version_number, holder_name, verification_code, "
                 "anchor_status, tx_hash, issued_at, pdf_en_path, pdf_ka_path, "
-                "skill_entries(skill, badge, awarded_on, position))"
+                "skill_entries(skill, badge, awarded_on, description, position))"
             )
             .eq("email", email.strip().lower())
             .limit(1)
@@ -95,6 +95,7 @@ def _version_from_row(row: dict[str, object]) -> StoredVersion:
             skill=str(item["skill"]),
             badge=str(item["badge"]),
             awarded_on=None if item["awarded_on"] is None else str(item["awarded_on"]),
+            description=str(item.get("description") or ""),
         )
         for item in ordered
     )

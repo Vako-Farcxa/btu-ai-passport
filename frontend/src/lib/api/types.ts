@@ -4,6 +4,7 @@ export const skillSchema = z.object({
   skill: z.string(),
   badge: z.string(),
   awarded_on: z.string().nullable(),
+  description: z.string().default(''),
 })
 
 const foundFields = {

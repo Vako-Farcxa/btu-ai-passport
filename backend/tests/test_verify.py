@@ -22,7 +22,12 @@ def test_latest_confirmed_code_is_valid() -> None:
         "version": 2,
         "is_latest": True,
         "skills": [
-            {"skill": "Machine Learning", "badge": "Stamp", "awarded_on": "2025-06-01"},
+            {
+                "skill": "Machine Learning",
+                "badge": "Stamp",
+                "awarded_on": "2025-06-01",
+                "description": "",
+            },
         ],
         "tx_url": f"https://amoy.polygonscan.com/tx/0x{TX_CURRENT}",
     }
@@ -49,7 +54,7 @@ def test_older_confirmed_code_is_outdated() -> None:
     assert body["version"] == 1
     assert body["holder_name"] == "Nino Beridze"
     assert body["skills"] == [
-        {"skill": "Python", "badge": "Foundation", "awarded_on": "2025-01-15"},
+        {"skill": "Python", "badge": "Foundation", "awarded_on": "2025-01-15", "description": ""},
     ]
     assert body["tx_url"] == f"https://amoy.polygonscan.com/tx/0x{TX_OLDER}"
 

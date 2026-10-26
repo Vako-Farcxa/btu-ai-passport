@@ -22,7 +22,12 @@ const callerOldestFirst: PassportResponse = {
         holder_name: 'Nino Beridze',
         verification_code: 'K9M2-N3P4-Q5R6-S7T8',
         skills: [
-          { skill: 'Python', badge: 'Foundation', awarded_on: '2025-01-15' },
+          {
+            skill: 'Python',
+            badge: 'Foundation',
+            awarded_on: '2025-01-15',
+            description: '',
+          },
         ],
         anchor: {
           status: 'confirmed',
@@ -40,6 +45,7 @@ const callerOldestFirst: PassportResponse = {
             skill: 'მანქანური სწავლება',
             badge: 'Stamp',
             awarded_on: '2025-06-01',
+            description: '',
           },
         ],
         anchor: {

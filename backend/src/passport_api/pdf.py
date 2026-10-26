@@ -1,4 +1,5 @@
 import json
+import textwrap
 from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
@@ -120,6 +121,9 @@ def render_pdf(lang: Language, document: PassportPdf) -> bytes:
     extra = _overflow_pdf(lang, document.skills[slots:], (width, height))
     if extra is not None:
         writer.append(PdfReader(BytesIO(extra)))
+    details = _descriptions_pdf(lang, document.skills, (width, height))
+    if details is not None:
+        writer.append(PdfReader(BytesIO(details)))
     output = BytesIO()
     writer.write(output)
     return output.getvalue()
@@ -239,6 +243,42 @@ def _overflow_pdf(
             _draw_runs(canvas, line, 40, y, 11)
             y -= 22
         canvas.showPage()
+    canvas.save()
+    return buffer.getvalue()
+
+
+def _descriptions_pdf(
+    lang: Language,
+    skills: tuple[Skill, ...],
+    page_size: tuple[float, float],
+) -> bytes | None:
+    described = [skill for skill in skills if skill.description.strip()]
+    if not described:
+        return None
+    buffer = BytesIO()
+    canvas = Canvas(buffer, pagesize=page_size)
+    height = page_size[1]
+    title = "Skill descriptions" if lang == "en" else "უნარების აღწერა"
+    width_chars = max(40, int((page_size[0] - 80) / 5.2))
+
+    def new_page() -> float:
+        _draw_runs(canvas, title, 40, height - 48, 14)
+        return height - 80
+
+    y = new_page()
+    for skill in described:
+        lines = textwrap.wrap(skill.description.strip(), width_chars) or [""]
+        if y - 16 * (len(lines) + 1) < 40:
+            canvas.showPage()
+            y = new_page()
+        heading = "  ".join(part for part in (skill.skill, skill.badge) if part)
+        _draw_runs(canvas, heading, 40, y, 11)
+        y -= 16
+        for line in lines:
+            _draw_runs(canvas, line, 52, y, 9)
+            y -= 14
+        y -= 8
+    canvas.showPage()
     canvas.save()
     return buffer.getvalue()
 

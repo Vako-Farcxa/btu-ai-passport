@@ -46,6 +46,7 @@ def canonical_skills(skills: Sequence[Skill]) -> list[Skill]:
             skill=_text(skill.skill),
             badge=_text(skill.badge),
             awarded_on=_awarded(skill.awarded_on),
+            description=_text(skill.description),
         )
         collapsed[(item.skill, item.badge, item.awarded_on)] = item
     ordered = list(collapsed.values())

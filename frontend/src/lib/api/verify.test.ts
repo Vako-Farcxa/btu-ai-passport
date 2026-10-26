@@ -26,6 +26,7 @@ describe('verify submission', () => {
         skill: 'მანქანური სწავლება',
         badge: 'ბეჭედი',
         awarded_on: '2025-06-01',
+        description: 'აღწერა',
       },
     ]
     expect(presentSkills(skills, 'en')).toEqual(skills)

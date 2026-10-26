@@ -24,6 +24,8 @@ class Skill(BaseModel):
     skill: str
     badge: str
     awarded_on: str | None
+    # Display only. Not part of the fingerprint or the anchored content hash.
+    description: str = ""
 
 
 class Anchor(BaseModel):

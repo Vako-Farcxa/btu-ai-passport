@@ -27,7 +27,12 @@ def test_error_body_rejects_unknown_code() -> None:
 
 def test_skill_keeps_empty_badge_and_null_date() -> None:
     skill = Skill(skill="Python", badge="", awarded_on=None)
-    assert skill.model_dump() == {"skill": "Python", "badge": "", "awarded_on": None}
+    assert skill.model_dump() == {
+        "skill": "Python",
+        "badge": "",
+        "awarded_on": None,
+        "description": "",
+    }
 
 
 def test_api_error_returns_only_the_code() -> None:

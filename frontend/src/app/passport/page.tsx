@@ -162,6 +162,9 @@ function VersionFacts({
             <span className="font-medium">{skill.skill}</span>
             {skill.badge ? <span> · {skill.badge}</span> : null}
             <span> · {skill.awarded_on ?? copy.dateUnavailable}</span>
+            {skill.description ? (
+              <p className="text-sm opacity-80">{skill.description}</p>
+            ) : null}
           </li>
         ))}
       </ul>
