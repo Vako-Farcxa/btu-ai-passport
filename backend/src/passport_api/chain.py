@@ -5,7 +5,7 @@ from typing import Any, Protocol, cast
 from eth_account import Account
 from eth_typing import HexStr
 from web3 import Web3
-from web3.exceptions import TransactionNotFound
+from web3.exceptions import TimeExhausted, TransactionNotFound
 from web3.middleware import ExtraDataToPOAMiddleware
 
 from passport_api.settings import settings
@@ -137,8 +137,11 @@ class Web3AnchorChain:
 
     def receipt_succeeded(self, tx_hash: str) -> bool | None:
         try:
-            receipt = self._w3.eth.get_transaction_receipt(HexStr(tx_hash))
-        except TransactionNotFound:
+            # Wait briefly so new codes are confirmed within the same sync.
+            receipt = self._w3.eth.wait_for_transaction_receipt(
+                HexStr(tx_hash), timeout=45, poll_latency=2
+            )
+        except (TransactionNotFound, TimeExhausted):
             return None
         return bool(receipt["status"])
 
