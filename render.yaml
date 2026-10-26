@@ -1,0 +1,33 @@
+services:
+  - type: web
+    name: btu-ai-passport-api
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install uv && uv sync --frozen --no-dev
+    startCommand: uv run --no-dev uvicorn passport_api.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.8
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SYNC_TOKEN
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: SHEET_ID
+        sync: false
+      - key: GOOGLE_SERVICE_ACCOUNT_JSON
+        sync: false
+      - key: AMOY_RPC_URL
+        sync: false
+      - key: ANCHOR_CONTRACT_ADDRESS
+        sync: false
+      - key: BTU_ISSUER_PRIVATE_KEY
+        sync: false
+      - key: ALLOWED_EMAIL_DOMAINS
+        sync: false
