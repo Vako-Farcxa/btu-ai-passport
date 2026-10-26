@@ -260,6 +260,10 @@ class GspreadSheet:
         if not isinstance(parsed, dict):
             raise SheetUnavailableError("sheet_not_configured")
         info = cast(dict[str, Any], parsed)
+        key = info.get("private_key")
+        if isinstance(key, str) and "\\n" in key:
+            # Hosting dashboards often keep escaped newlines in pasted JSON.
+            info["private_key"] = key.replace("\\n", "\n")
         try:
             client = gspread.service_account_from_dict(info, scopes=_SHEETS_SCOPES)
             worksheet = client.open_by_key(settings.sheet_id).get_worksheet(0)
@@ -267,6 +271,7 @@ class GspreadSheet:
         except SheetUnavailableError:
             raise
         except Exception as exc:
+            _log.warning("sheet_read_failed: %s", type(exc).__name__, exc_info=True)
             raise SheetUnavailableError("sheet_unavailable") from exc
         grid = cast(list[list[object]], values)
         header_index = find_header_row(grid)
