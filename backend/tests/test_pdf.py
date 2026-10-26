@@ -1,7 +1,7 @@
 import re
+from dataclasses import replace
 from io import BytesIO
 from pathlib import Path
-from typing import Literal
 
 import pytest
 from pypdf import PdfReader
@@ -15,7 +15,7 @@ from passport_api.sync import FakeSheet, MemorySyncStore, run_sync
 
 ASSETS = Path(__file__).resolve().parents[1] / "assets"
 FONT = ASSETS / "fonts" / "NotoSansGeorgian-Regular.ttf"
-FIELDS = ASSETS / "templates" / "fields.json"
+BOLD_FONT = ASSETS / "fonts" / "NotoSansGeorgian-Bold.ttf"
 
 HOLDER = "ნინო ბერიძე"
 OVERFLOW_SKILL = "ხელოვნური ინტელექტი"
@@ -37,81 +37,66 @@ def _document() -> PassportPdf:
     )
 
 
-def _field_map(template: str) -> dict[str, str]:
-    import json
-
-    payload = json.loads(FIELDS.read_text())
-    raw = payload[template]
-    assert isinstance(raw, dict)
-    return {str(key): str(value) for key, value in raw.items()}
+def _text(pdf: bytes) -> str:
+    return "\n".join(page.extract_text() or "" for page in PdfReader(BytesIO(pdf)).pages)
 
 
-def _slots(field_map: dict[str, str]) -> int:
-    indexes = [
-        int(key.split("_")[1])
-        for key in field_map
-        if key.startswith("skill_") and key.endswith("_name")
-    ]
-    return max(indexes)
-
-
-def _value(fields: dict[str, object], name: str) -> str:
-    field = fields[name]
-    assert isinstance(field, DictionaryObject)
-    stored = field.get("/V")
-    return "" if stored is None else str(stored)
-
-
-def _expected(document: PassportPdf, slots: int) -> dict[str, str]:
-    values = {
-        "holder_name": document.holder_name,
-        "passport_id": document.passport_id,
-        "version": str(document.version),
-        "issued_on": document.issued_on,
-        "verification_code": document.verification_code,
-    }
-    for index in range(1, slots + 1):
-        skill = document.skills[index - 1] if index <= len(document.skills) else None
-        values[f"skill_{index}_name"] = "" if skill is None else skill.skill
-        values[f"skill_{index}_badge"] = "" if skill is None else skill.badge
-        awarded = "" if skill is None or skill.awarded_on is None else skill.awarded_on
-        values[f"skill_{index}_date"] = awarded
-    return values
-
-
-def test_fill_uses_canonical_fields_and_appends_overflow() -> None:
+def test_official_four_page_layout_in_both_languages() -> None:
     document = _document()
-    cases: tuple[tuple[Literal["en", "ka"], str], ...] = (
-        ("en", "passport-en.pdf"),
-        ("ka", "passport-ka.pdf"),
+    for lang in ("en", "ka"):
+        pdf = render_pdf(lang, document)
+        reader = PdfReader(BytesIO(pdf))
+        assert len(reader.pages) == 4
+        assert reader.pages[0].mediabox.width > reader.pages[0].mediabox.height
+        text = _text(pdf)
+        for part in HOLDER.split():
+            assert part in text
+        assert ENGLISH_SKILL.upper() in text
+        assert OVERFLOW_SKILL.upper() in text
+        assert document.passport_id in text
+        assert document.verification_code in text
+    assert "სახელი" in _text(render_pdf("ka", document))
+    assert "AI APPLIED SKILL" in _text(render_pdf("en", document))
+
+
+def test_many_skills_paginate_grid_and_table() -> None:
+    skills = tuple(
+        Skill(skill=f"Skill {index}", badge="BDG-AI-002", awarded_on="2026-01-01")
+        for index in range(12)
     )
-    for lang, template in cases:
-        reader = PdfReader(BytesIO(render_pdf(lang, document)))
-        field_map = _field_map(template)
-        slots = _slots(field_map)
-        assert slots == 2
-        fields = reader.get_fields()
-        assert fields is not None
-        expected = _expected(document, slots)
-        for canonical, acro_name in field_map.items():
-            assert _value(fields, acro_name) == expected[canonical]
-        joined = " ".join(str(item.get("/V")) for item in fields.values())
-        assert OVERFLOW_SKILL not in joined
-        text = "\n".join(page.extract_text() or "" for page in reader.pages)
-        assert ENGLISH_SKILL in text
-        assert OVERFLOW_SKILL in text
-        assert HOLDER in text
-        assert len(reader.pages) >= 2
-        assert "Artificial Intelligence" not in text
+    document = replace(_document(), skills=skills)
+    reader = PdfReader(BytesIO(render_pdf("en", document)))
+    # cover + about + 2 grid pages (10 per page) + 3 table pages (5 per page)
+    assert len(reader.pages) == 7
+    assert "Skill 11" in (reader.pages[3].extract_text() or "").title()
+
+
+def test_stamp_images_are_drawn_for_known_badges() -> None:
+    document = replace(
+        _document(),
+        skills=(Skill(skill="AI Literacy", badge="BDG-AI-001", awarded_on="2026-01-01"),),
+    )
+    plain = replace(document, skills=(Skill(skill="AI Literacy", badge="X", awarded_on=None),))
+    with_stamp = PdfReader(BytesIO(render_pdf("en", document))).pages[2]
+    without = PdfReader(BytesIO(render_pdf("en", plain))).pages[2]
+    assert len(with_stamp.images) > len(without.images)
+
+
+def test_blockchain_link_is_printed_when_known() -> None:
+    url = "https://amoy.polygonscan.com/tx/0xabc"
+    text = _text(render_pdf("en", replace(_document(), tx_url=url)))
+    assert "amoy.polygonscan.com/tx/0xabc" in text
+    assert "pending" in _text(render_pdf("en", _document()))
 
 
 def test_georgian_text_is_drawn_with_the_asset_font() -> None:
     document = _document()
     pdf = render_pdf("ka", document)
-    text = "\n".join(page.extract_text() or "" for page in PdfReader(BytesIO(pdf)).pages)
-    assert HOLDER in text
-    assert OVERFLOW_SKILL in text
-    assert ENGLISH_SKILL in text
+    text = _text(pdf)
+    for part in HOLDER.split():
+        assert part in text
+    assert OVERFLOW_SKILL.upper() in text
+    assert ENGLISH_SKILL.upper() in text
     _assert_embedded_font_draws(pdf, HOLDER + OVERFLOW_SKILL)
 
 
@@ -163,8 +148,8 @@ def test_sync_writes_pdfs_and_retries_only_missing_paths(
     assert ada.pdf_ka_path == f"{ada.passport_id}/v1/ka.pdf"
     ka_path = tmp_path / ada.pdf_ka_path
     ka_text = "\n".join(page.extract_text() or "" for page in PdfReader(ka_path).pages)
-    assert ENGLISH_SKILL in ka_text
-    assert OVERFLOW_SKILL in ka_text
+    assert ENGLISH_SKILL.upper() in ka_text
+    assert OVERFLOW_SKILL.upper() in ka_text
     en_file = tmp_path / f"{ada.passport_id}/v1/en.pdf"
     ada.pdf_en_path = None
     ada.pdf_ka_path = None
@@ -194,8 +179,11 @@ def _row(email: str, full_name: str, skill: str, badge: str, awarded_on: str) ->
 
 
 def _assert_embedded_font_draws(pdf: bytes, sample: str) -> None:
-    source = TTFontFile(str(FONT))
-    ps_name = source.name.decode() if isinstance(source.name, bytes) else str(source.name)
+    sources = {}
+    for path in (FONT, BOLD_FONT):
+        font_file = TTFontFile(str(path))
+        name = font_file.name
+        sources[name.decode() if isinstance(name, bytes) else str(name)] = font_file
     needed = {char for char in sample if _georgian(char)}
     seen: set[str] = set()
     reader = PdfReader(BytesIO(pdf))
@@ -211,7 +199,8 @@ def _assert_embedded_font_draws(pdf: bytes, sample: str) -> None:
             if not isinstance(font_obj, DictionaryObject):
                 continue
             base = str(font_obj.get("/BaseFont"))
-            if not base.endswith(ps_name):
+            source = next((f for n, f in sources.items() if base.endswith(n)), None)
+            if source is None:
                 continue
             widths = font_obj.get("/Widths")
             first = font_obj.get("/FirstChar")

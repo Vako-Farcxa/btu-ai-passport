@@ -5,6 +5,7 @@ import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 
 import { LocaleSwitcher } from '@/components/locale-switcher'
 import { Button } from '@/components/ui/button'
+import { Spinner } from '@/components/ui/spinner'
 import { messages, type Locale, type Outcome } from '@/i18n/messages'
 import { useLocale } from '@/i18n/use-locale'
 import { postVerify } from '@/lib/api/client'
@@ -87,8 +88,20 @@ export default function VerifyPage() {
           onChange={(event) => setCode(event.target.value)}
           className="h-11 rounded-md border border-[#c5d0dc] bg-white px-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#10243e]"
         />
-        <Button type="submit" disabled={loading} className="h-11 w-fit px-4">
-          {loading ? copy.checking : copy.check}
+        <Button
+          type="submit"
+          disabled={loading}
+          aria-busy={loading}
+          className="h-11 w-fit bg-[#10243e] px-4 text-white hover:bg-[#1d3a5f] focus-visible:ring-[#10243e]/40"
+        >
+          {loading ? (
+            <>
+              <Spinner />
+              {copy.checking}
+            </>
+          ) : (
+            copy.check
+          )}
         </Button>
         {prompt ? (
           <p id="code-hint" role="alert">

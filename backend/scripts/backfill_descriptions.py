@@ -56,6 +56,11 @@ def main() -> None:
                     issued_on=version.issued_at[:10],
                     verification_code=version.verification_code,
                     skills=version.skills,
+                    tx_url=(
+                        f"https://amoy.polygonscan.com/tx/{version.tx_hash}"
+                        if version.anchor_status == "confirmed" and version.tx_hash
+                        else None
+                    ),
                 ),
                 storage,
             )

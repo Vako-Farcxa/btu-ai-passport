@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react'
 
+import { Button } from '@/components/ui/button'
+import { Spinner } from '@/components/ui/spinner'
 import { LocaleSwitcher } from '@/components/locale-switcher'
 import { SignInButton } from '@/components/sign-in-button'
 import { entrance } from '@/components/entrance'
@@ -20,13 +22,11 @@ import { readAccessToken } from '@/lib/supabase/client'
 const linkClass =
   'underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#10243e]'
 
-const buttonClass =
-  'w-fit rounded-md px-2 py-1 text-sm underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#10243e]'
-
 export default function PassportPage() {
   const [locale, setLocale] = useLocale()
   const session = useMyPassport()
   const [pdfNotice, setPdfNotice] = useState<string | null>(null)
+  const [downloading, setDownloading] = useState<number | null>(null)
   const copy = messages[locale]
   const ref = useRef<HTMLElement | null>(null)
 
@@ -40,7 +40,9 @@ export default function PassportPage() {
   const current = versions.find((version) => version.is_current) ?? versions[0]
 
   async function onDownload(version: number) {
+    if (downloading !== null) return
     setPdfNotice(null)
+    setDownloading(version)
     try {
       const token = await readAccessToken()
       if (!token) {
@@ -59,6 +61,8 @@ export default function PassportPage() {
     } catch (error) {
       const code = error instanceof PassportRequestError ? error.code : 'error'
       setPdfNotice(explainPassportError(code, locale))
+    } finally {
+      setDownloading(null)
     }
   }
 
@@ -112,13 +116,22 @@ export default function PassportPage() {
                     {version.is_current ? ` · ${copy.currentVersion}` : ''}
                   </h3>
                   <VersionFacts locale={locale} version={version} />
-                  <button
+                  <Button
                     type="button"
-                    className={buttonClass}
+                    className="h-10 w-fit bg-[#10243e] px-4 text-white hover:bg-[#1d3a5f] focus-visible:ring-[#10243e]/40"
+                    disabled={downloading !== null}
+                    aria-busy={downloading === version.version}
                     onClick={() => void onDownload(version.version)}
                   >
-                    {copy.downloadPdf}
-                  </button>
+                    {downloading === version.version ? (
+                      <>
+                        <Spinner />
+                        {copy.preparingPdf}
+                      </>
+                    ) : (
+                      copy.downloadPdf
+                    )}
+                  </Button>
                 </li>
               ))}
             </ol>
