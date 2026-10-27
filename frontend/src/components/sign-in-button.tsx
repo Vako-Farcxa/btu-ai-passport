@@ -2,15 +2,17 @@
 
 import { useState } from 'react'
 
-import { Button } from '@/components/ui/button'
+import { PrimaryButton } from '@/components/book'
 import { signInWithGoogle } from '@/lib/supabase/client'
 
 export function SignInButton({
   label,
   unavailable,
+  tone = 'gold',
 }: {
   label: string
   unavailable: string
+  tone?: 'gold' | 'navy'
 }) {
   const [notice, setNotice] = useState<string | null>(null)
 
@@ -25,15 +27,18 @@ export function SignInButton({
   }
 
   return (
-    <div className="flex flex-col items-start gap-3">
-      <Button
-        type="button"
-        onClick={() => void onClick()}
-        className="h-11 w-fit px-4"
+    <div className={tone === 'gold' ? 'sign-in cover-sign-in' : 'sign-in'}>
+    <PrimaryButton type="button" tone={tone} onClick={() => void onClick()}>
+    {label}
+    </PrimaryButton>
+    {notice ? (
+      <p
+      role="alert"
+      className={tone === 'gold' ? 'cover-alert' : 'page-alert'}
       >
-        {label}
-      </Button>
-      {notice ? <p role="alert">{notice}</p> : null}
+      {notice}
+      </p>
+    ) : null}
     </div>
   )
 }

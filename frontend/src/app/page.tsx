@@ -1,60 +1,74 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import Link from 'next/link'
 
-import { LocaleSwitcher } from '@/components/locale-switcher'
+import { LandingDesk } from '@/components/book'
 import { SignInButton } from '@/components/sign-in-button'
-import { entrance } from '@/components/entrance'
 import { messages } from '@/i18n/messages'
 import { useLocale } from '@/i18n/use-locale'
 import { explainPassportError } from '@/lib/api/passport'
 import { useMyPassport } from '@/lib/api/use-passport'
 
-const linkClass =
-  'underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#10243e]'
-
 export default function Home() {
   const [locale, setLocale] = useLocale()
   const session = useMyPassport()
   const copy = messages[locale]
-  const ref = useRef<HTMLElement | null>(null)
-
-  useEffect(() => {
-    document.documentElement.lang = locale
-    entrance(ref.current!)
-  }, [locale])
+  const hasPassport = session.kind === 'ready' && session.body.passport !== null
 
   return (
-    <main
-      ref={ref}
-      className="mx-auto flex w-full max-w-xl flex-1 flex-col gap-8 px-6 py-16 text-[#10243e]"
-    >
-      <header className="flex flex-col gap-4">
-        <LocaleSwitcher locale={locale} onChange={setLocale} />
-        <div className="flex flex-col gap-2">
-          <p className="text-sm tracking-wide text-[#4d6078]">BTU</p>
-          <h1 className="text-3xl font-semibold tracking-tight">
-            {copy.homeTitle}
-          </h1>
-          <p className="text-[#4d6078]">{copy.homeIntro}</p>
-        </div>
-      </header>
-      {session.kind === 'loading' ? <p role="status">{copy.loading}</p> : null}
-      {session.kind === 'error' ? (
-        <p role="alert">{explainPassportError(session.code, locale)}</p>
-      ) : null}
-      {session.kind === 'ready' && session.body.passport === null ? (
+    <LandingDesk locale={locale} onLocale={setLocale}>
+    <div className="landing-stage">
+    <div className="book-cover">
+    <div className="cover-border">
+    <div className="cover-content">
+    <span className="cover-eyebrow">BTU · 2026</span>
+    <div className="cover-flourish" aria-hidden="true">
+    <i />
+    <b>✦</b>
+    <i />
+    </div>
+    <h1>{copy.homeTitle}</h1>
+    <p>{copy.homeIntro}</p>
+    {session.kind === 'loading' ? (
+      <div className="cover-status">
+      <span aria-hidden="true" />
+      <p role="status">{copy.loading}</p>
+      </div>
+    ) : null}
+    {session.kind === 'error' ? (
+      <p role="alert" className="cover-alert">
+      {explainPassportError(session.code, locale)}
+      </p>
+    ) : null}
+    {session.kind === 'signed_out' ||
+      (session.kind === 'ready' && session.body.passport === null) ? (
+        <div className="cover-status">
+        <span aria-hidden="true" />
         <p role="status">{copy.emptyPassport}</p>
+        </div>
       ) : null}
-      {session.kind === 'ready' && session.body.passport !== null ? (
-        <a className={linkClass} href="/passport">
-          {copy.openPassport}
-        </a>
+      {hasPassport ? (
+        <Link className="text-link cover-open" href="/passport">
+        {copy.openPassport}
+        </Link>
       ) : null}
-      <SignInButton label={copy.signIn} unavailable={copy.signInUnavailable} />
-      <a className={linkClass} href="/verify">
-        {copy.verifyLink}
-      </a>
-    </main>
+      <SignInButton
+      label={copy.signIn}
+      unavailable={copy.signInUnavailable}
+      />
+      <Link className="text-link" href="/verify">
+      {copy.verifyLink}
+      </Link>
+      </div>
+      <div className="cover-footer">
+      BUSINESS AND TECHNOLOGY UNIVERSITY
+      </div>
+      </div>
+      </div>
+      <div className="book-pages" aria-hidden="true" />
+      <div className="book-ribbon" aria-hidden="true" />
+      </div>
+      <p className="landing-note">{copy.landingNote}</p>
+      </LandingDesk>
   )
 }

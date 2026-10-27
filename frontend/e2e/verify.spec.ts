@@ -20,8 +20,9 @@ test('verification page shows one still outcome', async ({ page }) => {
           skills: [
             {
               skill: 'Machine Learning',
-              badge: 'Stamp',
+              badge: 'BDG-AI-001',
               awarded_on: '2025-06-01',
+              description: 'Use models with a human in the loop.',
             },
           ],
           tx_url: 'https://amoy.polygonscan.com/tx/0x' + '11'.repeat(32),
@@ -71,7 +72,9 @@ test('verification page shows one still outcome', async ({ page }) => {
   await expect(result).toContainText('Valid')
   await expect(result).toContainText('Nino Beridze')
   await expect(result).toContainText('Machine Learning')
+  await expect(result).toContainText('Use models with a human in the loop.')
   await expect(result).toContainText('This is the latest version')
+  await expect(result.locator('img[src*="BDG-AI-001"]')).toBeVisible()
   await expect(result.getByRole('link')).toHaveAttribute(
     'href',
     /amoy\.polygonscan\.com/,
@@ -82,7 +85,7 @@ test('verification page shows one still outcome', async ({ page }) => {
   expect(animation).toBe('none')
 
   await page.getByRole('button', { name: 'ქართული' }).click()
-  await expect(result).toContainText('ვალიდური')
+  await expect(result).toContainText('ნამდვილია')
   await expect(result).toContainText('Machine Learning')
 
   await page.getByRole('button', { name: 'English' }).click()
@@ -100,4 +103,5 @@ test('verification page shows one still outcome', async ({ page }) => {
   await page.getByRole('button', { name: 'Check' }).click()
   await expect(page.getByTestId('verify-result')).toHaveText(/Error/)
   await expect(page.getByTestId('verify-result')).not.toContainText('Python')
+  await expect(page.locator('.badge-stamp')).toHaveCount(0)
 })
