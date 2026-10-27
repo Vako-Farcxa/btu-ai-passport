@@ -516,7 +516,9 @@ button:disabled {
 }
 
 .back-link {
-    display: inline-flex;
+    display: flex;
+    width: fit-content;
+    margin-bottom: 10px;
     align-items: center;
     min-height: 44px;
     border: 0;
