@@ -18,8 +18,9 @@ const caller = {
         skills: [
           {
             skill: 'Machine Learning',
-            badge: 'Stamp',
+            badge: 'BDG-AI-002',
             awarded_on: '2025-06-01',
+            description: 'Choose a model the decision can survive.',
           },
         ],
         anchor: {
@@ -105,6 +106,10 @@ test('a signed-in student cannot open another passport', async ({ page }) => {
   await expect(page.getByText('A1B2-C3D4-E5F6-G7H8')).toBeVisible()
   await expect(page.getByText('K9M2-N3P4-Q5R6-S7T8')).toBeVisible()
   await expect(page.getByText('Machine Learning')).toBeVisible()
+  await expect(
+    page.getByText('Choose a model the decision can survive.'),
+  ).toBeVisible()
+  await expect(page.locator('img[src*="BDG-AI-002"]')).toBeVisible()
   await expect(page.getByText(OTHER_ID)).toHaveCount(0)
   await expect(page.getByText(OTHER_CODE)).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Download PDF' })).toHaveCount(
@@ -159,8 +164,8 @@ test('a student downloads the PDF for the selected language', async ({
   await page.getByRole('button', { name: 'PDF-ის ჩამოტვირთვა' }).first().click()
   await expect(
     page
-      .getByRole('alert')
-      .filter({ hasText: 'ამ ვერსიის PDF ჯერ მზად არ არის.' }),
+    .getByRole('alert')
+    .filter({ hasText: 'ამ ვერსიის PDF ჯერ მზად არ არის.' }),
   ).toBeVisible()
   await expect(page.getByText('პასპორტის ID')).toBeVisible()
   await expect(page.getByText(OWN_ID)).toBeVisible()
