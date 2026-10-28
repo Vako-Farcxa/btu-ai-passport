@@ -805,6 +805,9 @@ def award_skill(
             sync_result = SyncResult(
                 status="failed", rows_read=0, versions_created=0, error="sync_failed"
             )
+        if sync_result.status == "skipped":
+            # Another sync holds the lock. The rows are already in the Sheet.
+            sync_result = sync_result.model_copy(update={"error": "sync_in_progress"})
         for email, row_number in placed.items():
             outcome = recorder.outcomes.get(sheet.data_index(row_number))
             if outcome is None:

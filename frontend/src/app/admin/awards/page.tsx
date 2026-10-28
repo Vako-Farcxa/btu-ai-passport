@@ -6,6 +6,7 @@ import {
   SKILL_LEVELS,
   adminErrorMessage,
   awardAdminSkill,
+  awardSyncNotice,
   fetchAdminSkills,
   parseAwardStudents,
   type AdminAwardResponse,
@@ -97,10 +98,7 @@ function AwardForm() {
     }
   }
 
-  const syncProblem =
-    result && result.sync_result.status === 'failed'
-      ? 'The sync failed after the rows were added to the Sheet. They will be picked up by the next scheduled sync.'
-      : null
+  const syncProblem = result ? awardSyncNotice(result) : null
 
   return (
     <div className="space-y-6">
@@ -274,7 +272,7 @@ function AwardForm() {
                     {row.error
                       ? `${adminErrorMessage(row.error)} (${row.error})`
                       : row.status === 'pending'
-                        ? 'In the Sheet. Waiting for the next sync.'
+                        ? 'Saved in the Sheet. Will sync shortly.'
                         : ''}
                   </td>
                 </tr>

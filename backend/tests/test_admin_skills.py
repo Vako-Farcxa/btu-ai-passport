@@ -655,6 +655,7 @@ def test_award_row_is_pending_when_another_sync_is_running(
     body = response.json()
     assert body["rows"][0]["status"] == "pending"
     assert body["sync_result"]["status"] == "skipped"
+    assert body["sync_result"]["error"] == "sync_in_progress"
     assert sheet.grid[-1][HEADER.index("BTU Email (Test)")] == "nino@btu.edu.ge"
 
 
