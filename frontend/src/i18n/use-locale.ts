@@ -3,6 +3,7 @@
 import { useSyncExternalStore } from 'react'
 
 import { preferredLocale, type Locale } from '@/i18n/messages'
+import { writeCookie } from '@/lib/cookies'
 
 const COOKIE = 'passport_locale'
 const EVENT = 'passport-locale'
@@ -32,7 +33,7 @@ export function useLocale(): [Locale, (locale: Locale) => void] {
     () => 'ka' as const,
   )
   const setLocale = (next: Locale) => {
-    document.cookie = `${COOKIE}=${next}; path=/; max-age=31536000; samesite=lax`
+    writeCookie(COOKIE, next, 31536000)
     document.documentElement.lang = next
     window.dispatchEvent(new Event(EVENT))
   }

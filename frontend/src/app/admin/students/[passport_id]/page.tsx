@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import React, { Suspense, useEffect, useState } from 'react'
 import { fetchAdminStudent, type AdminStudentDetail } from '@/lib/api/admin'
+import { explorerTxUrlFor } from '@/lib/explorer'
 import { shareLinkFor } from '@/lib/share'
 
 function StudentDetailContent() {
@@ -223,11 +224,11 @@ function StudentDetailContent() {
                   >
                     Verify ↗
                   </Link>
-                  {ver.tx_hash && (
+                  {ver.tx_hash && explorerTxUrlFor(ver.tx_hash) && (
                     <>
                       <span>•</span>
                       <a
-                        href={`https://amoy.polygonscan.com/tx/${ver.tx_hash}`}
+                        href={explorerTxUrlFor(ver.tx_hash) ?? undefined}
                         target="_blank"
                         rel="noreferrer"
                         className="text-indigo-600 hover:underline"

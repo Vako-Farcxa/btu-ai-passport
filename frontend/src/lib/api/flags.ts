@@ -1,3 +1,4 @@
+import { apiBaseUrl } from '@/lib/api/base-url'
 import { z } from 'zod'
 
 import type { Locale } from '@/i18n/messages'
@@ -71,7 +72,7 @@ export function explainFlagError(code: FlagErrorCode, locale: Locale): string {
 }
 
 function apiBase(): string {
-  return process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
+  return apiBaseUrl()
 }
 
 function code(value: unknown): FlagErrorCode {

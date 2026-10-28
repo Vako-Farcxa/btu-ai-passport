@@ -8,6 +8,7 @@ import { SkillList } from '@/components/skill-list'
 import { messages, type Locale } from '@/i18n/messages'
 import type { VerifyResult } from '@/lib/api/types'
 import { labelsFor, newerVersionNotice } from '@/lib/api/verify'
+import { explorerTxUrl } from '@/lib/explorer'
 
 const glyphs = {
   valid: '✓',
@@ -29,6 +30,7 @@ export function VerifyResultCard({
   useResultMotion(ref)
   const notice = newerVersionNotice(result, locale)
   const found = result.outcome === 'valid' || result.outcome === 'outdated'
+  const txUrl = 'tx_url' in result ? explorerTxUrl(result.tx_url) : null
 
   return (
     <section
@@ -69,10 +71,12 @@ export function VerifyResultCard({
             <b>{result.version}</b>
           </div>
           <SkillList skills={result.skills} locale={locale} />
-          <a className="transaction-link" href={result.tx_url}>
-            {copy.transaction}
-            <span aria-hidden="true">↗</span>
-          </a>
+          {txUrl ? (
+            <a className="transaction-link" href={txUrl}>
+              {copy.transaction}
+              <span aria-hidden="true">↗</span>
+            </a>
+          ) : null}
           <TestnetNote locale={locale} />
         </>
       ) : null}

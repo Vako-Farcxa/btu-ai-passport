@@ -1,3 +1,4 @@
+import { apiBaseUrl } from '@/lib/api/base-url'
 import {
   VerifyInputError,
   verifyResultSchema,
@@ -5,7 +6,7 @@ import {
 } from '@/lib/api/types'
 
 export async function postVerify(code: string): Promise<VerifyResult> {
-  const base = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
+  const base = apiBaseUrl()
   const response = await fetch(`${base}/verify`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
