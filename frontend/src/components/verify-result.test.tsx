@@ -66,10 +66,10 @@ function userFacingText(root: HTMLElement): string {
   return text
 }
 
-// Latin words that may stay in Georgian: the abbreviations BTU and AI.
+// Latin words that may stay in Georgian: BTU and AI, and the Polygon Amoy network name.
 function englishWords(text: string): string[] {
   return (text.match(/[A-Za-z]{2,}/g) ?? []).filter(
-    (word) => word !== 'BTU' && word !== 'AI',
+    (word) => !['BTU', 'AI', 'Polygon', 'Amoy'].includes(word),
   )
 }
 
@@ -149,5 +149,34 @@ describe('translations', () => {
       .replace(/btu\.edu\.ge/g, ' ')
       .match(/[A-Za-z]{2,}/g)
     expect((words ?? []).filter((word) => !allowed.has(word))).toEqual([])
+  })
+
+  it.each(['valid', 'outdated'] as const)(
+    'tells the reader the anchor is on a test network for %s',
+    (outcome) => {
+      const { getByTestId } = render(
+        <VerifyResultCard locale="en" result={RESULTS[outcome]!} />,
+      )
+      expect(getByTestId('testnet-note').textContent).toMatch(
+        /Polygon Amoy test network/,
+      )
+    },
+  )
+
+  it.each(['not_found', 'error'] as const)(
+    'shows no test network note when there is no anchor (%s)',
+    (outcome) => {
+      const { queryByTestId } = render(
+        <VerifyResultCard locale="en" result={RESULTS[outcome]!} />,
+      )
+      expect(queryByTestId('testnet-note')).toBeNull()
+    },
+  )
+
+  it('never shows an email address, passport id or code', () => {
+    const { container } = render(
+      <VerifyResultCard locale="en" result={VALID} />,
+    )
+    expect(container.textContent).not.toMatch(/@|BTU-[A-Z0-9]{6,}/)
   })
 })

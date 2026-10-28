@@ -5,7 +5,8 @@ import React from 'react'
 import { AdminGate, AdminIdentity } from '@/components/admin/admin-gate'
 
 export const metadata: Metadata = {
-  title: 'BTU Admin Panel — Digital Skills Passport',
+  title: 'BTU Admin Panel',
+  robots: { index: false, follow: false },
   description: 'Manage students, skills, sheet syncs, and blockchain anchoring',
 }
 

@@ -5,6 +5,7 @@ import { useRef, type ButtonHTMLAttributes, type ReactNode } from 'react'
 
 import { messages, type Locale } from '@/i18n/messages'
 import { LocaleSwitcher } from '@/components/locale-switcher'
+import { SiteFooter } from '@/components/site-footer'
 import { useCoverMotion, useOpenBookMotion } from '@/components/motion'
 
 export function BrandMark({ locale }: { locale: Locale }) {
@@ -67,6 +68,7 @@ export function LandingDesk({
         <LocaleSwitcher locale={locale} onChange={onLocale} />
       </header>
       {children}
+      <SiteFooter locale={locale} />
     </main>
   )
 }
@@ -113,6 +115,7 @@ export function OpenBook({
         </div>
       </div>
       <div className="book-shadow" aria-hidden="true" />
+      <SiteFooter locale={locale} />
     </main>
   )
 }

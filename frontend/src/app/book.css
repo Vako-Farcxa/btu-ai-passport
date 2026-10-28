@@ -1562,3 +1562,138 @@ button:disabled {
 .flag-list-head .flag-state {
   margin: 0;
 }
+
+/* Trust pages: footer, info pages, status pages, testnet note */
+.site-footer {
+  position: relative;
+  z-index: 3;
+  width: min(1180px, calc(100% - 80px));
+  margin: 22px auto 0;
+  padding: 18px 0 0;
+  border-top: 1px solid rgba(213, 186, 120, 0.28);
+  text-align: center;
+  color: rgba(255, 255, 255, 0.66);
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.site-footer p {
+  margin: 0;
+}
+
+.site-footer-project {
+  color: rgba(255, 255, 255, 0.86);
+  letter-spacing: 0.06em;
+}
+
+.site-footer-team span {
+  color: var(--gold-300);
+}
+
+.site-footer .site-footer-disclaimer {
+  max-width: 640px;
+  margin: 4px auto 0;
+}
+
+.site-footer-links {
+  margin-top: 8px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+
+.site-footer-links a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--gold-300);
+  text-decoration: none;
+}
+
+.site-footer-links a:hover {
+  text-decoration: underline;
+}
+
+.site-footer a:focus-visible {
+  outline: 2px solid var(--gold-300);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+.info-section h2 {
+  margin-top: 30px;
+  font-size: 20px;
+}
+
+.info-section p,
+.info-section li {
+  margin: 8px 0 0;
+  max-width: 560px;
+  color: var(--ink-600);
+  font-size: 14px;
+  line-height: 1.75;
+}
+
+.info-section ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.status-actions {
+  margin-top: 30px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 18px;
+}
+
+.status-page .primary-button {
+  width: auto;
+}
+
+.testnet-note {
+  margin: 18px 0 0;
+  max-width: 520px;
+  padding: 8px 0 8px 14px;
+  border-left: 3px solid var(--gold-500);
+  color: var(--ink-600);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.certificate .testnet-note {
+  margin: 14px 22px 20px;
+}
+
+@media (max-width: 900px) {
+  .site-footer {
+    width: calc(100% - 40px);
+  }
+}
+
+.status-page .text-link {
+  margin-top: 0;
+  color: var(--navy-900);
+  border-bottom-color: var(--gold-500);
+}
+
+.info-page h1,
+.status-page h1 {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 560px) {
+  .info-page h1 {
+    font-size: 26px;
+  }
+}
+
+@media (max-width: 560px) {
+  .landing-note {
+    margin-top: 48px;
+    padding: 0 20px;
+    line-height: 1.8;
+  }
+}

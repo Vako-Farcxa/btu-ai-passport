@@ -9,6 +9,7 @@ import { CopyCode } from '@/components/copy-code'
 import { FlagBadge, FlagDialog, MyFlags } from '@/components/flags'
 import { ShareLinkButton } from '@/components/share-link-button'
 import { SkillList } from '@/components/skill-list'
+import { TestnetNote } from '@/components/testnet-note'
 import { Spinner } from '@/components/ui/spinner'
 import { messages, type Locale } from '@/i18n/messages'
 import { useLocale } from '@/i18n/use-locale'
@@ -133,6 +134,9 @@ export default function PassportPage() {
               onOpened={() => void myFlags.markSeen()}
             />
           </div>
+          {versions.some((version) => version.anchor.tx_url) ? (
+            <TestnetNote locale={locale} />
+          ) : null}
           <ol className="version-list">
             {versions.map((version) => {
               const flag = flagForVersion(myFlags.flags, version.version)
