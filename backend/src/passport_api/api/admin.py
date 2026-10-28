@@ -45,7 +45,6 @@ from passport_api.schemas import (
     Skill,
     SyncResult,
 )
-from passport_api.settings import email_domain_allowed
 from passport_api.sheet_admin import (
     ALREADY_AWARDED,
     AdminGspreadSheet,
@@ -62,6 +61,15 @@ from passport_api.sync import (
     SyncStore,
     badge_for_category,
     run_sync,
+)
+from passport_api.validation import (
+    DUPLICATE_EMAIL,
+    FIRST_NAME_INVALID,
+    LAST_NAME_INVALID,
+    clean_email,
+    clean_name,
+    email_error,
+    name_error,
 )
 
 
@@ -317,7 +325,6 @@ def trigger_sync() -> SyncResult:
 
 _SKILL_COLUMNS = "id, name, name_ka, category, badge, description"
 _SKILL_ID = re.compile(r"^SKL-(\d+)$")
-_EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
 def get_admin_sheet() -> AdminSheet:
@@ -511,6 +518,9 @@ def award_skill(
     sheet: AdminSheet = _admin_sheet_dependency,
     store: SyncStore = _sync_store_dependency,
 ) -> AdminAwardResponse:
+    emails = [clean_email(student.email) for student in body.students]
+    if len(set(emails)) != len(emails):
+        raise APIError(422, DUPLICATE_EMAIL)
     response = (
         _skills_table().select(_SKILL_COLUMNS).eq("id", body.skill_id.strip().upper()).execute()
     )
@@ -529,33 +539,34 @@ def award_skill(
     results: dict[str, AwardRowResult] = {}
     awards: list[AwardInput] = []
     for student in body.students:
-        email = _nfc(student.email).lower()
-        if email in results or any(a.email == email for a in awards):
-            continue
+        email = clean_email(student.email)
         order.append(email)
-        if not _EMAIL.match(email):
-            results[email] = AwardRowResult(email=email, status="failed", error="invalid_email")
-        elif not email_domain_allowed(email):
-            results[email] = AwardRowResult(
-                email=email, status="failed", error="email_domain_not_allowed"
+        first_name, last_name = clean_name(student.first_name), clean_name(student.last_name)
+        problem = email_error(email)
+        if problem is None and (first_name or last_name):
+            # A name is optional only when neither part is given (an existing student).
+            problem = name_error(first_name, FIRST_NAME_INVALID) or name_error(
+                last_name, LAST_NAME_INVALID
             )
-        else:
-            awards.append(
-                AwardInput(
-                    email=email,
-                    passport_id=known[email].passport_id if email in known else "",
-                    first_name=_nfc(student.first_name),
-                    last_name=_nfc(student.last_name),
-                    program=_nfc(student.program),
-                    education_level=_nfc(student.education_level),
-                    skill_id=skill.id,
-                    skill_name=skill.name,
-                    category=level,
-                    badge=badge,
-                    description=skill.description,
-                    awarded_on=awarded_on,
-                )
+        if problem is not None:
+            results[email] = AwardRowResult(email=email, status="failed", error=problem)
+            continue
+        awards.append(
+            AwardInput(
+                email=email,
+                passport_id=known[email].passport_id if email in known else "",
+                first_name=first_name,
+                last_name=last_name,
+                program=_nfc(student.program),
+                education_level=_nfc(student.education_level),
+                skill_id=skill.id,
+                skill_name=skill.name,
+                category=level,
+                badge=badge,
+                description=skill.description,
+                awarded_on=awarded_on,
             )
+        )
 
     placed: dict[str, int] = {}
     if awards:

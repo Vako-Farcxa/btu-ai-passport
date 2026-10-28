@@ -639,7 +639,6 @@ def test_award_appends_rows_then_syncs(
             "awarded_on": "2026-10-28",
             "students": [
                 {"email": "Nino@btu.edu.ge", "first_name": "Nino", "last_name": "Beridze"},
-                {"email": "nino@btu.edu.ge"},
                 {"email": "nobody@btu.edu.ge"},
                 {"email": "bad@gmail.com", "first_name": "Bad"},
                 {"email": "not-an-email"},
@@ -739,7 +738,9 @@ def test_award_row_is_pending_when_another_sync_is_running(
         headers=AUTH,
         json={
             "skill_id": "SKL-002",
-            "students": [{"email": "nino@btu.edu.ge", "first_name": "Nino"}],
+            "students": [
+                {"email": "nino@btu.edu.ge", "first_name": "Nino", "last_name": "Beridze"}
+            ],
         },
     )
     body = response.json()
@@ -756,7 +757,7 @@ def test_award_unknown_skill_and_missing_level(
     unknown = client.post(
         "/admin/awards",
         headers=AUTH,
-        json={"skill_id": "SKL-404", "students": [{"email": "a@btu.edu.ge"}]},
+        json={"skill_id": "SKL-404", "students": [{"email": "anna@btu.edu.ge"}]},
     )
     assert unknown.status_code == 404
     assert unknown.json() == {"code": "skill_not_found"}
@@ -765,7 +766,7 @@ def test_award_unknown_skill_and_missing_level(
     nolevel = client.post(
         "/admin/awards",
         headers=AUTH,
-        json={"skill_id": "SKL-002", "students": [{"email": "a@btu.edu.ge"}]},
+        json={"skill_id": "SKL-002", "students": [{"email": "anna@btu.edu.ge"}]},
     )
     assert nolevel.status_code == 422
     assert nolevel.json() == {"code": "award_level_required"}
@@ -775,7 +776,7 @@ def test_award_unknown_skill_and_missing_level(
         json={
             "skill_id": "SKL-002",
             "level": "AI Advanced Skill",
-            "students": [{"email": "a@btu.edu.ge", "first_name": "A"}],
+            "students": [{"email": "anna@btu.edu.ge", "first_name": "Anna", "last_name": "Smith"}],
         },
     )
     assert explicit.status_code == 200
@@ -789,7 +790,10 @@ def test_award_sheet_unavailable(env: tuple[FakeDb, FakeAdminSheet, MemorySyncSt
     response = client.post(
         "/admin/awards",
         headers=AUTH,
-        json={"skill_id": "SKL-002", "students": [{"email": "a@btu.edu.ge", "first_name": "A"}]},
+        json={
+            "skill_id": "SKL-002",
+            "students": [{"email": "anna@btu.edu.ge", "first_name": "Anna", "last_name": "Smith"}],
+        },
     )
     assert response.status_code == 503
 
@@ -856,12 +860,14 @@ def test_database_student_without_a_sheet_row_keeps_their_passport_id(
     db, sheet, store = env
     seed_skill(db)
     store.students.append(
-        StudentRecord(email="db@btu.edu.ge", full_name="Db Student", passport_id="BTU-AI-000999")
+        StudentRecord(
+            email="dbuser@btu.edu.ge", full_name="Db Student", passport_id="BTU-AI-000999"
+        )
     )
     store.versions.append(
         VersionRecord(
             passport_id="BTU-AI-000999",
-            email="db@btu.edu.ge",
+            email="dbuser@btu.edu.ge",
             version_number=1,
             holder_name="Db Student",
             verification_code="code",
@@ -879,7 +885,7 @@ def test_database_student_without_a_sheet_row_keeps_their_passport_id(
     response = client.post(
         "/admin/awards",
         headers=AUTH,
-        json={"skill_id": "SKL-002", "students": [{"email": "db@btu.edu.ge"}]},
+        json={"skill_id": "SKL-002", "students": [{"email": "dbuser@btu.edu.ge"}]},
     )
     assert response.status_code == 200
     row = dict(zip(HEADER, sheet.grid[-1], strict=True))
@@ -895,3 +901,129 @@ def test_direct_student_creation_is_gone(
         "/admin/students", headers=AUTH, json={"email": "x@btu.edu.ge", "full_name": "X"}
     )
     assert response.status_code == 405
+
+
+def post_award(students: list[dict[str, str]]) -> Any:
+    return client.post(
+        "/admin/awards", headers=AUTH, json={"skill_id": "SKL-002", "students": students}
+    )
+
+
+def test_award_rejects_a_fake_student_and_writes_nothing(
+    env: tuple[FakeDb, FakeAdminSheet, MemorySyncStore],
+) -> None:
+    db, sheet, _ = env
+    seed_skill(db)
+    rows = len(sheet.grid)
+    response = post_award([{"email": "111@btu.edu.ge", "first_name": "1", "last_name": "1"}])
+    assert response.status_code == 200
+    only = response.json()["rows"][0]
+    assert only["status"] == "failed"
+    assert only["error"] == "email_local_not_name_like"
+    assert len(sheet.grid) == rows
+
+
+@pytest.mark.parametrize(
+    ("student", "error"),
+    [
+        (
+            {"email": "1@btu.edu.ge", "first_name": "Nino", "last_name": "Beridze"},
+            "email_local_too_short",
+        ),
+        (
+            {"email": "nino@gmail.com", "first_name": "Nino", "last_name": "Beridze"},
+            "email_domain_not_allowed",
+        ),
+        ({"email": "nino@", "first_name": "Nino", "last_name": "Beridze"}, "invalid_email"),
+        (
+            {"email": "nino@btu.edu.ge", "first_name": "1", "last_name": "Beridze"},
+            "invalid_first_name",
+        ),
+        (
+            {"email": "nino@btu.edu.ge", "first_name": "Nino", "last_name": "B3ridze"},
+            "invalid_last_name",
+        ),
+        ({"email": "nino@btu.edu.ge", "first_name": "Nino", "last_name": ""}, "invalid_last_name"),
+        (
+            {"email": "nino@btu.edu.ge", "first_name": "", "last_name": "Beridze"},
+            "invalid_first_name",
+        ),
+        (
+            {"email": "nino@btu.edu.ge", "first_name": "N", "last_name": "Beridze"},
+            "invalid_first_name",
+        ),
+    ],
+)
+def test_award_applies_name_and_email_rules(
+    env: tuple[FakeDb, FakeAdminSheet, MemorySyncStore],
+    student: dict[str, str],
+    error: str,
+) -> None:
+    db, sheet, _ = env
+    seed_skill(db)
+    rows = len(sheet.grid)
+    body = post_award([student]).json()["rows"][0]
+    assert (body["status"], body["error"]) == ("failed", error)
+    assert len(sheet.grid) == rows
+
+
+def test_award_lowercases_the_email_and_cleans_the_name(
+    env: tuple[FakeDb, FakeAdminSheet, MemorySyncStore],
+) -> None:
+    db, sheet, _ = env
+    seed_skill(db)
+    body = post_award(
+        [
+            {
+                "email": "  Nino.Beridze@BTU.edu.ge ",
+                "first_name": " ნინო ",
+                "last_name": "O'Brien  Kapanadze",
+            }
+        ]
+    ).json()["rows"][0]
+    assert body["status"] == "synced"
+    assert body["email"] == "nino.beridze@btu.edu.ge"
+    row = dict(zip(HEADER, sheet.grid[-1], strict=True))
+    assert row["BTU Email (Test)"] == "nino.beridze@btu.edu.ge"
+    assert row["First Name"] == "ნინო"
+    assert row["Last Name"] == "O'Brien Kapanadze"
+
+
+def test_award_rejects_duplicate_emails_in_one_request(
+    env: tuple[FakeDb, FakeAdminSheet, MemorySyncStore],
+) -> None:
+    db, sheet, _ = env
+    seed_skill(db)
+    rows = len(sheet.grid)
+    response = post_award(
+        [
+            {"email": "nino@btu.edu.ge", "first_name": "Nino", "last_name": "Beridze"},
+            {"email": " NINO@btu.edu.ge", "first_name": "Nino", "last_name": "Beridze"},
+        ]
+    )
+    assert response.status_code == 422
+    assert response.json() == {"code": "duplicate_email"}
+    assert len(sheet.grid) == rows
+
+
+def test_one_bad_row_does_not_block_a_good_one(
+    env: tuple[FakeDb, FakeAdminSheet, MemorySyncStore],
+) -> None:
+    db, _, _ = env
+    seed_skill(db)
+    rows = post_award(
+        [
+            {"email": "111@btu.edu.ge", "first_name": "1", "last_name": "1"},
+            {"email": "tamar@btu.edu.ge", "first_name": "Tamar", "last_name": "Chikovani"},
+        ]
+    ).json()["rows"]
+    assert [r["status"] for r in rows] == ["failed", "synced"]
+
+
+def test_existing_student_needs_no_name(
+    env: tuple[FakeDb, FakeAdminSheet, MemorySyncStore],
+) -> None:
+    db, _, _ = env
+    seed_skill(db)
+    body = post_award([{"email": "ada@btu.edu.ge"}]).json()["rows"][0]
+    assert body["status"] == "synced"

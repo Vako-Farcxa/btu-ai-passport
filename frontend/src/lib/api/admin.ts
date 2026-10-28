@@ -307,6 +307,13 @@ const ERROR_MESSAGES: Record<string, string> = {
   admin_not_found: 'Your account is not on the admin list.',
   email_domain_not_allowed: 'Email domain is not allowed.',
   invalid_email: 'Not a valid email address.',
+  email_local_too_short: 'The part before @ needs at least 3 characters.',
+  email_local_not_name_like: 'The part before @ cannot be only digits.',
+  invalid_first_name:
+    'First name must be 2 to 50 letters (Latin or Georgian). No digits or symbols.',
+  invalid_last_name:
+    'Last name must be 2 to 50 letters (Latin or Georgian). No digits or symbols.',
+  duplicate_email: 'The same email is listed more than once.',
   missing_full_name: 'New student: add a first and last name.',
   already_awarded: 'Already has this skill.',
   passport_id_taken: 'Passport ID already belongs to another student.',
