@@ -128,16 +128,46 @@ export interface AdminAwardResponse {
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
 
+export class AdminAccessError extends Error {
+  readonly code: 'signed_out' | 'not_authorized'
+
+  constructor(code: 'signed_out' | 'not_authorized') {
+    super(code)
+    this.name = 'AdminAccessError'
+    this.code = code
+  }
+}
+
 async function getHeaders(): Promise<HeadersInit> {
-  // The signed-in Supabase session decides who is an admin. The demo token only
-  // works against a backend that has no Supabase configured (local demo).
-  const token =
-    (await readAccessToken()) ??
-    (process.env.NEXT_PUBLIC_SUPABASE_URL ? '' : 'demo-admin')
+  // Only the signed-in Supabase session is accepted. There is no demo token and no
+  // fallback: without a session nothing is sent to the API.
+  const token = await readAccessToken()
+  if (!token) throw new AdminAccessError('signed_out')
   return {
     'Content-Type': 'application/json',
     Authorization: `Bearer ${token}`,
   }
+}
+
+/** Asks the backend whether the signed-in user is an admin. Never guesses. */
+export async function fetchAdminMe(): Promise<{ email: string }> {
+  const res = await fetch(`${API_BASE}/admin/me`, {
+    headers: await getHeaders(),
+    cache: 'no-store',
+  })
+  if (res.status === 401) throw new AdminAccessError('signed_out')
+  if (res.status === 403) throw new AdminAccessError('not_authorized')
+  if (!res.ok) throw new Error(`Failed to check admin access: ${res.status}`)
+  const body: unknown = await res.json()
+  if (
+    typeof body !== 'object' ||
+    body === null ||
+    !('email' in body) ||
+    typeof body.email !== 'string'
+  ) {
+    throw new Error('Unexpected admin response')
+  }
+  return { email: body.email }
 }
 
 export async function fetchAdminStudents(params?: {

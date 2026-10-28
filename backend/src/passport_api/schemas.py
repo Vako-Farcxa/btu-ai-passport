@@ -209,6 +209,12 @@ SkillLevel = Literal["AI Skill", "AI Applied Skill", "AI Advanced Skill"]
 SkillName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
 
 
+class AdminMe(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    email: str
+
+
 class AdminCatalogSkill(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
