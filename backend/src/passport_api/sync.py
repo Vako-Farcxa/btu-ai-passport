@@ -26,7 +26,17 @@ from passport_api.settings import email_domain_allowed, settings
 
 _log = logging.getLogger(__name__)
 _ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
-_COLUMNS = ("email", "full_name", "skill", "badge", "awarded_on", "passport_id", "description")
+_COLUMNS = (
+    "email",
+    "full_name",
+    "skill",
+    "badge",
+    "awarded_on",
+    "passport_id",
+    "description",
+    "skill_id",
+    "skill_category",
+)
 _SHEETS_SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 # Header aliases, lowercased. The first name in each tuple is the old 5-column format.
 _ALIASES: dict[str, tuple[str, ...]] = {
@@ -38,6 +48,7 @@ _ALIASES: dict[str, tuple[str, ...]] = {
     "badge": ("badge", "badge/stamp code", "badge code", "stamp code"),
     "awarded_on": ("awarded_on", "date earned", "date_earned"),
     "passport_id": ("passport_id", "passport id (existing)", "passport id"),
+    "skill_id": ("skill id", "skill_id"),
     "skill_category": ("skill category", "skill_category"),
     "description": ("skill description", "skill_description", "description"),
 }
@@ -56,6 +67,17 @@ _CATEGORY_BADGES = {
     "ai applied skill": "BDG-AI-002",
     "ai advanced skill": "BDG-AI-003",
 }
+
+
+@dataclass(frozen=True)
+class CatalogSkill:
+    """One row of the skills catalog, taken from the sheet's Skill ID column."""
+
+    id: str
+    name: str
+    category: str
+    badge: str
+    description: str
 
 
 class SheetUnavailableError(Exception):
@@ -167,6 +189,8 @@ class _SkillFact:
     awarded_on: str | None
     raw_awarded_on: str
     description: str = ""
+    skill_id: str = ""
+    category: str = ""
 
 
 @dataclass
@@ -195,6 +219,8 @@ class SyncStore(Protocol):
     def insert_student(self, email: str, full_name: str, passport_id: str) -> None: ...
 
     def insert_version(self, version: VersionRecord) -> None: ...
+
+    def upsert_skills(self, skills: list[CatalogSkill]) -> None: ...
 
     def remember_source(self, record_key: str, email: str) -> None: ...
 
@@ -323,6 +349,7 @@ class MemorySyncStore:
         self.students: list[StudentRecord] = []
         self.versions: list[VersionRecord] = []
         self.runs: list[RunRecord] = []
+        self.skills: dict[str, CatalogSkill] = {}
         self._sources: dict[str, str] = {}
 
     def has_running(self) -> bool:
@@ -376,7 +403,14 @@ class MemorySyncStore:
         )
 
     def insert_version(self, version: VersionRecord) -> None:
+        for skill in version.skills:
+            if skill.skill_id is not None and skill.skill_id not in self.skills:
+                raise RuntimeError("skill_not_in_catalog")
         self.versions.append(version)
+
+    def upsert_skills(self, skills: list[CatalogSkill]) -> None:
+        for skill in skills:
+            self.skills[skill.id] = skill
 
     def remember_source(self, record_key: str, email: str) -> None:
         self._sources[record_key] = email
@@ -558,12 +592,31 @@ class SupabaseSyncStore:
                 "badge": skill.badge,
                 "awarded_on": skill.awarded_on,
                 "description": skill.description,
+                "skill_id": skill.skill_id,
                 "position": position,
             }
             for position, skill in enumerate(version.skills, start=1)
         ]
         if skill_rows:
             get_supabase().table("skill_entries").insert(skill_rows).execute()
+
+    def upsert_skills(self, skills: list[CatalogSkill]) -> None:
+        if not skills:
+            return
+        get_supabase().table("skills").upsert(
+            [
+                {
+                    "id": skill.id,
+                    "name": skill.name,
+                    "category": skill.category,
+                    "badge": skill.badge,
+                    "description": skill.description,
+                    "updated_at": _now(),
+                }
+                for skill in skills
+            ],
+            on_conflict="id",
+        ).execute()
 
     def remember_source(self, record_key: str, email: str) -> None:
         get_supabase().table("source_records").upsert(
@@ -775,6 +828,7 @@ def _issue_versions(
     groups, failures = _group_rows(raw_rows)
     for index, error in failures.items():
         fail([index], error)
+    store.upsert_skills(_catalog_from_groups(groups))
     synced: set[str] = set()
     for email, group in groups.items():
         skills = tuple(
@@ -785,6 +839,7 @@ def _issue_versions(
                         badge=fact.badge,
                         awarded_on=fact.awarded_on,
                         description=fact.description,
+                        skill_id=fact.skill_id or None,
                     )
                     for fact in group.rows
                 ]
@@ -941,6 +996,22 @@ def _student_embed(value: object) -> dict[str, object] | None:
     return None
 
 
+def _catalog_from_groups(groups: dict[str, _EmailGroup]) -> list[CatalogSkill]:
+    """Distinct catalog rows for facts that have a Skill ID. The last sheet row wins."""
+    catalog: dict[str, CatalogSkill] = {}
+    for group in groups.values():
+        for fact in group.rows:
+            if fact.skill_id:
+                catalog[fact.skill_id] = CatalogSkill(
+                    id=fact.skill_id,
+                    name=fact.skill,
+                    category=fact.category,
+                    badge=fact.badge,
+                    description=fact.description,
+                )
+    return list(catalog.values())
+
+
 def _skills_from_rows(value: object) -> tuple[Skill, ...]:
     ordered = sorted(_nested_rows(value), key=lambda item: _as_int(item.get("position", 0)))
     return tuple(
@@ -981,6 +1052,8 @@ def _group_rows(
             awarded_on=normalize_awarded_on(row["awarded_on"]),
             raw_awarded_on=row["awarded_on"],
             description=row["description"],
+            skill_id=row["skill_id"].upper(),
+            category=row["skill_category"],
         )
         group = groups.get(email)
         if group is None:
