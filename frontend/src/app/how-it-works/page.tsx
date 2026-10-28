@@ -8,166 +8,110 @@ import { useLocale } from '@/i18n/use-locale'
 export default function HowItWorksPage() {
   const [locale, setLocale] = useLocale()
 
+  const en = locale === 'en'
+
   return (
     <InfoLayout
       locale={locale}
       onLocale={setLocale}
-      title={locale === 'ka' ? 'როგორ მუშაობს' : 'How It Works'}
-      subtitle={
-        locale === 'ka'
-          ? 'ციფრული პასპორტის შექმნის, ვერსიონირებისა და ვერიფიკაციის ეტაპები'
-          : 'The lifecycle of credential creation, versioning, and cryptographic verification'
+      folio="05"
+      chapterLabel={en ? 'AI SKILLS PASSPORT' : 'AI უნარების პასპორტი'}
+      chapterBody={
+        en
+          ? 'A trusted record of learning, achievement, and applied intelligence.'
+          : 'სწავლის, მიღწევებისა და გამოყენებითი ინტელექტის სანდო ჩანაწერი.'
       }
+      title={en ? 'How it works' : 'როგორ მუშაობს'}
     >
-      {locale === 'ka' ? (
-        <>
-          <div className="grid gap-6">
-            <div className="bg-[#1e293b]/50 border border-slate-700/60 rounded-lg p-5">
-              <span className="text-amber-400 font-bold text-xs uppercase tracking-wider block mb-1">
-                ნაბიჯი 1
-              </span>
-              <h3 className="text-lg font-serif text-slate-100 mb-2">
-                უნარების რეგისტრაცია და სინქრონიზაცია
-              </h3>
-              <p className="text-sm text-slate-300">
-                სტუდენტის მიერ კურსის ან პროექტის დასრულების შემდეგ, მონაცემები
-                ფიქსირდება BTU-ს საგანმანათლებლო ცხრილში. სისტემა ავტომატურად
-                ახდენს მონაცემების სინქრონიზაციას და ამოწმებს უნარების
-                ჩამონათვალს.
-              </p>
-            </div>
+      <Link className="back-link" href="/">
+        ← {en ? 'Back to home' : 'მთავარ გვერდზე დაბრუნება'}
+      </Link>
 
-            <div className="bg-[#1e293b]/50 border border-slate-700/60 rounded-lg p-5">
-              <span className="text-amber-400 font-bold text-xs uppercase tracking-wider block mb-1">
-                ნაბიჯი 2
-              </span>
-              <h3 className="text-lg font-serif text-slate-100 mb-2">
-                ვერსიონირება და PDF გენერაცია
-              </h3>
-              <p className="text-sm text-slate-300">
-                თუ სტუდენტს დაემატა ახალი უნარი, სისტემა ქმნის ახალ ვერსიას (V1,
-                V2...) და ახალ უნიკალურ ვერიფიკაციის კოდს (მაგ.{' '}
-                <code>K9M2-N3P4-Q5R6-S7T8</code>). ამავე დროს ავტომატურად
-                მზადდება ოფიციალური ორენოვანი PDF პასპორტი უნივერსიტეტის ბეჭდითა
-                და ბეჯებით.
-              </p>
-            </div>
+      <p className="intro">
+        {en ? (
+          <>
+            Four steps take a student&apos;s achievement from spreadsheet row to
+            anchored credential.
+          </>
+        ) : (
+          <>
+            ოთხი ნაბიჯი გარდაქმნის სტუდენტის მიღწევას ცხრილის სტრიქონიდან
+            კრიპტოგრაფიულად დაფიქსირებულ სერტიფიკატად.
+          </>
+        )}
+      </p>
 
-            <div className="bg-[#1e293b]/50 border border-slate-700/60 rounded-lg p-5">
-              <span className="text-amber-400 font-bold text-xs uppercase tracking-wider block mb-1">
-                ნაბიჯი 3
-              </span>
-              <h3 className="text-lg font-serif text-slate-100 mb-2">
-                ბლოკჩეინზე დაფიქსირება (Anchor)
-              </h3>
-              <p className="text-sm text-slate-300">
-                პასპორტის მონაცემებისგან დაგენერირებული კრიპტოგრაფიული ჰეში
-                იგზავნება Polygon Amoy Testnet-ის სმარტ-კონტრაქტში BTU-ს
-                ოფიციალური გამცემი საფულის მიერ. ეს გამორიცხავს მონაცემების
-                უკანა თარიღით შეცვლას ან გაყალბებას.
-              </p>
-            </div>
+      <h2>{en ? '1 · Sync from the sheet' : '1 · სინქრონიზაცია ცხრილიდან'}</h2>
+      <p>
+        {en ? (
+          <>
+            The backend reads BTU&apos;s official Google Sheet every 15 minutes,
+            detects new or changed rows, and creates or updates passport records
+            idempotently.
+          </>
+        ) : (
+          <>
+            Backend ყოველ 15 წუთში კითხულობს BTU-ს ოფიციალურ Google Sheets-ს,
+            ამოიცნობს ახალ ან შეცვლილ სტრიქონებს და ქმნის ან განაახლებს
+            პასპორტის ჩანაწერებს იდემპოტენტურად.
+          </>
+        )}
+      </p>
 
-            <div className="bg-[#1e293b]/50 border border-slate-700/60 rounded-lg p-5">
-              <span className="text-amber-400 font-bold text-xs uppercase tracking-wider block mb-1">
-                ნაბიჯი 4
-              </span>
-              <h3 className="text-lg font-serif text-slate-100 mb-2">
-                მარტივი საჯარო ვერიფიკაცია
-              </h3>
-              <p className="text-sm text-slate-300">
-                ნებისმიერ დამსაქმებელს ან პარტნიორს შეუძლია შეიყვანოს
-                ვერიფიკაციის კოდი <code>/verify</code> გვერდზე და მყისიერად
-                იხილოს სტუდენტის უნარები, გაცემის თარიღი, ვერსიის სტატუსი და
-                ბლოკჩეინის ტრანზაქციის ბმული.
-              </p>
-            </div>
-          </div>
+      <h2>
+        {en
+          ? '2 · Version & generate PDF'
+          : '2 · ვერსიონირება და PDF გენერაცია'}
+      </h2>
+      <p>
+        {en ? (
+          <>
+            Each changed skill set produces a new version (V1, V2&hellip;) with
+            a unique verification code and a bilingual EN/KA PDF rendered from
+            BTU&apos;s official template.
+          </>
+        ) : (
+          <>
+            შეცვლილი უნარების თითოეული ნაკრები ქმნის ახალ ვერსიას (V1, V2…)
+            უნიკალური ვერიფიკაციის კოდით და ორენოვანი EN/KA PDF-ით, BTU-ს
+            ოფიციალური შაბლონიდან.
+          </>
+        )}
+      </p>
 
-          <div className="pt-4">
-            <Link
-              href="/"
-              className="text-amber-400 hover:text-amber-300 underline font-medium"
-            >
-              ← მთავარ გვერდზე დაბრუნება
-            </Link>
-          </div>
-        </>
-      ) : (
-        <>
-          <div className="grid gap-6">
-            <div className="bg-[#1e293b]/50 border border-slate-700/60 rounded-lg p-5">
-              <span className="text-amber-400 font-bold text-xs uppercase tracking-wider block mb-1">
-                Step 1
-              </span>
-              <h3 className="text-lg font-serif text-slate-100 mb-2">
-                Skill Registration & Sync
-              </h3>
-              <p className="text-sm text-slate-300">
-                When students complete approved AI courses or practical
-                projects, entries are logged in the BTU academic roster. The
-                backend runs automated syncs, identifying verified achievements
-                with strict idempotency.
-              </p>
-            </div>
+      <h2>{en ? '3 · Anchor on-chain' : '3 · ბლოკჩეინზე დაფიქსირება'}</h2>
+      <p>
+        {en ? (
+          <>
+            A SHA-256 fingerprint of the credential is submitted to the BTU
+            issuer smart contract on Polygon Amoy. Only the hash reaches the
+            chain &mdash; names and emails stay off-chain.
+          </>
+        ) : (
+          <>
+            სერტიფიკატის SHA-256 ანაბეჭდი იგზავნება BTU-ს გამცემ სმარტ
+            კონტრაქტში Polygon Amoy-ზე. ჯაჭვს მხოლოდ ჰეში ეხება — სახელები და
+            ელ-ფოსტები ჯაჭვის გარეთ რჩება.
+          </>
+        )}
+      </p>
 
-            <div className="bg-[#1e293b]/50 border border-slate-700/60 rounded-lg p-5">
-              <span className="text-amber-400 font-bold text-xs uppercase tracking-wider block mb-1">
-                Step 2
-              </span>
-              <h3 className="text-lg font-serif text-slate-100 mb-2">
-                Versioning & Document Generation
-              </h3>
-              <p className="text-sm text-slate-300">
-                Whenever skills change, a new passport version is issued (V1,
-                V2...) along with a dedicated verification code (e.g.{' '}
-                <code>K9M2-N3P4-Q5R6-S7T8</code>). High-resolution bilingual PDF
-                passports are compiled with cryptographic fingerprints and
-                visual badges.
-              </p>
-            </div>
-
-            <div className="bg-[#1e293b]/50 border border-slate-700/60 rounded-lg p-5">
-              <span className="text-amber-400 font-bold text-xs uppercase tracking-wider block mb-1">
-                Step 3
-              </span>
-              <h3 className="text-lg font-serif text-slate-100 mb-2">
-                Cryptographic Testnet Anchoring
-              </h3>
-              <p className="text-sm text-slate-300">
-                A SHA-256 fingerprint of the credential is submitted to the
-                Polygon Amoy Testnet smart contract by the BTU issuer wallet.
-                This permanently timestamps the credentials without publishing
-                private student data.
-              </p>
-            </div>
-
-            <div className="bg-[#1e293b]/50 border border-slate-700/60 rounded-lg p-5">
-              <span className="text-amber-400 font-bold text-xs uppercase tracking-wider block mb-1">
-                Step 4
-              </span>
-              <h3 className="text-lg font-serif text-slate-100 mb-2">
-                Public Instant Verification
-              </h3>
-              <p className="text-sm text-slate-300">
-                Anyone can verify credentials by entering the verification code
-                on the <code>/verify</code> page. The system displays the active
-                status, version history, authenticated skills, and direct link
-                to the PolygonScan blockchain explorer.
-              </p>
-            </div>
-          </div>
-
-          <div className="pt-4">
-            <Link
-              href="/"
-              className="text-amber-400 hover:text-amber-300 underline font-medium"
-            >
-              ← Back to Home
-            </Link>
-          </div>
-        </>
-      )}
+      <h2>{en ? '4 · Public verify' : '4 · საჯარო ვერიფიკაცია'}</h2>
+      <p>
+        {en ? (
+          <>
+            Anyone with a verification code visits /verify, enters the code, and
+            sees the official skill list, version status, holder name, and a
+            link to the blockchain transaction.
+          </>
+        ) : (
+          <>
+            ნებისმიერი ვერიფიკაციის კოდის მქონე პირი ეწვევა /verify-ს, შეიყვანს
+            კოდს და ნახავს ოფიციალური უნარების სიას, ვერსიის სტატუსს, მფლობელის
+            სახელს და ბლოკჩეინის ტრანზაქციის ბმულს.
+          </>
+        )}
+      </p>
     </InfoLayout>
   )
 }

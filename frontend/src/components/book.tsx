@@ -115,7 +115,6 @@ export function OpenBook({
         </div>
       </div>
       <div className="book-shadow" aria-hidden="true" />
-      <Footer locale={locale} />
     </main>
   )
 }

@@ -39,7 +39,6 @@ button:disabled {
 .desk {
   min-height: 100vh;
   position: relative;
-  overflow: hidden;
   background:
     radial-gradient(circle at 50% 45%, rgba(42, 80, 96, 0.52), transparent 48%),
     repeating-linear-gradient(
@@ -1234,5 +1233,118 @@ button:disabled {
   [data-slot='spinner'] {
     transition: none;
     animation: none;
+  }
+}
+
+/* ─── Site footer ────────────────────────────────────────────────────────── */
+
+.site-footer {
+  max-width: 1280px;
+  margin: 32px auto 0;
+  padding: 0 32px 40px;
+  color: rgba(251, 246, 233, 0.55);
+}
+
+.site-footer-notices {
+  border-top: 1px solid rgba(213, 186, 120, 0.18);
+  padding-top: 20px;
+  margin-bottom: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.site-footer-notice {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.65;
+  letter-spacing: 0.01em;
+}
+
+.site-footer-notice.testnet {
+  color: rgba(213, 186, 120, 0.72);
+  display: flex;
+  gap: 7px;
+  align-items: baseline;
+}
+
+.notice-glyph {
+  color: var(--gold-500);
+  flex: none;
+  font-size: 9px;
+}
+
+.site-footer-notice.disclaimer {
+  color: rgba(251, 246, 233, 0.4);
+  font-size: 10.5px;
+}
+
+.site-footer-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: rgba(251, 246, 233, 0.38);
+}
+
+.footer-monogram {
+  font: 600 11px var(--serif);
+  color: var(--gold-500);
+  letter-spacing: 0.12em;
+}
+
+.site-footer-nav {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.site-footer-nav a {
+  color: rgba(251, 246, 233, 0.5);
+  text-decoration: none;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  border-bottom: 1px solid transparent;
+  padding-bottom: 1px;
+  transition:
+    color 0.15s,
+    border-color 0.15s;
+}
+
+.site-footer-nav a:hover {
+  color: var(--gold-300);
+  border-color: var(--gold-500);
+}
+
+/* ─── Info pages (About / Privacy / How it works) ───────────────────────── */
+
+.info-page .back-link {
+  margin-bottom: 20px;
+}
+
+.info-page h1 {
+  margin-top: 0;
+}
+
+.info-page h2 {
+  margin-top: 32px;
+}
+
+.info-page p + h2 {
+  margin-top: 28px;
+}
+
+@media (max-width: 560px) {
+  .site-footer {
+    padding: 0 18px 32px;
+  }
+
+  .site-footer-bar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
   }
 }
