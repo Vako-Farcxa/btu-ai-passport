@@ -945,6 +945,26 @@ button:disabled {
   margin-top: 12px;
 }
 
+.version-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 20px;
+}
+
+.share-link {
+  margin-top: 12px;
+  color: var(--navy-800);
+  font-weight: 700;
+}
+
+.share-link-note {
+  margin: 4px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
 .page-verify {
   color: var(--navy-800);
   font-weight: 700;
@@ -964,6 +984,7 @@ button:disabled {
 .language-switcher button:focus-visible,
 .primary-button:focus-visible,
 .text-link:focus-visible,
+.share-link:focus-visible,
 .back-link:focus-visible,
 .transaction-link:focus-visible,
 .verify-page input:focus-visible {

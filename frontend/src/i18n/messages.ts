@@ -42,6 +42,9 @@ type Copy = {
   holderLabel: string
   passportEyebrow: string
   verifyEyebrow: string
+  copyShareLink: string
+  shareLinkCopied: string
+  shareLinkFailed: string
 }
 
 export const messages: Record<Locale, Copy> = {
@@ -94,6 +97,9 @@ export const messages: Record<Locale, Copy> = {
     holderLabel: 'Passport holder',
     passportEyebrow: 'BTU · PASSPORT 01',
     verifyEyebrow: 'BTU · VERIFICATION',
+    copyShareLink: 'Copy share link',
+    shareLinkCopied: 'Share link copied',
+    shareLinkFailed: 'Could not copy. Copy this link manually:',
   },
   ka: {
     title: 'პასპორტის შემოწმება',
@@ -144,6 +150,9 @@ export const messages: Record<Locale, Copy> = {
     holderLabel: 'პასპორტის მფლობელი',
     passportEyebrow: 'BTU · პასპორტი 01',
     verifyEyebrow: 'BTU · შემოწმება',
+    copyShareLink: 'ბმულის კოპირება',
+    shareLinkCopied: 'ბმული დაკოპირდა',
+    shareLinkFailed: 'კოპირება ვერ მოხერხდა. დააკოპირეთ ბმული ხელით:',
   },
 }
 

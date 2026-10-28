@@ -5,6 +5,7 @@ import { useState } from 'react'
 
 import { OpenBook, PrimaryButton } from '@/components/book'
 import { SignInButton } from '@/components/sign-in-button'
+import { ShareLinkButton } from '@/components/share-link-button'
 import { SkillList } from '@/components/skill-list'
 import { Spinner } from '@/components/ui/spinner'
 import { messages, type Locale } from '@/i18n/messages'
@@ -125,22 +126,28 @@ export default function PassportPage() {
                   {version.is_current ? ` · ${copy.currentVersion}` : ''}
                 </h3>
                 <VersionFacts locale={locale} version={version} />
-                <PrimaryButton
-                  type="button"
-                  tone="navy"
-                  disabled={downloading !== null}
-                  aria-busy={downloading === version.version}
-                  onClick={() => void onDownload(version.version)}
-                >
-                  {downloading === version.version ? (
-                    <>
-                      <Spinner />
-                      {copy.preparingPdf}
-                    </>
-                  ) : (
-                    copy.downloadPdf
-                  )}
-                </PrimaryButton>
+                <div className="version-actions">
+                  <PrimaryButton
+                    type="button"
+                    tone="navy"
+                    disabled={downloading !== null}
+                    aria-busy={downloading === version.version}
+                    onClick={() => void onDownload(version.version)}
+                  >
+                    {downloading === version.version ? (
+                      <>
+                        <Spinner />
+                        {copy.preparingPdf}
+                      </>
+                    ) : (
+                      copy.downloadPdf
+                    )}
+                  </PrimaryButton>
+                  <ShareLinkButton
+                    code={version.verification_code}
+                    locale={locale}
+                  />
+                </div>
               </li>
             ))}
           </ol>
