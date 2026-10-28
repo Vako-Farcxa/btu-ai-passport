@@ -61,3 +61,10 @@ export class VerifyInputError extends Error {
     this.name = 'VerifyInputError'
   }
 }
+
+export class VerifyRateLimitError extends Error {
+  constructor() {
+    super('rate_limited')
+    this.name = 'VerifyRateLimitError'
+  }
+}

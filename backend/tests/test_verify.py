@@ -124,3 +124,13 @@ def test_found_payload_hides_email_passport_id_and_code() -> None:
     assert "email" not in body
     assert "passport_id" not in body
     assert "verification_code" not in body
+
+
+def test_verify_rate_limiting() -> None:
+    from passport_api.rate_limit import RateLimiter
+
+    limiter = RateLimiter(max_requests=2, window_seconds=60.0)
+    assert limiter.check("1.2.3.4") is True
+    assert limiter.check("1.2.3.4") is True
+    assert limiter.check("1.2.3.4") is False
+    assert limiter.check("5.6.7.8") is True

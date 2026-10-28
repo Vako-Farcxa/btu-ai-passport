@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 480" width="800" height="480">
+  <defs>
+    <radialGradient id="desk-bg-v" cx="50%" cy="50%" r="60%">
+      <stop offset="0%" stop-color="#152642"/>
+      <stop offset="100%" stop-color="#0a1220"/>
+    </radialGradient>
+    <linearGradient id="page-left" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#0e1726"/>
+      <stop offset="100%" stop-color="#142136"/>
+    </linearGradient>
+    <linearGradient id="page-right" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#f8fafc"/>
+      <stop offset="100%" stop-color="#ffffff"/>
+    </linearGradient>
+    <filter id="shadow-book" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="18" stdDeviation="24" flood-color="#000" flood-opacity="0.6"/>
+    </filter>
+  </defs>
+
+  <rect width="800" height="480" fill="url(#desk-bg-v)"/>
+
+  <!-- Top bar -->
+  <rect x="0" y="0" width="800" height="56" fill="#0b1424" opacity="0.8"/>
+  <text x="36" y="34" font-family="Georgia, serif" font-weight="bold" font-size="16" fill="#d4af37" letter-spacing="2">BTU</text>
+  <text x="82" y="34" font-family="system-ui, sans-serif" font-size="12" fill="#94a3b8" letter-spacing="1">BUSINESS AND TECHNOLOGY UNIVERSITY</text>
+
+  <!-- Open Book -->
+  <g filter="url(#shadow-book)">
+    <!-- Left Page -->
+    <path d="M 120 75 Q 260 72 400 75 L 400 425 Q 260 422 120 425 Z" fill="url(#page-left)" stroke="#1e293b"/>
+    <text x="150" y="115" font-family="system-ui, sans-serif" font-size="10" fill="#94a3b8" letter-spacing="1">BTU · 2026</text>
+    <text x="150" y="145" font-family="Georgia, serif" font-weight="bold" font-size="16" fill="#f1f5f9" letter-spacing="1">AI SKILLS PASSPORT</text>
+    <text x="150" y="180" font-family="system-ui, sans-serif" font-size="12" fill="#94a3b8" width="200">
+      <tspan x="150" dy="0">A trusted record of learning,</tspan>
+      <tspan x="150" dy="18">achievement, and applied</tspan>
+      <tspan x="150" dy="18">intelligence.</tspan>
+    </text>
+
+    <!-- Seal -->
+    <circle cx="260" cy="320" r="42" fill="#0b1424" stroke="#d4af37" stroke-width="1.5"/>
+    <circle cx="260" cy="320" r="36" fill="none" stroke="#d4af37" stroke-opacity="0.5" stroke-dasharray="3 2"/>
+    <text x="260" y="315" text-anchor="middle" font-family="Georgia, serif" font-weight="bold" font-size="14" fill="#d4af37">BTU</text>
+    <text x="260" y="332" text-anchor="middle" font-family="system-ui, sans-serif" font-size="9" fill="#94a3b8">EST. 2016</text>
+
+    <!-- Book Spine Crease -->
+    <line x1="400" y1="75" x2="400" y2="425" stroke="#000" stroke-width="3" opacity="0.3"/>
+
+    <!-- Right Page -->
+    <path d="M 400 75 Q 540 72 680 75 L 680 425 Q 540 422 400 425 Z" fill="url(#page-right)" stroke="#cbd5e1"/>
+    
+    <!-- Verify Form -->
+    <text x="430" y="115" font-family="system-ui, sans-serif" font-size="10" font-weight="bold" fill="#64748b" letter-spacing="1">BTU · VERIFICATION</text>
+    <text x="430" y="145" font-family="Georgia, serif" font-weight="bold" font-size="18" fill="#0f172a">Verify a passport</text>
+    <text x="430" y="170" font-family="system-ui, sans-serif" font-size="11" fill="#64748b">Enter the verification code from a BTU AI Skills passport.</text>
+
+    <!-- Input -->
+    <rect x="430" y="195" width="220" height="34" rx="4" fill="#f8fafc" stroke="#cbd5e1"/>
+    <text x="442" y="217" font-family="monospace" font-size="12" fill="#0f172a">K9M2-N3P4-Q5R6-S7T8</text>
+
+    <!-- Button -->
+    <rect x="430" y="240" width="90" height="32" rx="4" fill="#1e3a8a"/>
+    <text x="475" y="260" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" font-weight="bold" fill="#ffffff">Check →</text>
+
+    <!-- Result Certificate Snippet -->
+    <rect x="430" y="285" width="220" height="110" rx="6" fill="#f1f5f9" stroke="#10b981" stroke-width="1.5"/>
+    <circle cx="452" cy="310" r="10" fill="#10b981"/>
+    <text x="452" y="314" text-anchor="middle" font-family="system-ui, sans-serif" font-weight="bold" font-size="11" fill="#ffffff">✓</text>
+    <text x="470" y="310" font-family="system-ui, sans-serif" font-weight="bold" font-size="13" fill="#0f172a">Valid</text>
+    <text x="470" y="324" font-family="system-ui, sans-serif" font-size="10" fill="#059669">This is the latest version</text>
+
+    <text x="442" y="348" font-family="system-ui, sans-serif" font-size="10" fill="#64748b">Holder: <tspan font-weight="bold" fill="#0f172a">Nino Beridze</tspan></text>
+    <text x="442" y="365" font-family="system-ui, sans-serif" font-size="10" fill="#64748b">Skills: <tspan font-weight="bold" fill="#0f172a">Machine Learning (Stamp)</tspan></text>
+    <text x="442" y="382" font-family="system-ui, sans-serif" font-size="9" fill="#2563eb">Polygon Amoy Testnet ↗</text>
+
+    <text x="650" y="415" font-family="Georgia, serif" font-size="10" fill="#94a3b8">03</text>
+  </g>
+</svg>

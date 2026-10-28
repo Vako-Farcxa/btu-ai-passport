@@ -54,6 +54,13 @@ type Copy = {
   copyCode: string
   codeCopied: string
   copyCodeFailed: string
+  rateLimited: string
+  footerDisclaimer: string
+  footerTestnetNotice: string
+  navAbout: string
+  navPrivacy: string
+  navHowItWorks: string
+  testnetBadge: string
 }
 
 export const messages: Record<Locale, Copy> = {
@@ -128,6 +135,16 @@ export const messages: Record<Locale, Copy> = {
     copyCode: 'Copy code',
     codeCopied: 'Copied',
     copyCodeFailed: 'Could not copy. The code is selected: press Ctrl+C.',
+    rateLimited:
+      'Too many verification attempts. Please wait a moment and try again.',
+    footerDisclaimer:
+      'Disclaimer: This digital passport platform is an academic proof-of-concept prototype. Issued credentials reflect verified AI achievements for BTU coursework.',
+    footerTestnetNotice:
+      'Network Notice: Cryptographic proofs and hashes are anchored on the Polygon Amoy Testnet for demonstration and testing purposes.',
+    navAbout: 'About',
+    navPrivacy: 'Privacy',
+    navHowItWorks: 'How it works',
+    testnetBadge: 'Polygon Amoy Testnet',
     newerVersionNotice:
       'A newer version (v{version}) of this passport was issued on {date}. Ask the holder for their latest code.',
   },
@@ -202,6 +219,16 @@ export const messages: Record<Locale, Copy> = {
     copyCode: 'კოდის კოპირება',
     codeCopied: 'დაკოპირდა',
     copyCodeFailed: 'კოპირება ვერ მოხერხდა. კოდი მონიშნულია: დააჭირეთ Ctrl+C.',
+    rateLimited:
+      'ძალიან ბევრი მოთხოვნაა. გთხოვთ მოიცადოთ ცოტა ხანი და სცადოთ ხელახლა.',
+    footerDisclaimer:
+      'პასუხისმგებლობის შეზღუდვა: ეს ციფრული პასპორტის პლატფორმა არის აკადემიური სატესტო პროტოტიპი. გაცემული სერტიფიკატები ასახავს BTU-ს სასწავლო კურსებში დადასტურებულ AI მიღწევებს.',
+    footerTestnetNotice:
+      'ქსელის შეტყობინება: კრიპტოგრაფიული მტკიცებულებები და ჰეშები რეგისტრირდება სატესტო ქსელში დემონსტრაციისა და ტესტირების მიზნით.',
+    navAbout: 'შესახებ',
+    navPrivacy: 'კონფიდენციალურობა',
+    navHowItWorks: 'როგორ მუშაობს',
+    testnetBadge: 'სატესტო ქსელი',
     newerVersionNotice:
       'ამ პასპორტის უფრო ახალი ვერსია (v{version}) გაიცა {date}-ზე. სთხოვეთ მფლობელს უახლესი კოდი.',
   },

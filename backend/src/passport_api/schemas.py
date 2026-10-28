@@ -21,6 +21,7 @@ ErrorCode = Literal[
     "skill_name_taken",
     "sheet_unavailable",
     "award_level_required",
+    "rate_limited",
 ]
 
 

@@ -1,5 +1,6 @@
 import {
   VerifyInputError,
+  VerifyRateLimitError,
   verifyResultSchema,
   type VerifyResult,
 } from '@/lib/api/types'
@@ -11,6 +12,9 @@ export async function postVerify(code: string): Promise<VerifyResult> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ code }),
   })
+  if (response.status === 429) {
+    throw new VerifyRateLimitError()
+  }
   const payload: unknown = await response.json()
   if (response.status === 422) {
     throw new VerifyInputError()

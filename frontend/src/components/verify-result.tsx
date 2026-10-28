@@ -68,10 +68,29 @@ export function VerifyResultCard({
             <b>{result.version}</b>
           </div>
           <SkillList skills={result.skills} locale={locale} />
-          <a className="transaction-link" href={result.tx_url}>
+          <a
+            className="transaction-link"
+            href={result.tx_url}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
             {copy.transaction}
             <span aria-hidden="true">↗</span>
           </a>
+          <div
+            className="testnet-pill"
+            style={{
+              marginTop: '0.75rem',
+              fontSize: '0.75rem',
+              color: '#94a3b8',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.35rem',
+            }}
+          >
+            <span style={{ color: '#eab308' }}>✦</span>
+            <span>{copy.testnetBadge}</span>
+          </div>
         </>
       ) : null}
     </section>

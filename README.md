@@ -1,25 +1,64 @@
 # BTU AI Skills Digital Passport
 
-Issues verifiable AI skills passports to BTU students. Passports come from a Google Sheet, students sign in with their btu.edu.ge account and download English or Georgian PDFs, and anyone can verify a passport by its code. Each version can be anchored on Polygon Amoy.
+[![CI](https://github.com/Vako-Farcxa/btu-ai-passport/actions/workflows/ci.yml/badge.svg)](https://github.com/Vako-Farcxa/btu-ai-passport/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Network: Polygon Amoy Testnet](https://img.shields.io/badge/Network-Polygon%20Amoy%20Testnet-8247e5.svg)](https://amoy.polygonscan.com/)
+
+Issues verifiable AI skills passports to Business and Technology University (BTU) students. Passports sync idempotently from an official university Google Sheet registry, students authenticate with their institutional `@btu.edu.ge` Google accounts to inspect version history and export bilingual PDFs, and employers/public viewers can verify credentials via unique verification codes anchored on the Polygon Amoy testnet.
+
+---
+
+### Preview & Screenshots
+
+<p align="center">
+  <img src="docs/screenshots/landing.svg" alt="BTU AI Skills Passport Landing" width="48%" />
+  <img src="docs/screenshots/verify.svg" alt="Public Passport Verification" width="48%" />
+</p>
+
+---
+
+## 📌 Repository About Box
+
+- **Description:** Verifiable AI skills digital passports for BTU students, featuring automated Google Sheets sync, bilingual PDF credentials, and zero-knowledge Polygon Amoy testnet proof anchoring.
+- **Website:** [https://btu-ai-passport.onrender.com](https://btu-ai-passport.onrender.com) (or local `http://localhost:3000`)
+- **Topics/Tags:** `nextjs`, `fastapi`, `supabase`, `blockchain`, `polygon-amoy`, `testnet`, `digital-credentials`, `education`, `ai-skills`, `georgia`, `btu`
+
+---
+
+## Key Features
+
+- **Institutional Google Authentication:** Restricted to authorized `@btu.edu.ge` accounts.
+- **Physical Passport UI:** Tactile book cover, textured folios, and seal stamps designed with GSAP animations.
+- **Cryptographic Testnet Anchoring:** Passports are hashed with SHA-256 and anchored to the Polygon Amoy testnet with verifiable transaction links. Zero personal data touches the chain.
+- **Rate-Limited Public Verification:** Sliding-window rate limiter protecting `/verify` against brute-force code enumeration.
+- **Comprehensive Footers & Legal Pages:** Clear academic testnet notices, disclaimers, and dedicated `/about`, `/privacy`, and `/how-it-works` pages.
+- **Automated Sheet Sync:** Scheduled GitHub Actions workflow syncing Google Sheets with atomic DB locking and per-row error tracking.
+
+---
 
 ## Structure
 
-- `frontend/`: Next.js app (sign-in, passport, public verify page)
-- `backend/`: FastAPI service (sheet sync, PDFs, verification, Amoy anchoring)
-- `supabase/`: database setup
-- `specs/`: spec-kit specification, plan and tasks
-- `.github/workflows/sync.yml`: runs the sheet sync every 15 minutes
+- `frontend/`: Next.js 16 app (Sign-in, Passport viewer, public Verify, About/Privacy/How-it-works)
+- `backend/`: FastAPI service (Google Sheets sync, ReportLab PDF generation, Amoy anchoring, rate limiter)
+- `supabase/`: Postgres schemas and migrations
+- `specs/`: Spec-Kit requirements, data models, contracts, and tasks
+- `.github/workflows/`:
+  - `ci.yml`: Continuous Integration running full frontend and backend test suites, typechecks, and linters.
+  - `sync.yml`: Periodic 15-minute background sheet synchronization.
 
-## Run locally
+---
 
-Backend:
+## Run Locally
+
+### 1. Backend
 
 ```bash
 cd backend
-uv run uvicorn passport_api.main:app --reload
+uv sync
+PYTHONPATH=src uv run uvicorn passport_api.main:app --reload
 ```
 
-Frontend:
+### 2. Frontend
 
 ```bash
 cd frontend
@@ -28,15 +67,25 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:3000. Try verifying with the demo code `K9M2-N3P4-Q5R6-S7T8`.
+Open [http://localhost:3000](http://localhost:3000). Try verifying with the demo code: `K9M2-N3P4-Q5R6-S7T8`.
 
-## Google Sheet
+---
 
-The sync reads BTU's official test sheet layout (title rows, header on row 3 with `BTU Email (Test)`, `Passport ID (Existing)`, `Skill Name`, `Date Earned` and so on) as well as the old `email, full_name, skill, badge, awarded_on` layout. Existing Passport IDs are kept. After each run it writes `Passport Sync Status` (`SYNCED`/`FAILED`), `Synced Passport Version` (`V1`, `V2`...), `Synced At (UTC)` and `Sync Error / Notes` back to each row. Full rules: `specs/001-ai-skills-passport/contracts/sheet.md`.
+## Google Sheet Integration
 
-Setup: share the sheet with the service account as Editor, set `SHEET_ID` and `GOOGLE_SERVICE_ACCOUNT_JSON` in `backend/.env`, and set `ALLOWED_EMAIL_DOMAINS=btu.edu.ge,example.org` to accept the test emails. Run `supabase/migrations/0002_official_sheet.sql` after `0001`.
+The sync reads BTU's official test sheet layout (headers on row 3: `BTU Email (Test)`, `Passport ID (Existing)`, `Skill Name`, `Date Earned`, etc.) with fallback to flat schemas. After sync, status columns (`SYNCED`/`FAILED`), version tags, timestamps, and error notes are written back to the sheet. See `specs/001-ai-skills-passport/contracts/sheet.md`.
 
-## Checks
+---
 
-- Backend: `uv run ruff format . && uv run ruff check . && uv run mypy . && uv run pytest`
-- Frontend: `npm run check` and `npm run e2e`
+## Automated Checks & CI
+
+Run local checks before pushing:
+
+- **Backend:** `uv run ruff check . && uv run ruff format --check . && uv run mypy . && PYTHONPATH=src uv run pytest`
+- **Frontend:** `npm run check` (runs `typecheck`, `lint`, `format:check`, and `vitest`)
+
+---
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).

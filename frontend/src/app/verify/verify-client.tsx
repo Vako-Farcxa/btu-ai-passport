@@ -10,7 +10,11 @@ import { VerifyResultCard } from '@/components/verify-result'
 import { messages } from '@/i18n/messages'
 import { useLocale } from '@/i18n/use-locale'
 import { postVerify } from '@/lib/api/client'
-import { VerifyInputError, type VerifyResult } from '@/lib/api/types'
+import {
+  VerifyInputError,
+  VerifyRateLimitError,
+  type VerifyResult,
+} from '@/lib/api/types'
 import { submitDecision } from '@/lib/api/verify'
 import { codeFromParam } from '@/lib/share'
 
@@ -19,12 +23,14 @@ export default function VerifyClient() {
   const sharedCode = codeFromParam(useSearchParams().get('code'))
   const [code, setCode] = useState(sharedCode)
   const [prompt, setPrompt] = useState(false)
+  const [rateLimited, setRateLimited] = useState(false)
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<VerifyResult | null>(null)
   const copy = messages[locale]
 
   async function check(value: string) {
     setPrompt(false)
+    setRateLimited(false)
     try {
       const decision = await submitDecision(value, async (value) => {
         setLoading(true)
@@ -44,6 +50,10 @@ export default function VerifyClient() {
       setResult(null)
       if (error instanceof VerifyInputError) {
         setPrompt(true)
+        return
+      }
+      if (error instanceof VerifyRateLimitError) {
+        setRateLimited(true)
         return
       }
       setResult({ outcome: 'error' })
@@ -109,6 +119,15 @@ export default function VerifyClient() {
           {prompt ? (
             <p id="code-hint" role="alert">
               {copy.prompt}
+            </p>
+          ) : null}
+          {rateLimited ? (
+            <p
+              id="code-rate-limit"
+              role="alert"
+              className="text-amber-700 text-sm mt-2 font-medium"
+            >
+              {copy.rateLimited}
             </p>
           ) : null}
         </form>
