@@ -69,7 +69,7 @@ async function pageText(page: Page): Promise<string> {
 // Brand and acronyms that stay Latin in Georgian text, plus the language switcher's
 // fixed "English" label, which names the language in its own script on purpose.
 // Polygon Amoy is the name of the test network, a proper noun.
-const ALLOWED = new Set(['BTU', 'AI', 'English', 'Polygon', 'Amoy'])
+const ALLOWED = new Set(['BTU', 'AI', 'English', 'Polygon', 'Amoy', 'GitHub'])
 
 function englishWords(text: string): string[] {
   return (text.match(/[A-Za-z]{2,}/g) ?? []).filter(

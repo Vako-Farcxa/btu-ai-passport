@@ -46,6 +46,18 @@ export function InfoPage({ page }: { page: InfoPageId }) {
                 </p>
               ))
             )}
+            {section.link ? (
+              <p>
+                <a
+                  className="info-link"
+                  href={section.link.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {section.link.label}
+                </a>
+              </p>
+            ) : null}
           </section>
         ))}
       </article>

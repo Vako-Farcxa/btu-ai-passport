@@ -43,10 +43,13 @@ describe('site footer', () => {
     },
   )
 
-  it('does not link to the private repository', () => {
+  it('links to the public repository and opens it safely', () => {
     render(<SiteFooter locale="en" />)
-    const hrefs = screen.getAllByRole('link').map((a) => a.getAttribute('href'))
-    expect(hrefs.some((href) => href?.includes('github.com'))).toBe(false)
+    const link = screen.getByRole('link', { name: 'GitHub' })
+    expect(link.getAttribute('href')).toBe(
+      'https://github.com/Vako-Farcxa/btu-ai-passport',
+    )
+    expect(link.getAttribute('rel')).toContain('noopener')
   })
 })
 
@@ -74,6 +77,16 @@ describe('info pages', () => {
     expect(
       within(article).getAllByText(/Polygon Amoy test network/).length,
     ).toBeGreaterThan(0)
+  })
+
+  it('links to the repository from About', () => {
+    render(<InfoPage page="about" />)
+    const link = screen
+      .getAllByRole('link')
+      .find((a) => a.textContent === 'github.com/Vako-Farcxa/btu-ai-passport')
+    expect(link?.getAttribute('href')).toBe(
+      'https://github.com/Vako-Farcxa/btu-ai-passport',
+    )
   })
 
   it('renders in Georgian', () => {

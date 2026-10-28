@@ -1697,3 +1697,14 @@ button:disabled {
     line-height: 1.8;
   }
 }
+
+.info-link {
+  color: var(--navy-900);
+  border-bottom: 1px solid var(--gold-500);
+  text-decoration: none;
+}
+
+.info-link:focus-visible {
+  outline: 2px solid var(--navy-900);
+  outline-offset: 3px;
+}

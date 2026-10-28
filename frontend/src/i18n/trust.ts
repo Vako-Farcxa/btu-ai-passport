@@ -1,4 +1,5 @@
 import type { Locale } from '@/i18n/messages'
+import { REPO_URL } from '@/lib/site'
 
 export type InfoPageId = 'about' | 'privacy' | 'terms'
 
@@ -7,6 +8,7 @@ export type InfoSection = {
   /** Paragraphs, or list items when `list` is true. */
   body: readonly string[]
   list?: boolean
+  link?: { label: string; href: string }
 }
 
 export type InfoPageCopy = {
@@ -26,6 +28,7 @@ export type TrustCopy = {
   navAbout: string
   navPrivacy: string
   navTerms: string
+  navGithub: string
   backHome: string
   notFoundTitle: string
   notFoundBody: string
@@ -45,7 +48,7 @@ export const TEAM = [
 
 const TEAM_KA = [
   'ვაკო ფარცხალაძე',
-  'ტაზო ფუთურიძე',
+  'თაზო ფუთურიძე',
   'გიორგი გვიანიშვილი',
 ] as const
 
@@ -61,6 +64,7 @@ const en: TrustCopy = {
   navAbout: 'About',
   navPrivacy: 'Privacy',
   navTerms: 'Terms',
+  navGithub: 'GitHub',
   backHome: 'Back to home',
   notFoundTitle: 'Page not found',
   notFoundBody: 'This page does not exist or has moved.',
@@ -107,6 +111,16 @@ const en: TrustCopy = {
           body: [
             'Records are anchored on the Polygon Amoy test network. This is a demo: test network data can be reset or disappear, so there is no guarantee that a record stays available.',
           ],
+        },
+        {
+          heading: 'Source code',
+          body: [
+            'The code is open source under the MIT license. You can read how verification and anchoring work.',
+          ],
+          link: {
+            label: 'github.com/Vako-Farcxa/btu-ai-passport',
+            href: REPO_URL,
+          },
         },
         {
           heading: 'Team',
@@ -224,6 +238,7 @@ const ka: TrustCopy = {
   navAbout: 'შესახებ',
   navPrivacy: 'კონფიდენციალურობა',
   navTerms: 'პირობები',
+  navGithub: 'GitHub',
   backHome: 'მთავარ გვერდზე დაბრუნება',
   notFoundTitle: 'გვერდი ვერ მოიძებნა',
   notFoundBody: 'ეს გვერდი არ არსებობს ან გადატანილია.',
@@ -270,6 +285,16 @@ const ka: TrustCopy = {
           body: [
             'ჩანაწერები ფიქსირდება Polygon Amoy სატესტო ქსელში. ეს დემოა: სატესტო ქსელის მონაცემები შეიძლება განულდეს ან გაქრეს, ამიტომ ჩანაწერის შენარჩუნება გარანტირებული არ არის.',
           ],
+        },
+        {
+          heading: 'წყაროს კოდი',
+          body: [
+            'კოდი ღიაა და MIT ლიცენზიით ვრცელდება. შეგიძლიათ ნახოთ, როგორ მუშაობს გადამოწმება და ბლოკჩეინზე დაფიქსირება.',
+          ],
+          link: {
+            label: 'github.com/Vako-Farcxa/btu-ai-passport',
+            href: REPO_URL,
+          },
         },
         {
           heading: 'გუნდი',

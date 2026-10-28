@@ -21,10 +21,16 @@ describe('trust copy', () => {
       expect(ka.sections.length).toBe(en.sections.length)
       en.sections.forEach((section, index) => {
         expect(ka.sections[index]?.list).toBe(section.list)
+        expect(Boolean(ka.sections[index]?.link)).toBe(Boolean(section.link))
         expect(ka.sections[index]?.body.length).toBe(section.body.length)
       })
     }
     expect(Object.keys(trust.ka).sort()).toEqual(Object.keys(trust.en).sort())
+  })
+
+  it('spells the team names the same way everywhere', () => {
+    expect(trust.ka.team).toContain('თაზო ფუთურიძე')
+    for (const text of strings(trust.ka)) expect(text).not.toContain('ტაზო')
   })
 
   it('uses no em-dashes anywhere in user-facing text', () => {

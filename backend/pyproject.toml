@@ -1,7 +1,8 @@
 [project]
 name = "passport-api"
 version = "0.1.0"
-description = "Add your description here"
+description = "FastAPI service for the BTU AI Skills Digital Passport"
+license = "MIT"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
