@@ -61,7 +61,15 @@ def test_the_route_list_is_not_empty() -> None:
         "/admin/awards",
         "/admin/sync",
     } <= paths
-    assert len(ROUTES) >= 15
+    assert len(ROUTES) >= 13
+
+
+def test_direct_to_database_student_routes_are_gone() -> None:
+    routes = set(ROUTES)
+    assert ("POST", "/admin/students") not in routes
+    assert ("POST", "/admin/students/x/skills") not in routes
+    assert ("DELETE", "/admin/students/x/skills/x") not in routes
+    assert not [path for _, path in ROUTES if path.endswith("/skills") and "students" in path]
 
 
 @pytest.mark.parametrize(("method", "path"), ROUTES)

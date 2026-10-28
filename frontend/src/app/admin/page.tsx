@@ -2,7 +2,9 @@
 
 import Link from 'next/link'
 import React, { useEffect, useState } from 'react'
+import { AddStudentDialog } from '@/components/admin/add-student-dialog'
 import {
+  describeSyncResult,
   fetchAdminStudents,
   fetchAdminPendingVersions,
   fetchAdminSyncRuns,
@@ -19,6 +21,7 @@ export default function AdminDashboardPage() {
   const [syncRuns, setSyncRuns] = useState<AdminSyncRun[]>([])
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
+  const [showAdd, setShowAdd] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const loadData = async () => {
@@ -86,8 +89,9 @@ export default function AdminDashboardPage() {
   const handleTriggerSync = async () => {
     try {
       setSyncing(true)
-      await triggerAdminSync()
+      const res = await triggerAdminSync()
       await loadData()
+      if (res.status !== 'completed') alert(describeSyncResult(res).text)
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : 'Sync failed')
     } finally {
@@ -131,12 +135,13 @@ export default function AdminDashboardPage() {
             </svg>
             {syncing ? 'Running Sync...' : 'Trigger Sync'}
           </button>
-          <Link
-            href="/admin/students"
+          <button
+            type="button"
+            onClick={() => setShowAdd(true)}
             className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors shadow-sm"
           >
-            + Add / Manage Students
-          </Link>
+            + Add Student
+          </button>
         </div>
       </div>
 
@@ -319,6 +324,12 @@ export default function AdminDashboardPage() {
           </table>
         </div>
       </div>
+      {showAdd && (
+        <AddStudentDialog
+          onClose={() => setShowAdd(false)}
+          onDone={() => void loadData()}
+        />
+      )}
     </div>
   )
 }

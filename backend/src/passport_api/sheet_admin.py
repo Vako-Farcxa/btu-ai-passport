@@ -55,6 +55,10 @@ class AwardInput:
     badge: str
     description: str
     awarded_on: str
+    # Used only when the student has no row in the sheet yet.
+    student_id: str = ""
+    program: str = ""
+    education_level: str = ""
 
 
 @dataclass(frozen=True)
@@ -272,6 +276,14 @@ def build_award_rows(
             status_column = _column(header, _STATUS_COLUMNS)
             if status_column is not None:
                 row[status_column] = "Active"
+            for names, text in (
+                (("student id",), award.student_id.strip()),
+                (("program",), award.program.strip()),
+                (("education level",), award.education_level.strip()),
+            ):
+                text_column = _column(header, names)
+                if text_column is not None:
+                    row[text_column] = text
         values.update(
             email=email,
             skill=award.skill_name,

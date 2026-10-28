@@ -16,7 +16,6 @@ ErrorCode = Literal[
     "skill_not_found",
     "student_already_deleted",
     "anchor_already_confirmed",
-    "sheet_managed_student",
     "student_email_taken",
     "pdf_already_exists",
     "skill_name_taken",
@@ -150,21 +149,6 @@ class AdminStudentList(BaseModel):
     total: int
 
 
-class AdminStudentCreate(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    email: str
-    full_name: str
-
-
-class AdminSkillAdd(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    skill: str
-    badge: str = ""
-    awarded_on: date | None = None
-
-
 class AdminSyncRun(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -257,6 +241,10 @@ class AwardStudent(BaseModel):
     # Needed only when the student has no passport and no row in the sheet yet.
     first_name: str = Field(default="", max_length=100)
     last_name: str = Field(default="", max_length=100)
+    # Also only for new students. Students who already have a row keep what they have.
+    student_id: str = Field(default="", max_length=100)
+    program: str = Field(default="", max_length=200)
+    education_level: str = Field(default="", max_length=100)
 
 
 class AdminAwardRequest(BaseModel):

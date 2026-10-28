@@ -3,12 +3,7 @@
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import React, { Suspense, useEffect, useState } from 'react'
-import {
-  fetchAdminStudent,
-  addAdminSkill,
-  removeAdminSkill,
-  type AdminStudentDetail,
-} from '@/lib/api/admin'
+import { fetchAdminStudent, type AdminStudentDetail } from '@/lib/api/admin'
 
 function StudentDetailContent() {
   const params = useParams()
@@ -18,16 +13,6 @@ function StudentDetailContent() {
   const [student, setStudent] = useState<AdminStudentDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-
-  // Add skill form state
-  const [skillName, setSkillName] = useState('')
-  const [badgeCode, setBadgeCode] = useState('BDG-AI-001')
-  const [awardedOn, setAwardedOn] = useState(
-    new Date().toISOString().slice(0, 10),
-  )
-  const [submittingSkill, setSubmittingSkill] = useState(false)
-  const [skillError, setSkillError] = useState<string | null>(null)
-  const [showAddForm, setShowAddForm] = useState(false)
 
   useEffect(() => {
     if (!passportId) return
@@ -58,50 +43,6 @@ function StudentDetailContent() {
       ignore = true
     }
   }, [passportId])
-
-  const handleAddSkill = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setSkillError(null)
-
-    if (!passportId) return
-    if (!skillName.trim()) {
-      setSkillError('Skill name is required')
-      return
-    }
-
-    try {
-      setSubmittingSkill(true)
-      const updated = await addAdminSkill(passportId, {
-        skill: skillName.trim(),
-        badge: badgeCode.trim(),
-        awarded_on: awardedOn || null,
-      })
-      setStudent(updated)
-      setSkillName('')
-      setShowAddForm(false)
-    } catch (err: unknown) {
-      setSkillError(err instanceof Error ? err.message : 'Failed to add skill')
-    } finally {
-      setSubmittingSkill(false)
-    }
-  }
-
-  const handleRemoveSkill = async (skillId: string, name: string) => {
-    if (!passportId) return
-    if (
-      !confirm(
-        `Remove skill "${name}"? This will automatically issue a new passport version.`,
-      )
-    ) {
-      return
-    }
-    try {
-      const updated = await removeAdminSkill(passportId, skillId)
-      setStudent(updated)
-    } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Failed to remove skill')
-    }
-  }
 
   if (loading) {
     return (
@@ -150,15 +91,9 @@ function StudentDetailContent() {
             <h1 className="text-2xl font-bold text-slate-900">
               {student.full_name}
             </h1>
-            {student.admin_managed ? (
-              <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-purple-50 text-purple-700 border border-purple-200">
-                Admin Managed
-              </span>
-            ) : (
-              <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
-                Google Sheet Managed
-              </span>
-            )}
+            <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+              {student.admin_managed ? 'Legacy admin record' : 'Google Sheet'}
+            </span>
             {student.deleted_at && (
               <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200">
                 Archived
@@ -214,151 +149,20 @@ function StudentDetailContent() {
         )}
       </div>
 
-      {/* Sheet vs Admin Managed Info Banner */}
-      {!student.admin_managed ? (
-        <div className="p-4 rounded-xl bg-blue-50/80 border border-blue-200/80 text-blue-900 text-xs flex items-center gap-3">
-          <svg
-            className="w-5 h-5 text-blue-500 shrink-0"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="2"
-              d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-            />
-          </svg>
-          <div>
-            <strong>Google Sheet Managed Student:</strong> Skills and name
-            changes for this student originate from BTU&apos;s Google Sheet. To
-            add, remove, or modify skills, edit the sheet and trigger a sync.
-          </div>
+      {/* Where skills come from */}
+      <div className="p-4 rounded-xl bg-blue-50/80 border border-blue-200/80 text-blue-900 text-xs flex items-center justify-between gap-3">
+        <div>
+          <strong>Skills come from the Google Sheet.</strong> To give this
+          student a skill, award it from the Award Skills page. It is written to
+          the Sheet first, then synced into this ledger.
         </div>
-      ) : (
-        <div className="p-4 rounded-xl bg-purple-50/80 border border-purple-200/80 text-purple-900 text-xs flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <svg
-              className="w-5 h-5 text-purple-500 shrink-0"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
-              />
-            </svg>
-            <div>
-              <strong>Admin Managed Student:</strong> You have full control over
-              skills. Adding or removing a skill will automatically issue a new
-              passport version, generate multi-page PDFs, and anchor to Polygon
-              Amoy.
-            </div>
-          </div>
-          <button
-            onClick={() => setShowAddForm(!showAddForm)}
-            className="px-3 py-1.5 bg-purple-700 hover:bg-purple-800 text-white rounded-lg text-xs font-semibold transition-colors shrink-0"
-          >
-            {showAddForm ? 'Cancel' : '+ Add Skill'}
-          </button>
-        </div>
-      )}
-
-      {/* Add Skill Form (Inline Collapsible) */}
-      {showAddForm && student.admin_managed && (
-        <div className="bg-white p-6 rounded-2xl border border-purple-200 shadow-sm space-y-4 animate-in fade-in duration-150">
-          <div className="flex items-center justify-between">
-            <h2 className="text-base font-bold text-slate-900">
-              Add Skill to Student
-            </h2>
-            <span className="text-xs text-purple-600 font-semibold">
-              Will create Version{' '}
-              {latestVersion ? latestVersion.version_number + 1 : 1}
-            </span>
-          </div>
-
-          {skillError && (
-            <div className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs">
-              {skillError}
-            </div>
-          )}
-
-          <form
-            onSubmit={handleAddSkill}
-            className="grid grid-cols-1 md:grid-cols-3 gap-4"
-          >
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Skill Name *
-              </label>
-              <input
-                type="text"
-                required
-                placeholder="e.g. AI Prompt Engineering"
-                value={skillName}
-                onChange={(e) => setSkillName(e.target.value)}
-                className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Badge / Stamp Code
-              </label>
-              <select
-                value={badgeCode}
-                onChange={(e) => setBadgeCode(e.target.value)}
-                className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500"
-              >
-                <option value="BDG-AI-001">BDG-AI-001 (AI Skill)</option>
-                <option value="BDG-AI-002">
-                  BDG-AI-002 (AI Applied Skill)
-                </option>
-                <option value="BDG-AI-003">
-                  BDG-AI-003 (AI Advanced Skill)
-                </option>
-                <option value="Foundation">Foundation Badge</option>
-                <option value="Stamp">Stamp Badge</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Awarded On Date
-              </label>
-              <input
-                type="date"
-                value={awardedOn}
-                onChange={(e) => setAwardedOn(e.target.value)}
-                className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500"
-              />
-            </div>
-
-            <div className="md:col-span-3 flex justify-end gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => setShowAddForm(false)}
-                className="px-4 py-2 text-xs font-medium text-slate-600 hover:text-slate-900"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={submittingSkill}
-                className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-semibold transition-colors disabled:opacity-50"
-              >
-                {submittingSkill
-                  ? 'Issuing Version...'
-                  : 'Confirm & Issue New Version'}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
+        <Link
+          href="/admin/awards"
+          className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold transition-colors shrink-0"
+        >
+          Award a skill
+        </Link>
+      </div>
 
       {/* Version Records Breakdown */}
       <div className="space-y-6">
@@ -368,7 +172,7 @@ function StudentDetailContent() {
 
         {student.versions.length === 0 ? (
           <div className="p-8 bg-white rounded-2xl border border-slate-200 text-center text-slate-400 text-xs">
-            No versions issued for this student yet. Add a skill to create
+            No versions issued for this student yet. Award a skill to create
             Version 1.
           </div>
         ) : (
@@ -440,18 +244,13 @@ function StudentDetailContent() {
                       <th className="px-6 py-2.5 font-semibold">
                         Date Awarded
                       </th>
-                      {student.admin_managed && idx === 0 && (
-                        <th className="px-6 py-2.5 font-semibold text-right">
-                          Actions
-                        </th>
-                      )}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {ver.skills.length === 0 ? (
                       <tr>
                         <td
-                          colSpan={5}
+                          colSpan={4}
                           className="px-6 py-6 text-center text-slate-400"
                         >
                           No skills recorded on this version.
@@ -481,18 +280,6 @@ function StudentDetailContent() {
                           <td className="px-6 py-3 text-slate-600">
                             {skill.awarded_on || 'Unavailable'}
                           </td>
-                          {student.admin_managed && idx === 0 && (
-                            <td className="px-6 py-3 text-right">
-                              <button
-                                onClick={() =>
-                                  handleRemoveSkill(skill.id, skill.skill)
-                                }
-                                className="text-rose-600 hover:text-rose-800 font-semibold transition-colors"
-                              >
-                                Remove
-                              </button>
-                            </td>
-                          )}
                         </tr>
                       ))
                     )}

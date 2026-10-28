@@ -23,13 +23,6 @@ from passport_api.auth import require_admin
 from passport_api.chain import chain_from_settings, publish_anchor
 from passport_api.db import get_supabase
 from passport_api.errors import APIError
-from passport_api.fingerprint import (
-    canonical_skills,
-    content_hash,
-    normalize_awarded_on,
-    skill_fingerprint,
-    verification_id_hash,
-)
 from passport_api.pdf import PassportPdf, get_storage, publish_pdfs
 from passport_api.schemas import (
     AdminAwardRequest,
@@ -39,7 +32,6 @@ from passport_api.schemas import (
     AdminCatalogSkillList,
     AdminCatalogSkillUpdate,
     AdminMe,
-    AdminSkillAdd,
     AdminSkillEntry,
     AdminStudent,
     AdminStudentDetail,
@@ -179,147 +171,6 @@ def _require_admin_student(passport_id: str) -> dict[str, object]:
     return rows[0]
 
 
-def _latest_skills_for_student(student_id: str) -> tuple[list[dict[str, object]], int]:
-    """Return (skill_entry rows, latest_version_number) or ([], 0) for a new student."""
-    response = (
-        get_supabase()
-        .table("passport_versions")
-        .select(
-            "id, version_number, skill_entries(id, skill, badge, awarded_on, description, position)"
-        )
-        .eq("student_id", student_id)
-        .order("version_number", desc=True)
-        .limit(1)
-        .execute()
-    )
-    rows = _table_rows(response.data)
-    if not rows:
-        return [], 0
-    skill_rows = _table_rows(rows[0].get("skill_entries"))
-    return skill_rows, int(cast(int, rows[0]["version_number"]))
-
-
-def _issue_new_version_for_admin(
-    student_row: dict[str, object],
-    new_skills: tuple[Skill, ...],
-    next_version_number: int,
-) -> None:
-    """Create a new passport version, PDFs, and initiate anchoring."""
-    email = str(student_row["email"])
-    passport_id = str(student_row["passport_id"])
-    holder_name = str(student_row["full_name"])
-    fingerprint = skill_fingerprint(new_skills)
-    document_hash = content_hash(
-        holder_name=holder_name,
-        passport_id=passport_id,
-        skills=new_skills,
-        version=next_version_number,
-    )
-
-    # Reuse sync helpers for code/hash minting
-    supabase = get_supabase()
-    codes_resp = supabase.table("passport_versions").select("verification_code").execute()
-    codes: set[str] = {str(r["verification_code"]) for r in _table_rows(codes_resp.data)}
-    hashes_resp = supabase.table("passport_versions").select("content_hash").execute()
-    content_hashes: set[str] = {str(r["content_hash"]) for r in _table_rows(hashes_resp.data)}
-
-    from passport_api.sync import _format_code, _mint  # noqa: PLC0415
-
-    code = _mint(codes, 16, _format_code)
-    vid_hash = verification_id_hash(code)
-
-    if document_hash in content_hashes:
-        raise RuntimeError("content_hash_collision")
-
-    # Insert version row
-    version_resp = (
-        supabase.table("passport_versions")
-        .insert(
-            {
-                "student_id": str(student_row["id"]),
-                "version_number": next_version_number,
-                "holder_name": holder_name,
-                "verification_code": code,
-                "verification_id_hash": vid_hash,
-                "skill_fingerprint": fingerprint,
-                "content_hash": document_hash,
-                "anchor_status": "pending",
-                "issued_at": _now(),
-            }
-        )
-        .execute()
-    )
-    version_rows = _table_rows(version_resp.data)
-    if not version_rows:
-        raise RuntimeError("version_not_created")
-    version_id = str(version_rows[0]["id"])
-
-    # Insert skill entries
-    skill_rows = [
-        {
-            "version_id": version_id,
-            "skill": s.skill,
-            "badge": s.badge,
-            "awarded_on": s.awarded_on,
-            "description": s.description,
-            "position": pos,
-        }
-        for pos, s in enumerate(new_skills, start=1)
-    ]
-    if skill_rows:
-        supabase.table("skill_entries").insert(skill_rows).execute()
-
-    # Generate PDFs
-    storage = get_storage()
-    en_path, ka_path = publish_pdfs(
-        PassportPdf(
-            holder_name=holder_name,
-            passport_id=passport_id,
-            version=next_version_number,
-            issued_on=_now()[:10],
-            verification_code=code,
-            skills=new_skills,
-        ),
-        storage,
-    )
-    supabase.table("passport_versions").update({"pdf_en_path": en_path, "pdf_ka_path": ka_path}).eq(
-        "id", version_id
-    ).execute()
-
-    # Anchor
-    chain = chain_from_settings()
-    if chain is not None:
-        from passport_api.sync import VersionRecord  # noqa: PLC0415
-
-        vr = VersionRecord(
-            passport_id=passport_id,
-            email=email,
-            version_number=next_version_number,
-            holder_name=holder_name,
-            verification_code=code,
-            verification_id_hash=vid_hash,
-            skill_fingerprint=fingerprint,
-            content_hash=document_hash,
-            anchor_status="pending",
-            pdf_en_path=en_path,
-            pdf_ka_path=ka_path,
-            tx_hash=None,
-            issued_at=_now(),
-            skills=new_skills,
-        )
-        try:
-            publish_anchor(vr, chain, now=_now())
-        except Exception:
-            vr.anchor_status = "failed"
-        supabase.table("passport_versions").update(
-            {
-                "anchor_status": vr.anchor_status,
-                "tx_hash": vr.tx_hash,
-                "anchored_at": vr.anchored_at,
-            }
-        ).eq("id", version_id).execute()
-
-
 # ---------------------------------------------------------------------------
 # Students — read
 # ---------------------------------------------------------------------------
@@ -410,86 +261,6 @@ def delete_student(
         "id", str(student["id"])
     ).execute()
     return Response(status_code=204)
-
-
-# ---------------------------------------------------------------------------
-# Skills — write (admin_managed students only)
-# ---------------------------------------------------------------------------
-
-
-@router.post("/students/{passport_id}/skills", response_model=AdminStudentDetail, status_code=201)
-def add_skill(
-    passport_id: str,
-    body: AdminSkillAdd,
-) -> AdminStudentDetail:
-    student = _require_admin_student(passport_id)
-
-    if not student.get("admin_managed"):
-        raise APIError(422, "sheet_managed_student")
-    if student.get("deleted_at") is not None:
-        raise APIError(409, "student_already_deleted")
-
-    current_skill_rows, latest_version = _latest_skills_for_student(str(student["id"]))
-
-    # Build new skill list: existing + new entry
-    existing_skills = [
-        Skill(
-            skill=str(r["skill"]),
-            badge=str(r["badge"]),
-            awarded_on=None if r.get("awarded_on") is None else str(r["awarded_on"]),
-            description=str(r.get("description") or ""),
-        )
-        for r in current_skill_rows
-    ]
-    awarded_str = body.awarded_on.isoformat() if body.awarded_on else None
-    new_entry = Skill(
-        skill=_nfc(body.skill),
-        badge=_nfc(body.badge),
-        awarded_on=normalize_awarded_on(awarded_str or ""),
-        description="",
-    )
-    all_skills = tuple(canonical_skills(existing_skills + [new_entry]))
-    _issue_new_version_for_admin(student, all_skills, latest_version + 1)
-    return get_student(passport_id)
-
-
-@router.delete(
-    "/students/{passport_id}/skills/{skill_id}",
-    response_model=AdminStudentDetail,
-)
-def remove_skill(
-    passport_id: str,
-    skill_id: str,
-) -> AdminStudentDetail:
-    student = _require_admin_student(passport_id)
-
-    if not student.get("admin_managed"):
-        raise APIError(422, "sheet_managed_student")
-    if student.get("deleted_at") is not None:
-        raise APIError(409, "student_already_deleted")
-
-    current_skill_rows, latest_version = _latest_skills_for_student(str(student["id"]))
-
-    # Find and remove the target skill
-    remaining_rows = [r for r in current_skill_rows if str(r["id"]) != skill_id]
-    if len(remaining_rows) == len(current_skill_rows):
-        raise APIError(404, "skill_not_found")
-
-    remaining_skills = tuple(
-        canonical_skills(
-            [
-                Skill(
-                    skill=str(r["skill"]),
-                    badge=str(r["badge"]),
-                    awarded_on=None if r.get("awarded_on") is None else str(r["awarded_on"]),
-                    description=str(r.get("description") or ""),
-                )
-                for r in remaining_rows
-            ]
-        )
-    )
-    _issue_new_version_for_admin(student, remaining_skills, latest_version + 1)
-    return get_student(passport_id)
 
 
 # ---------------------------------------------------------------------------
@@ -773,6 +544,9 @@ def award_skill(
                     email=email,
                     first_name=_nfc(student.first_name),
                     last_name=_nfc(student.last_name),
+                    student_id=_nfc(student.student_id),
+                    program=_nfc(student.program),
+                    education_level=_nfc(student.education_level),
                     skill_id=skill.id,
                     skill_name=skill.name,
                     category=level,

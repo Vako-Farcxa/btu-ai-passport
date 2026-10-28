@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   adminErrorMessage,
+  describeSyncResult,
   awardSyncNotice,
   parseAwardStudents,
   type AdminAwardResponse,
@@ -66,5 +67,38 @@ describe('awardSyncNotice', () => {
     )
     expect(awardSyncNotice(response('completed', null))).toBeNull()
     expect(awardSyncNotice(response('skipped', null))).toBeNull()
+  })
+})
+
+describe('describeSyncResult', () => {
+  it('reports a completed run', () => {
+    const notice = describeSyncResult({
+      status: 'completed',
+      rows_read: 5,
+      versions_created: 2,
+    })
+    expect(notice.kind).toBe('success')
+    expect(notice.text).toContain('completed')
+  })
+
+  it('reports a skipped run as a warning, not a success', () => {
+    const notice = describeSyncResult({
+      status: 'skipped',
+      rows_read: 0,
+      versions_created: 0,
+    })
+    expect(notice.kind).toBe('warning')
+    expect(notice.text).not.toContain('completed')
+  })
+
+  it('reports a failed run with its error', () => {
+    const notice = describeSyncResult({
+      status: 'failed',
+      rows_read: 0,
+      versions_created: 0,
+      error: 'sync_failed',
+    })
+    expect(notice.kind).toBe('error')
+    expect(notice.text).toContain('sync_failed')
   })
 })

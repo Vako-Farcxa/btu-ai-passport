@@ -26,6 +26,7 @@ from passport_api.schemas import Skill, SyncResult
 from passport_api.settings import email_domain_allowed, settings
 
 _log = logging.getLogger(__name__)
+_UNIQUE_VIOLATION = "23505"
 _ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
 _COLUMNS = (
     "email",
@@ -482,6 +483,8 @@ class MemorySyncStore:
                 return
 
     def insert_student(self, email: str, full_name: str, passport_id: str) -> None:
+        if any(student.email == email for student in self.students):
+            raise APIError({"code": _UNIQUE_VIOLATION, "message": "students_email_key"})
         self.students.append(
             StudentRecord(email=email, full_name=full_name, passport_id=passport_id)
         )
@@ -623,7 +626,6 @@ class SupabaseSyncStore:
                 "email, full_name, passport_id, "
                 "passport_versions(version_number, skill_fingerprint, holder_name)"
             )
-            .eq("admin_managed", False)
             .is_("deleted_at", "null")
             .execute()
         )
@@ -942,7 +944,9 @@ def _issue_versions(
     catalog.update({skill.id: skill for skill in tab_catalog or []})
     store.upsert_skills(list(catalog.values()))
     synced: set[str] = set()
-    for email, group in groups.items():
+
+    def process(email: str, group: _EmailGroup) -> None:
+        nonlocal created
         skills = tuple(
             canonical_skills(
                 [
@@ -962,10 +966,10 @@ def _issue_versions(
         if state is None:
             if not group.full_name:
                 fail(group.indexes, "missing_full_name")
-                continue
+                return
             if group.passport_id and group.passport_id in passport_ids:
                 fail(group.indexes, "passport_id_taken")
-                continue
+                return
             if group.passport_id:
                 passport_id = group.passport_id
                 passport_ids.add(passport_id)
@@ -1010,10 +1014,27 @@ def _issue_versions(
             results.append(
                 RowOutcome(index, STATUS_SYNCED, f"V{version_number}", synced_at, "", passport_id)
             )
+
+    for email, group in groups.items():
+        created_before = created
+        try:
+            process(email, group)
+        except Exception as exc:
+            # One student must not stop the run. Mark their rows and carry on.
+            _log.exception("student_sync_failed")
+            created = created_before
+            fail(group.indexes, _failure_code(exc))
     emails = synced
     _fill_pending_pdfs(store, emails)
     _anchor_pending(store, emails, chain)
     return created
+
+
+def _failure_code(exc: Exception) -> str:
+    """Row error code for an unexpected failure. Never includes internal details."""
+    if isinstance(exc, APIError) and exc.code == _UNIQUE_VIOLATION:
+        return "student_conflict"
+    return "sync_error"
 
 
 def _insert_version(
@@ -1063,18 +1084,22 @@ def _fill_pending_pdfs(store: SyncStore, emails: set[str]) -> None:
     for pending in store.pending_pdfs():
         if pending.email not in emails:
             continue
-        en_path, ka_path = publish_pdfs(
-            PassportPdf(
-                holder_name=pending.holder_name,
-                passport_id=pending.passport_id,
-                version=pending.version_number,
-                issued_on=pending.issued_at[:10],
-                verification_code=pending.verification_code,
-                skills=pending.skills,
-            ),
-            storage,
-        )
-        store.save_pdf_paths(pending.email, pending.version_number, en_path, ka_path)
+        try:
+            en_path, ka_path = publish_pdfs(
+                PassportPdf(
+                    holder_name=pending.holder_name,
+                    passport_id=pending.passport_id,
+                    version=pending.version_number,
+                    issued_on=pending.issued_at[:10],
+                    verification_code=pending.verification_code,
+                    skills=pending.skills,
+                ),
+                storage,
+            )
+            store.save_pdf_paths(pending.email, pending.version_number, en_path, ka_path)
+        except Exception:
+            # The PDF stays pending and is retried on the next run.
+            _log.warning("pdf_publish_failed", exc_info=True)
 
 
 def _anchor_pending(store: SyncStore, emails: set[str], chain: AnchorChain | None) -> None:

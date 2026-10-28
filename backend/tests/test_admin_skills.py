@@ -179,6 +179,19 @@ def test_known_database_student_needs_no_name() -> None:
     assert placements[0].row_number == 5
 
 
+def test_existing_student_keeps_their_details_over_the_request() -> None:
+    rows, _ = build_award_rows(
+        HEADER,
+        [existing_row()],
+        [award("ada@btu.edu.ge", student_id="OTHER", program="Other")],
+        set(),
+        first_row=6,
+    )
+    row = dict(zip(HEADER, rows[0], strict=True))
+    assert row["Student ID"] == "BTU-T-0001"
+    assert row["Program"] == "Computer Science"
+
+
 def test_two_awards_get_consecutive_rows_and_record_ids() -> None:
     rows, placements = build_award_rows(
         HEADER,
@@ -702,6 +715,45 @@ def test_award_sheet_unavailable(env: tuple[FakeDb, FakeAdminSheet, MemorySyncSt
         json={"skill_id": "SKL-002", "students": [{"email": "a@btu.edu.ge", "first_name": "A"}]},
     )
     assert response.status_code == 503
+
+
+def test_direct_skill_routes_are_gone(
+    env: tuple[FakeDb, FakeAdminSheet, MemorySyncStore],
+) -> None:
+    body = {"skill": "X", "badge": "", "awarded_on": None}
+    assert client.post("/admin/students/BTU-X/skills", headers=AUTH, json=body).status_code == 404
+    assert client.delete("/admin/students/BTU-X/skills/1", headers=AUTH).status_code == 404
+
+
+def test_new_student_details_land_in_the_sheet_row(
+    env: tuple[FakeDb, FakeAdminSheet, MemorySyncStore],
+) -> None:
+    db, sheet, _ = env
+    seed_skill(db)
+    response = client.post(
+        "/admin/awards",
+        headers=AUTH,
+        json={
+            "skill_id": "SKL-002",
+            "students": [
+                {
+                    "email": "tamar@btu.edu.ge",
+                    "first_name": "Tamar",
+                    "last_name": "Chikovani",
+                    "student_id": "BTU-T-0042",
+                    "program": "Law",
+                    "education_level": "Master's",
+                }
+            ],
+        },
+    )
+    assert response.json()["rows"][0]["status"] == "synced"
+    row = dict(zip(HEADER, sheet.grid[-1], strict=True))
+    assert row["Student ID"] == "BTU-T-0042"
+    assert row["Program"] == "Law"
+    assert row["Education Level"] == "Master's"
+    assert row["Student Status"] == "Active"
+    assert row["Passport ID (Existing)"] == ""
 
 
 def test_direct_student_creation_is_gone(
