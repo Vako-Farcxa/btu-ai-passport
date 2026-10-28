@@ -4,6 +4,8 @@ import type { ReactNode } from 'react'
 
 import { LocaleLang } from '@/components/locale-lang'
 
+import { SITE_NAME, SITE_URL } from '@/lib/site'
+
 import './globals.css'
 
 const sans = Noto_Sans_Georgian({
@@ -20,9 +22,27 @@ const serif = Noto_Serif_Georgian({
   display: 'swap',
 })
 
+const description =
+  'Verify a BTU AI skills passport. A student hackathon project, not an official BTU service.'
+
 export const metadata: Metadata = {
-  title: 'BTU AI Skills Digital Passport',
-  description: 'Verify a BTU AI skills passport.',
+  metadataBase: new URL(SITE_URL),
+  title: { default: SITE_NAME, template: `%s | ${SITE_NAME}` },
+  description,
+  applicationName: SITE_NAME,
+  openGraph: {
+    type: 'website',
+    siteName: SITE_NAME,
+    title: SITE_NAME,
+    description,
+    locale: 'en_US',
+    alternateLocale: ['ka_GE'],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: SITE_NAME,
+    description,
+  },
 }
 
 export default function RootLayout({ children }: { children: ReactNode }) {

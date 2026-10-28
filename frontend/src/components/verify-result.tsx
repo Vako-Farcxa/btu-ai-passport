@@ -3,6 +3,7 @@
 import { useRef } from 'react'
 
 import { useResultMotion } from '@/components/motion'
+import { TestnetNote } from '@/components/testnet-note'
 import { SkillList } from '@/components/skill-list'
 import { messages, type Locale } from '@/i18n/messages'
 import type { VerifyResult } from '@/lib/api/types'
@@ -72,6 +73,7 @@ export function VerifyResultCard({
             {copy.transaction}
             <span aria-hidden="true">↗</span>
           </a>
+          <TestnetNote locale={locale} />
         </>
       ) : null}
     </section>
