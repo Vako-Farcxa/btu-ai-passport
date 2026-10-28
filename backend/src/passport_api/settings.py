@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     btu_issuer_private_key: str = ""
     # Comma-separated email domains accepted for sign-in and sheet rows.
     allowed_email_domains: str = "btu.edu.ge"
+    # Local demos only. Accepts the "demo-admin" bearer token on /admin. Never set it on a
+    # deployed backend.
+    demo_mode: bool = False
 
 
 settings = Settings()

@@ -34,11 +34,18 @@ export async function readAccessToken(): Promise<string | null> {
   }
 }
 
-export async function signInWithGoogle(): Promise<
-  'started' | 'not_configured'
-> {
+export const POST_LOGIN_COOKIE = 'post_login_next'
+
+export async function signInWithGoogle(
+  next?: string,
+): Promise<'started' | 'not_configured'> {
   const client = createSupabaseBrowser()
   if (!client) return 'not_configured'
+  if (next) {
+    // The redirect URL stays exactly as Supabase allows it. The callback route reads
+    // this short-lived cookie to send the user back where they started.
+    document.cookie = `${POST_LOGIN_COOKIE}=${encodeURIComponent(next)}; path=/; max-age=600; SameSite=Lax`
+  }
   const { error } = await client.auth.signInWithOAuth({
     provider: 'google',
     options: {
@@ -48,4 +55,9 @@ export async function signInWithGoogle(): Promise<
   })
   if (error) throw error
   return 'started'
+}
+
+export async function signOut(): Promise<void> {
+  const client = createSupabaseBrowser()
+  if (client) await client.auth.signOut()
 }
