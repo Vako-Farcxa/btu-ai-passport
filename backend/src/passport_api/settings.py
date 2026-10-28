@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     # Local demos only. Accepts the "demo-admin" bearer token on /admin. Never set it on a
     # deployed backend.
     demo_mode: bool = False
+    # Serves /docs, /redoc and /openapi.json. Off by default so a deployed API does not
+    # publish its route map. Turn it on locally with ENABLE_API_DOCS=true.
+    enable_api_docs: bool = False
 
 
 settings = Settings()

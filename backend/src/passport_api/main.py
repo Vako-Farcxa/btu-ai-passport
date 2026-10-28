@@ -12,7 +12,18 @@ from passport_api.errors import APIError
 from passport_api.schemas import ErrorBody
 from passport_api.settings import settings
 
-app = FastAPI(title="BTU AI Skills Digital Passport API")
+
+def create_app(*, enable_docs: bool) -> FastAPI:
+    """Build the API. With docs off, /docs, /redoc and /openapi.json do not exist (404)."""
+    return FastAPI(
+        title="BTU AI Skills Digital Passport API",
+        docs_url="/docs" if enable_docs else None,
+        redoc_url="/redoc" if enable_docs else None,
+        openapi_url="/openapi.json" if enable_docs else None,
+    )
+
+
+app = create_app(enable_docs=settings.enable_api_docs)
 
 app.add_middleware(
     CORSMiddleware,

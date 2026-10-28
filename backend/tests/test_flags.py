@@ -30,6 +30,7 @@ GOOD = "The Prompt Engineering skill is missing from this version."
 def _token(email: str) -> str:
     payload = {
         "aud": "authenticated",
+        "iss": "https://test-project.supabase.co/auth/v1",
         "email": email,
         "exp": int(time.time()) + 600,
         "sub": "user",
