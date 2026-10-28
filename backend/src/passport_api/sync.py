@@ -532,6 +532,8 @@ class SupabaseSyncStore:
                 "email, full_name, passport_id, "
                 "passport_versions(version_number, skill_fingerprint, holder_name)"
             )
+            .eq("admin_managed", False)
+            .is_("deleted_at", "null")
             .execute()
         )
         states: dict[str, StudentState] = {}
