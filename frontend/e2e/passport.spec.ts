@@ -106,9 +106,10 @@ test('a signed-in student cannot open another passport', async ({ page }) => {
   await expect(page.getByText('A1B2-C3D4-E5F6-G7H8')).toBeVisible()
   await expect(page.getByText('K9M2-N3P4-Q5R6-S7T8')).toBeVisible()
   await expect(page.getByText('Machine Learning')).toBeVisible()
-  await expect(
-    page.getByText('Choose a model the decision can survive.'),
-  ).toBeVisible()
+  const description = page.getByText('Choose a model the decision can survive.')
+  await expect(description).toBeHidden()
+  await page.getByRole('button', { name: 'Machine Learning' }).click()
+  await expect(description).toBeVisible()
   await expect(page.locator('img[src*="BDG-AI-002"]')).toBeVisible()
   await expect(page.getByText(OTHER_ID)).toHaveCount(0)
   await expect(page.getByText(OTHER_CODE)).toHaveCount(0)

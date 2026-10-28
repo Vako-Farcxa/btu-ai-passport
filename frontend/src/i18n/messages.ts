@@ -1,5 +1,7 @@
 export type Locale = 'en' | 'ka'
 export type Outcome = 'valid' | 'outdated' | 'not_found' | 'error'
+export type BadgeCode = 'BDG-AI-001' | 'BDG-AI-002' | 'BDG-AI-003'
+type BadgeLevel = { title: string; text: string }
 
 type Copy = {
   title: string
@@ -48,6 +50,7 @@ type Copy = {
   newerVersionNotice: string
   universityName: string
   sealEstablished: string
+  badgeLevels: Record<BadgeCode, BadgeLevel>
   copyCode: string
   codeCopied: string
   copyCodeFailed: string
@@ -108,6 +111,20 @@ export const messages: Record<Locale, Copy> = {
     shareLinkFailed: 'Could not copy. Copy this link manually:',
     universityName: 'Business and Technology University',
     sealEstablished: 'EST. 2016',
+    badgeLevels: {
+      'BDG-AI-001': {
+        title: 'AI Skill · Focused learning',
+        text: 'Awarded for focused learning of an AI skill.',
+      },
+      'BDG-AI-002': {
+        title: 'AI Applied Skill · Applied learning',
+        text: 'Awarded for applying an AI skill in practice.',
+      },
+      'BDG-AI-003': {
+        title: 'AI Advanced Skill · Extended academic learning',
+        text: 'Awarded for extended academic learning in an AI skill.',
+      },
+    },
     copyCode: 'Copy code',
     codeCopied: 'Copied',
     copyCodeFailed: 'Could not copy. The code is selected: press Ctrl+C.',
@@ -168,6 +185,20 @@ export const messages: Record<Locale, Copy> = {
     shareLinkFailed: 'კოპირება ვერ მოხერხდა. დააკოპირეთ ბმული ხელით:',
     universityName: 'ბიზნესისა და ტექნოლოგიების უნივერსიტეტი',
     sealEstablished: 'დაარს. 2016',
+    badgeLevels: {
+      'BDG-AI-001': {
+        title: 'AI უნარი · მიზნობრივი სწავლა',
+        text: 'ენიჭება AI უნარის მიზნობრივი სწავლისთვის.',
+      },
+      'BDG-AI-002': {
+        title: 'AI გამოყენებითი უნარი · გამოყენებითი სწავლა',
+        text: 'ენიჭება AI უნარის პრაქტიკაში გამოყენებისთვის.',
+      },
+      'BDG-AI-003': {
+        title: 'AI მოწინავე უნარი · გაფართოებული აკადემიური სწავლა',
+        text: 'ენიჭება AI უნარში გაფართოებული აკადემიური სწავლისთვის.',
+      },
+    },
     copyCode: 'კოდის კოპირება',
     codeCopied: 'დაკოპირდა',
     copyCodeFailed: 'კოპირება ვერ მოხერხდა. კოდი მონიშნულია: დააჭირეთ Ctrl+C.',
