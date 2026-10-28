@@ -15,6 +15,7 @@ import {
   type AwardRowResult,
   type SkillLevel,
 } from '@/lib/api/admin'
+import { awardStudentProblems } from '@/lib/validation'
 
 const inputClass =
   'w-full px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500'
@@ -40,6 +41,7 @@ function AwardForm() {
   const [studentsText, setStudentsText] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [problems, setProblems] = useState<string[]>([])
   const [result, setResult] = useState<AdminAwardResponse | null>(null)
 
   useEffect(() => {
@@ -68,6 +70,7 @@ function AwardForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
+    setProblems([])
     setResult(null)
     const students = parseAwardStudents(studentsText)
     if (!skillId) {
@@ -80,6 +83,11 @@ function AwardForm() {
     }
     if (!effectiveLevel) {
       setError('This skill has no level yet. Choose one.')
+      return
+    }
+    const problems = awardStudentProblems(students)
+    if (problems.length > 0) {
+      setProblems(problems)
       return
     }
     try {
@@ -129,6 +137,20 @@ function AwardForm() {
         onSubmit={handleSubmit}
         className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-5 space-y-4"
       >
+        {problems.length > 0 && (
+          <div
+            role="alert"
+            className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs space-y-1"
+          >
+            <p className="font-semibold">Fix these before awarding:</p>
+            <ul className="list-disc pl-4">
+              {problems.map((problem) => (
+                <li key={problem}>{problem}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         {(error || loadError) && (
           <div
             role="alert"

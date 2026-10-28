@@ -4,6 +4,7 @@ import Link from 'next/link'
 import React, { useEffect, useState } from 'react'
 
 import { EDUCATION_LEVELS, programsForLevel } from '@/lib/btu-programs'
+import { cleanEmail, cleanName, emailError, nameError } from '@/lib/validation'
 import {
   SKILL_LEVELS,
   adminErrorMessage,
@@ -17,6 +18,17 @@ import {
 
 const inputClass =
   'w-full px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500'
+
+type Field = 'firstName' | 'lastName' | 'email' | 'skill'
+
+function FieldError({ id, message }: { id: string; message?: string }) {
+  if (!message) return null
+  return (
+    <p id={id} role="alert" className="text-[11px] text-rose-600 mt-1">
+      {message}
+    </p>
+  )
+}
 
 function asLevel(value: string): SkillLevel | '' {
   return SKILL_LEVELS.find((level) => level === value) ?? ''
@@ -45,6 +57,9 @@ export function AddStudentDialog({
   const [level, setLevel] = useState<SkillLevel | ''>('')
   const [awardedOn, setAwardedOn] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [fieldErrors, setFieldErrors] = useState<
+    Partial<Record<Field, string>>
+  >({})
   const [submitting, setSubmitting] = useState(false)
   const [result, setResult] = useState<AdminAwardResponse | null>(null)
 
@@ -83,18 +98,19 @@ export function AddStudentDialog({
     e.preventDefault()
     setError(null)
     setResult(null)
-    if (!firstName.trim() || !lastName.trim()) {
-      setError('Enter the first and last name.')
-      return
-    }
-    if (!email.trim().includes('@')) {
-      setError('Enter a valid email address.')
-      return
-    }
+    const problems: Partial<Record<Field, string>> = {}
+    const firstProblem = nameError(firstName, 'First name')
+    const lastProblem = nameError(lastName, 'Last name')
+    const emailProblem = emailError(email)
+    if (firstProblem) problems.firstName = firstProblem
+    if (lastProblem) problems.lastName = lastProblem
+    if (emailProblem) problems.email = emailProblem
     if (!skillId) {
-      setError('Choose a skill. Every student row in the Sheet is a skill.')
-      return
+      problems.skill =
+        'Choose a skill. Every student row in the Sheet is a skill.'
     }
+    setFieldErrors(problems)
+    if (Object.keys(problems).length > 0) return
     if (!(level || asLevel(selected?.category ?? ''))) {
       setError('This skill has no level yet. Choose one.')
       return
@@ -107,9 +123,9 @@ export function AddStudentDialog({
         awarded_on: awardedOn || null,
         students: [
           {
-            email: email.trim().toLowerCase(),
-            first_name: firstName.trim(),
-            last_name: lastName.trim(),
+            email: cleanEmail(email),
+            first_name: cleanName(firstName),
+            last_name: cleanName(lastName),
             program: program.trim(),
             education_level: educationLevel.trim(),
           },
@@ -234,7 +250,7 @@ export function AddStudentDialog({
             </div>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} noValidate className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <label
@@ -246,11 +262,22 @@ export function AddStudentDialog({
                 <input
                   id="new-first-name"
                   type="text"
-                  required
                   maxLength={100}
                   value={firstName}
-                  onChange={(e) => setFirstName(e.target.value)}
+                  onChange={(e) => {
+                    setFirstName(e.target.value)
+                    setFieldErrors((prev) => ({
+                      ...prev,
+                      firstName: undefined,
+                    }))
+                  }}
+                  aria-invalid={Boolean(fieldErrors.firstName)}
+                  aria-describedby="new-first-name-error"
                   className={inputClass}
+                />
+                <FieldError
+                  id="new-first-name-error"
+                  message={fieldErrors.firstName}
                 />
               </div>
               <div>
@@ -263,11 +290,19 @@ export function AddStudentDialog({
                 <input
                   id="new-last-name"
                   type="text"
-                  required
                   maxLength={100}
                   value={lastName}
-                  onChange={(e) => setLastName(e.target.value)}
+                  onChange={(e) => {
+                    setLastName(e.target.value)
+                    setFieldErrors((prev) => ({ ...prev, lastName: undefined }))
+                  }}
+                  aria-invalid={Boolean(fieldErrors.lastName)}
+                  aria-describedby="new-last-name-error"
                   className={inputClass}
+                />
+                <FieldError
+                  id="new-last-name-error"
+                  message={fieldErrors.lastName}
                 />
               </div>
               <div className="sm:col-span-2">
@@ -280,15 +315,21 @@ export function AddStudentDialog({
                 <input
                   id="new-email"
                   type="email"
-                  required
-                  placeholder="student.name@btu.edu.ge"
+                  placeholder="firstname.lastname@btu.edu.ge"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => {
+                    setEmail(e.target.value)
+                    setFieldErrors((prev) => ({ ...prev, email: undefined }))
+                  }}
+                  aria-invalid={Boolean(fieldErrors.email)}
+                  aria-describedby="new-email-error"
                   className={inputClass}
                 />
+                <FieldError id="new-email-error" message={fieldErrors.email} />
                 <p className="text-[11px] text-slate-400 mt-1">
-                  Only the allowed university domains are accepted. The student
-                  ID and passport ID are assigned automatically.
+                  University email only, at least 3 characters before @, not
+                  just digits. Student ID and passport ID are assigned
+                  automatically.
                 </p>
               </div>
               <div>
@@ -358,7 +399,12 @@ export function AddStudentDialog({
                   <select
                     id="new-skill"
                     value={skillId}
-                    onChange={(e) => setSkillId(e.target.value)}
+                    onChange={(e) => {
+                      setSkillId(e.target.value)
+                      setFieldErrors((prev) => ({ ...prev, skill: undefined }))
+                    }}
+                    aria-invalid={Boolean(fieldErrors.skill)}
+                    aria-describedby="new-skill-error"
                     className={inputClass}
                   >
                     <option value="">Choose a skill...</option>
@@ -368,6 +414,10 @@ export function AddStudentDialog({
                       </option>
                     ))}
                   </select>
+                  <FieldError
+                    id="new-skill-error"
+                    message={fieldErrors.skill}
+                  />
                 </div>
                 <div className="sm:col-span-2">
                   <label

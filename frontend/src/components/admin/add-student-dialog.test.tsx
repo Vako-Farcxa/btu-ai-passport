@@ -63,7 +63,7 @@ describe('AddStudentDialog', () => {
     await screen.findByLabelText(/first name/i)
     fill(/first name/i, 'Nino')
     fill(/last name/i, 'Beridze')
-    fill(/btu email/i, 'n@btu.edu.ge')
+    fill(/btu email/i, 'nino@btu.edu.ge')
     fireEvent.click(screen.getByRole('button', { name: 'Add student' }))
     expect(await screen.findByRole('alert')).toHaveTextContent(
       /choose a skill/i,
@@ -82,7 +82,7 @@ describe('AddStudentDialog', () => {
       },
       rows: [
         {
-          email: 'n@btu.edu.ge',
+          email: 'nino@btu.edu.ge',
           status: 'synced',
           passport_id: 'BTU-ABC',
           version: '1',
@@ -94,7 +94,7 @@ describe('AddStudentDialog', () => {
     await screen.findByLabelText(/first name/i)
     fill(/first name/i, 'Nino')
     fill(/last name/i, 'Beridze')
-    fill(/btu email/i, 'N@btu.edu.ge')
+    fill(/btu email/i, 'Nino@btu.edu.ge')
     fill(/education level/i, "Bachelor's")
     fill(/program/i, 'Digital Marketing')
     await waitFor(() =>
@@ -111,7 +111,7 @@ describe('AddStudentDialog', () => {
         skill_id: 'SKL-001',
         students: [
           {
-            email: 'n@btu.edu.ge',
+            email: 'nino@btu.edu.ge',
             first_name: 'Nino',
             last_name: 'Beridze',
             program: 'Digital Marketing',
@@ -141,6 +141,37 @@ describe('AddStudentDialog', () => {
     fill(/education level/i, "Bachelor's")
     expect((screen.getByLabelText(/program/i) as HTMLSelectElement).value).toBe(
       '',
+    )
+  })
+
+  it('shows inline errors for a fake student and sends nothing', async () => {
+    render(<AddStudentDialog onClose={() => {}} />)
+    await screen.findByLabelText(/first name/i)
+    fill(/first name/i, '1')
+    fill(/last name/i, '1')
+    fill(/btu email/i, '111@btu.edu.ge')
+    fireEvent.click(screen.getByRole('button', { name: 'Add student' }))
+    const alerts = await screen.findAllByRole('alert')
+    const text = alerts.map((a) => a.textContent).join(' | ')
+    expect(text).toMatch(/First name/)
+    expect(text).toMatch(/Last name/)
+    expect(text).toMatch(/only digits/)
+    expect(screen.getByLabelText(/first name/i)).toHaveAttribute(
+      'aria-invalid',
+      'true',
+    )
+    expect(api.awardAdminSkill).not.toHaveBeenCalled()
+  })
+
+  it('clears a field error when the admin edits that field', async () => {
+    render(<AddStudentDialog onClose={() => {}} />)
+    await screen.findByLabelText(/first name/i)
+    fireEvent.click(screen.getByRole('button', { name: 'Add student' }))
+    expect(await screen.findAllByRole('alert')).not.toHaveLength(0)
+    fill(/first name/i, 'Nino')
+    expect(screen.getByLabelText(/first name/i)).toHaveAttribute(
+      'aria-invalid',
+      'false',
     )
   })
 
