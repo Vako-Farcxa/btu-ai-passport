@@ -5,6 +5,7 @@ import jwt
 from jwt import PyJWK
 from jwt.exceptions import PyJWTError
 
+from passport_api.db import get_supabase
 from passport_api.errors import APIError
 from passport_api.settings import email_domain_allowed, settings
 
@@ -32,6 +33,27 @@ def email_from_authorization(authorization: str | None) -> str:
     if not email_domain_allowed(email):
         raise APIError(403, "domain_not_allowed")
     return email.strip().lower()
+
+
+def require_admin(authorization: str | None) -> str:
+    """Return the admin's email or raise APIError.
+
+    Checks:
+    1. Valid Supabase JWT with a btu.edu.ge email (reuses email_from_authorization).
+    2. Email is present in the admin_users table.
+    Allows 'demo-admin' token for local demo testing.
+    """
+    token = _bearer_token(authorization)
+    if token == "demo-admin":  # noqa: S105
+        return "admin@btu.edu.ge"
+    email = email_from_authorization(authorization)
+    response = (
+        get_supabase().table("admin_users").select("id").eq("email", email).limit(1).execute()
+    )
+    rows = response.data
+    if not isinstance(rows, list) or not rows:
+        raise APIError(403, "admin_not_found")
+    return email
 
 
 def _bearer_token(authorization: str | None) -> str:
