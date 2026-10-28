@@ -37,6 +37,8 @@ test('verification page shows one still outcome', async ({ page }) => {
           holder_name: 'Nino Beridze',
           version: 1,
           is_latest: false,
+          latest_version: 3,
+          latest_issued_at: '2026-10-28',
           skills: [
             { skill: 'Python', badge: 'Foundation', awarded_on: '2025-01-15' },
           ],
@@ -74,6 +76,7 @@ test('verification page shows one still outcome', async ({ page }) => {
   await expect(result).toContainText('Machine Learning')
   await expect(result).toContainText('Use models with a human in the loop.')
   await expect(result).toContainText('This is the latest version')
+  await expect(page.getByTestId('newer-notice')).toHaveCount(0)
   await expect(result.locator('img[src*="BDG-AI-001"]')).toBeVisible()
   await expect(result.getByRole('link')).toHaveAttribute(
     'href',
@@ -98,10 +101,41 @@ test('verification page shows one still outcome', async ({ page }) => {
   await expect(page.getByTestId('verify-result')).toContainText(
     'This is not the latest version',
   )
+  await expect(page.getByTestId('newer-notice')).toHaveText(
+    'A newer version (v3) of this passport was issued on 28 Oct 2026. Ask the holder for their latest code.',
+  )
+  await page.getByRole('button', { name: 'ქართული' }).click()
+  await expect(page.getByTestId('newer-notice')).toContainText('v3')
+  await expect(page.getByTestId('newer-notice')).not.toContainText('newer')
+  await page.getByRole('button', { name: 'English' }).click()
 
   await page.getByLabel('Verification code').fill(PENDING)
   await page.getByRole('button', { name: 'Check' }).click()
   await expect(page.getByTestId('verify-result')).toHaveText(/Error/)
   await expect(page.getByTestId('verify-result')).not.toContainText('Python')
   await expect(page.locator('.badge-stamp')).toHaveCount(0)
+})
+
+test('an outdated result from an older backend shows no newer-version note', async ({
+  page,
+}) => {
+  await page.route('http://localhost:8000/verify', async (route) => {
+    await route.fulfill({
+      json: {
+        outcome: 'outdated',
+        holder_name: 'Nino Beridze',
+        version: 1,
+        is_latest: false,
+        skills: [],
+        tx_url: 'https://amoy.polygonscan.com/tx/0x' + '22'.repeat(32),
+      },
+    })
+  })
+  await page.goto('/verify')
+  await page.getByLabel('Verification code').fill(OUTDATED)
+  await page.getByRole('button', { name: 'Check' }).click()
+  await expect(page.getByTestId('verify-result')).toContainText(
+    'Outdated version',
+  )
+  await expect(page.getByTestId('newer-notice')).toHaveCount(0)
 })

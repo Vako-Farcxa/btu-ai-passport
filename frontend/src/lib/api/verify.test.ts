@@ -1,6 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { labelsFor, presentSkills, submitDecision } from '@/lib/api/verify'
+import { verifyResultSchema } from '@/lib/api/types'
+import {
+  formatIssuedDate,
+  labelsFor,
+  newerVersionNotice,
+  presentSkills,
+  submitDecision,
+} from '@/lib/api/verify'
 
 describe('verify submission', () => {
   it('does not call the API for an empty code and is not not_found', async () => {
@@ -31,5 +38,58 @@ describe('verify submission', () => {
     ]
     expect(presentSkills(skills, 'en')).toEqual(skills)
     expect(presentSkills(skills, 'ka')).toEqual(skills)
+  })
+})
+
+describe('newer version notice', () => {
+  const base = {
+    outcome: 'outdated',
+    holder_name: 'Nino Beridze',
+    version: 1,
+    is_latest: false,
+    skills: [],
+    tx_url: 'https://amoy.polygonscan.com/tx/0x' + '22'.repeat(32),
+  }
+  const parse = (extra: object) =>
+    verifyResultSchema.parse({ ...base, ...extra })
+
+  it('names the newer version and a locale formatted date in English', () => {
+    const result = parse({ latest_version: 3, latest_issued_at: '2026-10-28' })
+    expect(newerVersionNotice(result, 'en')).toBe(
+      'A newer version (v3) of this passport was issued on 28 Oct 2026. Ask the holder for their latest code.',
+    )
+  })
+
+  it('is written in Georgian with a Georgian date', () => {
+    const result = parse({ latest_version: 3, latest_issued_at: '2026-10-28' })
+    const note = newerVersionNotice(result, 'ka') ?? ''
+    expect(note).toContain('v3')
+    expect(note).toContain('2026')
+    expect(note).not.toContain('Oct')
+    expect(note).not.toContain('newer')
+  })
+
+  it('accepts a full timestamp and ignores the time of day', () => {
+    expect(formatIssuedDate('2026-10-28T23:30:00Z', 'en')).toBe('28 Oct 2026')
+  })
+
+  it('is hidden when an older backend omits the fields', () => {
+    expect(newerVersionNotice(parse({}), 'en')).toBeNull()
+    expect(newerVersionNotice(parse({ latest_version: null }), 'en')).toBeNull()
+  })
+
+  it('is hidden for a date that does not parse', () => {
+    const result = parse({ latest_version: 3, latest_issued_at: 'yesterday' })
+    expect(newerVersionNotice(result, 'en')).toBeNull()
+  })
+
+  it('is never shown for valid or missing results', () => {
+    const valid = verifyResultSchema.parse({
+      ...base,
+      outcome: 'valid',
+      is_latest: true,
+    })
+    expect(newerVersionNotice(valid, 'en')).toBeNull()
+    expect(newerVersionNotice({ outcome: 'not_found' }, 'en')).toBeNull()
   })
 })
