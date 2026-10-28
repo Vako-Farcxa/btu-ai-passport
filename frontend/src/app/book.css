@@ -781,6 +781,92 @@ button:disabled {
   white-space: nowrap;
 }
 
+.skill-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  margin: 0;
+  border: 0;
+  padding: 2px 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+.skill-name:hover {
+  text-decoration: underline;
+  text-decoration-color: var(--gold-500);
+  text-underline-offset: 3px;
+}
+
+.skill-chevron {
+  flex: none;
+  color: var(--gold-500);
+}
+
+.skill-chevron.open {
+  transform: rotate(180deg);
+}
+
+.stamp-wrap {
+  position: relative;
+  display: inline-flex;
+  justify-content: flex-end;
+}
+
+.stamp-button {
+  border: 0;
+  border-radius: 8px;
+  padding: 2px;
+  background: transparent;
+  display: inline-flex;
+}
+
+/* Closed: visually hidden but still read by screen readers through aria-describedby. */
+.stamp-tip {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.stamp-tip.open {
+  right: 0;
+  bottom: calc(100% + 6px);
+  z-index: 20;
+  width: max-content;
+  max-width: 230px;
+  height: auto;
+  margin: 0;
+  padding: 10px 12px;
+  overflow: visible;
+  clip-path: none;
+  white-space: normal;
+  border: 1px solid var(--gold-500);
+  border-radius: 8px;
+  background: var(--navy-900);
+  color: var(--paper-50);
+  font-size: 12px;
+  line-height: 1.45;
+  text-align: left;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.25);
+}
+
+.stamp-tip b {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--gold-300);
+  font-size: 12px;
+}
+
 .badge-stamp {
   width: auto;
   height: 56px;
@@ -1022,6 +1108,8 @@ button:disabled {
 .text-link:focus-visible,
 .share-link:focus-visible,
 .copy-code:focus-visible,
+.skill-name:focus-visible,
+.stamp-button:focus-visible,
 .back-link:focus-visible,
 .transaction-link:focus-visible,
 .verify-page input:focus-visible {
@@ -1032,6 +1120,8 @@ button:disabled {
 .page-content .primary-button:focus-visible,
 .page-content .text-link:focus-visible,
 .page-content .copy-code:focus-visible,
+.page-content .skill-name:focus-visible,
+.page-content .stamp-button:focus-visible,
 .page-content .back-link:focus-visible,
 .page-content .transaction-link:focus-visible {
   outline-color: var(--navy-900);
@@ -1114,9 +1204,12 @@ button:disabled {
     margin-top: 2px;
   }
 
-  .badge-stamp {
+  .stamp-wrap {
     grid-column: 3;
     grid-row: 1 / span 2;
+  }
+
+  .badge-stamp {
     height: 48px;
     max-width: 96px;
   }
