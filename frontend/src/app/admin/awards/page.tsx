@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import React, { Suspense, useEffect, useState } from 'react'
 import {
@@ -109,6 +110,18 @@ function AwardForm() {
         <p className="text-sm text-slate-500 mt-1">
           Rows are added to the Google Sheet and the sync runs right away, so
           students appear in the database with their new passport version.
+        </p>
+        <p className="text-xs text-slate-500 mt-1">
+          Adding a brand new student with their student ID, program and
+          education level? Use{' '}
+          <Link
+            href="/admin/students"
+            className="text-indigo-600 hover:underline"
+          >
+            Add student
+          </Link>{' '}
+          on the Students page. Students already in the Sheet keep their
+          existing details.
         </p>
       </div>
 

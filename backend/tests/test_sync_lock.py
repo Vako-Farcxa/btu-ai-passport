@@ -99,3 +99,68 @@ def test_supabase_store_still_skips_while_a_fresh_run_is_running() -> None:
         running.return_value.data = [{"id": "run-1"}]
         assert SupabaseSyncStore().try_acquire() is False
         table.insert.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# One student must not stop the run
+# ---------------------------------------------------------------------------
+
+
+def _row(email: str, name: str) -> dict[str, str]:
+    return {**ROW, "email": email, "full_name": name}
+
+
+def test_existing_email_conflict_fails_that_row_and_the_run_continues() -> None:
+    from passport_api.sync import StudentRecord
+
+    store = MemorySyncStore()
+    # A student row exists without versions (the shape of the old admin-managed rows).
+    store.students.append(StudentRecord("clash@btu.edu.ge", "Clash", "BTU-CLASH00001"))
+    sheet = FakeSheet([_row("clash@btu.edu.ge", "Clash"), _row("fine@btu.edu.ge", "Fine")])
+    result = run_sync(store, sheet)
+    assert result.status == "completed"
+    assert result.versions_created == 1
+    outcomes = {o.index: o for o in sheet.writes[0]}
+    assert (outcomes[0].status, outcomes[0].error) == ("FAILED", "student_conflict")
+    assert outcomes[1].status == "SYNCED"
+    assert [s.email for s in store.students] == ["clash@btu.edu.ge", "fine@btu.edu.ge"]
+    assert store.runs[-1].status == "completed"
+
+
+def test_unexpected_error_marks_only_that_student(monkeypatch: pytest.MonkeyPatch) -> None:
+    store = MemorySyncStore()
+    original = store.insert_student
+
+    def flaky(email: str, full_name: str, passport_id: str) -> None:
+        if email == "bad@btu.edu.ge":
+            raise RuntimeError("secret internal detail")
+        original(email, full_name, passport_id)
+
+    monkeypatch.setattr(store, "insert_student", flaky)
+    sheet = FakeSheet([_row("bad@btu.edu.ge", "Bad"), _row("good@btu.edu.ge", "Good")])
+    result = run_sync(store, sheet)
+    assert result.status == "completed"
+    assert result.versions_created == 1
+    outcomes = {o.index: o for o in sheet.writes[0]}
+    assert (outcomes[0].status, outcomes[0].error) == ("FAILED", "sync_error")
+    assert outcomes[1].status == "SYNCED"
+
+
+def test_supabase_student_lookup_includes_admin_managed_students() -> None:
+    with patch("passport_api.sync.get_supabase") as db:
+        query = db.return_value.table.return_value.select.return_value
+        query.is_.return_value.execute.return_value.data = [
+            {
+                "email": "luka@btu.edu.ge",
+                "full_name": "Luka",
+                "passport_id": "BTU-J63ZVDGDK4",
+                "passport_versions": [
+                    {"version_number": 1, "skill_fingerprint": "f", "holder_name": "Luka"}
+                ],
+            }
+        ]
+        states = SupabaseSyncStore().current_students()
+        assert list(states) == ["luka@btu.edu.ge"]
+        # Only archived students are left out. admin_managed is not a filter any more.
+        query.eq.assert_not_called()
+        query.is_.assert_called_once_with("deleted_at", "null")

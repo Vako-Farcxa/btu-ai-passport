@@ -106,6 +106,10 @@ export interface AwardStudentInput {
   email: string
   first_name: string
   last_name: string
+  // Only used for students who are not in the Sheet yet.
+  student_id?: string
+  program?: string
+  education_level?: string
 }
 
 export interface AwardRowResult {
@@ -216,43 +220,6 @@ export async function deleteAdminStudent(passportId: string): Promise<void> {
   }
 }
 
-export async function addAdminSkill(
-  passportId: string,
-  skill: { skill: string; badge?: string; awarded_on?: string | null },
-): Promise<AdminStudentDetail> {
-  const res = await fetch(
-    `${API_BASE}/admin/students/${encodeURIComponent(passportId)}/skills`,
-    {
-      method: 'POST',
-      headers: await getHeaders(),
-      body: JSON.stringify(skill),
-    },
-  )
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw new Error(err.code || `Failed to add skill`)
-  }
-  return res.json()
-}
-
-export async function removeAdminSkill(
-  passportId: string,
-  skillId: string,
-): Promise<AdminStudentDetail> {
-  const res = await fetch(
-    `${API_BASE}/admin/students/${encodeURIComponent(passportId)}/skills/${encodeURIComponent(skillId)}`,
-    {
-      method: 'DELETE',
-      headers: await getHeaders(),
-    },
-  )
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw new Error(err.code || `Failed to remove skill`)
-  }
-  return res.json()
-}
-
 export async function fetchAdminSyncRuns(
   limit = 50,
 ): Promise<AdminSyncRunList> {
@@ -263,11 +230,39 @@ export async function fetchAdminSyncRuns(
   return res.json()
 }
 
-export async function triggerAdminSync(): Promise<{
-  status: string
+export interface AdminSyncResult {
+  status: 'completed' | 'skipped' | 'failed'
   rows_read: number
   versions_created: number
-}> {
+  error?: string | null
+}
+
+export interface SyncNotice {
+  kind: 'success' | 'warning' | 'error'
+  text: string
+}
+
+/** Honest one-line summary of a manual sync, by its real outcome. */
+export function describeSyncResult(res: AdminSyncResult): SyncNotice {
+  if (res.status === 'completed') {
+    return {
+      kind: 'success',
+      text: `Sync completed. Rows read: ${res.rows_read}, new versions created: ${res.versions_created}.`,
+    }
+  }
+  if (res.status === 'skipped') {
+    return {
+      kind: 'warning',
+      text: 'Sync skipped: another sync is already running. Nothing was read. Try again in a minute.',
+    }
+  }
+  return {
+    kind: 'error',
+    text: `Sync failed${res.error ? `: ${res.error}` : ''}. Rows read: ${res.rows_read}, new versions created: ${res.versions_created}.`,
+  }
+}
+
+export async function triggerAdminSync(): Promise<AdminSyncResult> {
   const res = await fetch(`${API_BASE}/admin/sync`, {
     method: 'POST',
     headers: await getHeaders(),
@@ -316,6 +311,10 @@ const ERROR_MESSAGES: Record<string, string> = {
   missing_full_name: 'New student: add a first and last name.',
   already_awarded: 'Already has this skill.',
   passport_id_taken: 'Passport ID already belongs to another student.',
+  student_conflict:
+    'This email already exists in the database in a way the sync could not merge. Ask a developer to check it.',
+  sync_error: 'The sync could not process this student. Try again later.',
+  missing_skill: 'A skill is required.',
 }
 
 export function adminErrorMessage(code: string): string {

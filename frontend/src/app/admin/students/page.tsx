@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import React, { useEffect, useState } from 'react'
+import { AddStudentDialog } from '@/components/admin/add-student-dialog'
 import {
   fetchAdminStudents,
   deleteAdminStudent,
@@ -12,6 +13,7 @@ export default function AdminStudentsPage() {
   const [students, setStudents] = useState<AdminStudent[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [showAdd, setShowAdd] = useState(false)
   const [tab, setTab] = useState<'all' | 'admin' | 'archived'>('all')
 
   const loadStudents = async () => {
@@ -107,25 +109,34 @@ export default function AdminStudentsPage() {
             awarding them a skill.
           </p>
         </div>
-        <Link
-          href="/admin/awards"
-          className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors shadow-sm self-start sm:self-auto"
-        >
-          <svg
-            className="w-4 h-4"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
+        <div className="flex items-center gap-3 self-start sm:self-auto">
+          <Link
+            href="/admin/awards"
+            className="px-4 py-2 text-sm font-medium text-slate-700 hover:text-slate-900"
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="2"
-              d="M12 4v16m8-8H4"
-            />
-          </svg>
-          Award a skill
-        </Link>
+            Award a skill
+          </Link>
+          <button
+            type="button"
+            onClick={() => setShowAdd(true)}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors shadow-sm"
+          >
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+                d="M12 4v16m8-8H4"
+              />
+            </svg>
+            Add student
+          </button>
+        </div>
       </div>
 
       {/* Tabs & Search Filter */}
@@ -319,6 +330,12 @@ export default function AdminStudentsPage() {
           </table>
         </div>
       </div>
+      {showAdd && (
+        <AddStudentDialog
+          onClose={() => setShowAdd(false)}
+          onDone={() => void loadStudents()}
+        />
+      )}
     </div>
   )
 }

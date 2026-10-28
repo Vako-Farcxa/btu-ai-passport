@@ -2,9 +2,11 @@
 
 import React, { useEffect, useState } from 'react'
 import {
+  describeSyncResult,
   fetchAdminSyncRuns,
   triggerAdminSync,
   type AdminSyncRun,
+  type SyncNotice,
 } from '@/lib/api/admin'
 
 export default function AdminSyncPage() {
@@ -12,7 +14,7 @@ export default function AdminSyncPage() {
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [successMsg, setSuccessMsg] = useState<string | null>(null)
+  const [notice, setNotice] = useState<SyncNotice | null>(null)
 
   const loadRuns = async () => {
     setLoading(true)
@@ -57,12 +59,10 @@ export default function AdminSyncPage() {
   const handleTriggerSync = async () => {
     try {
       setSyncing(true)
-      setSuccessMsg(null)
+      setNotice(null)
       setError(null)
       const res = await triggerAdminSync()
-      setSuccessMsg(
-        `Sync completed successfully! Rows read: ${res.rows_read}, New versions created: ${res.versions_created}`,
-      )
+      setNotice(describeSyncResult(res))
       await loadRuns()
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Sync execution failed')
@@ -106,12 +106,22 @@ export default function AdminSyncPage() {
         </button>
       </div>
 
-      {successMsg && (
-        <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center justify-between">
-          <span>{successMsg}</span>
+      {notice && (
+        <div
+          role="status"
+          className={`p-4 rounded-xl border text-xs flex items-center justify-between ${
+            notice.kind === 'success'
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+              : notice.kind === 'warning'
+                ? 'bg-amber-50 border-amber-200 text-amber-900'
+                : 'bg-rose-50 border-rose-200 text-rose-800'
+          }`}
+        >
+          <span>{notice.text}</span>
           <button
-            onClick={() => setSuccessMsg(null)}
-            className="text-emerald-600 font-bold ml-4"
+            onClick={() => setNotice(null)}
+            aria-label="Dismiss"
+            className="font-bold ml-4"
           >
             ✕
           </button>
@@ -158,11 +168,14 @@ export default function AdminSyncPage() {
 
         <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs">
           <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-            Admin Students Isolation
+            Existing Students
           </span>
-          <p className="mt-1 text-sm font-bold text-slate-900">Protected</p>
+          <p className="mt-1 text-sm font-bold text-slate-900">
+            Matched by email
+          </p>
           <p className="text-xs text-slate-400 mt-1">
-            Admin-managed students are never overwritten
+            A student already in the database gets a new version, never a
+            duplicate
           </p>
         </div>
       </div>
