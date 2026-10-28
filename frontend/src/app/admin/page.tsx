@@ -13,34 +13,74 @@ import {
 export default function AdminDashboardPage() {
   const [totalStudents, setTotalStudents] = useState<number | null>(null)
   const [adminManagedCount, setAdminManagedCount] = useState<number>(0)
-  const [pendingAnchorsCount, setPendingAnchorsCount] = useState<number | null>(null)
+  const [pendingAnchorsCount, setPendingAnchorsCount] = useState<number | null>(
+    null,
+  )
   const [syncRuns, setSyncRuns] = useState<AdminSyncRun[]>([])
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const loadData = async () => {
+    setLoading(true)
     try {
-      setLoading(true)
       const [studentsData, pendingData, runsData] = await Promise.all([
         fetchAdminStudents({ limit: 100 }),
         fetchAdminPendingVersions(),
         fetchAdminSyncRuns(5),
       ])
       setTotalStudents(studentsData.total)
-      setAdminManagedCount(studentsData.students.filter((s) => s.admin_managed).length)
+      setAdminManagedCount(
+        studentsData.students.filter((s) => s.admin_managed).length,
+      )
       setPendingAnchorsCount(pendingData.versions.length)
       setSyncRuns(runsData.runs)
       setError(null)
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to load dashboard metrics')
+      setError(
+        err instanceof Error ? err.message : 'Failed to load dashboard metrics',
+      )
     } finally {
       setLoading(false)
     }
   }
 
   useEffect(() => {
-    loadData()
+    let ignore = false
+    async function init() {
+      try {
+        const [studentsData, pendingData, runsData] = await Promise.all([
+          fetchAdminStudents({ limit: 100 }),
+          fetchAdminPendingVersions(),
+          fetchAdminSyncRuns(5),
+        ])
+        if (!ignore) {
+          setTotalStudents(studentsData.total)
+          setAdminManagedCount(
+            studentsData.students.filter((s) => s.admin_managed).length,
+          )
+          setPendingAnchorsCount(pendingData.versions.length)
+          setSyncRuns(runsData.runs)
+          setError(null)
+        }
+      } catch (err: unknown) {
+        if (!ignore) {
+          setError(
+            err instanceof Error
+              ? err.message
+              : 'Failed to load dashboard metrics',
+          )
+        }
+      } finally {
+        if (!ignore) {
+          setLoading(false)
+        }
+      }
+    }
+    void init()
+    return () => {
+      ignore = true
+    }
   }, [])
 
   const handleTriggerSync = async () => {
@@ -62,9 +102,12 @@ export default function AdminDashboardPage() {
       {/* Page Title & Actions */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">System Dashboard</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+            System Dashboard
+          </h1>
           <p className="text-sm text-slate-500 mt-1">
-            Overview of student digital passports, sync activity, and blockchain ledger status.
+            Overview of student digital passports, sync activity, and blockchain
+            ledger status.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -114,13 +157,16 @@ export default function AdminDashboardPage() {
           </p>
           <div className="mt-2 flex items-baseline gap-2">
             <span className="text-3xl font-extrabold text-slate-900">
-              {loading ? '—' : totalStudents ?? 0}
+              {loading ? '—' : (totalStudents ?? 0)}
             </span>
             <span className="text-xs text-slate-500">issued passports</span>
           </div>
           <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
             <span>Admin-managed: {adminManagedCount}</span>
-            <Link href="/admin/students" className="text-indigo-600 font-medium hover:underline">
+            <Link
+              href="/admin/students"
+              className="text-indigo-600 font-medium hover:underline"
+            >
               View all →
             </Link>
           </div>
@@ -133,16 +179,21 @@ export default function AdminDashboardPage() {
           <div className="mt-2 flex items-baseline gap-2">
             <span
               className={`text-3xl font-extrabold ${
-                (pendingAnchorsCount ?? 0) > 0 ? 'text-amber-600' : 'text-slate-900'
+                (pendingAnchorsCount ?? 0) > 0
+                  ? 'text-amber-600'
+                  : 'text-slate-900'
               }`}
             >
-              {loading ? '—' : pendingAnchorsCount ?? 0}
+              {loading ? '—' : (pendingAnchorsCount ?? 0)}
             </span>
             <span className="text-xs text-slate-500">unconfirmed</span>
           </div>
           <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
             <span>Network: Polygon Amoy</span>
-            <Link href="/admin/anchors" className="text-indigo-600 font-medium hover:underline">
+            <Link
+              href="/admin/anchors"
+              className="text-indigo-600 font-medium hover:underline"
+            >
               Inspect →
             </Link>
           </div>
@@ -154,14 +205,19 @@ export default function AdminDashboardPage() {
           </p>
           <div className="mt-2 flex items-baseline gap-2">
             <span className="text-xl font-bold capitalize text-slate-900">
-              {loading ? '—' : lastSync?.status ?? 'No runs'}
+              {loading ? '—' : (lastSync?.status ?? 'No runs')}
             </span>
           </div>
           <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
             <span>
-              {lastSync?.started_at ? new Date(lastSync.started_at).toLocaleTimeString() : 'N/A'}
+              {lastSync?.started_at
+                ? new Date(lastSync.started_at).toLocaleTimeString()
+                : 'N/A'}
             </span>
-            <Link href="/admin/sync" className="text-indigo-600 font-medium hover:underline">
+            <Link
+              href="/admin/sync"
+              className="text-indigo-600 font-medium hover:underline"
+            >
               History →
             </Link>
           </div>
@@ -172,7 +228,9 @@ export default function AdminDashboardPage() {
             Sync Cadence
           </p>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-xl font-bold text-slate-900">Every 15 min</span>
+            <span className="text-xl font-bold text-slate-900">
+              Every 15 min
+            </span>
           </div>
           <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
             <span>Automated via GitHub</span>
@@ -185,7 +243,9 @@ export default function AdminDashboardPage() {
       <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
         <div className="p-6 border-b border-slate-100 flex items-center justify-between">
           <div>
-            <h2 className="text-base font-semibold text-slate-900">Recent Sync Operations</h2>
+            <h2 className="text-base font-semibold text-slate-900">
+              Recent Sync Operations
+            </h2>
             <p className="text-xs text-slate-500 mt-0.5">
               Sync runs read the Google Sheet and issue versions automatically.
             </p>
@@ -212,23 +272,29 @@ export default function AdminDashboardPage() {
             <tbody className="divide-y divide-slate-100">
               {syncRuns.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center text-slate-400 text-xs">
+                  <td
+                    colSpan={5}
+                    className="px-6 py-8 text-center text-slate-400 text-xs"
+                  >
                     No sync runs recorded yet.
                   </td>
                 </tr>
               ) : (
                 syncRuns.map((run) => (
-                  <tr key={run.id} className="hover:bg-slate-50/50 transition-colors">
+                  <tr
+                    key={run.id}
+                    className="hover:bg-slate-50/50 transition-colors"
+                  >
                     <td className="px-6 py-3.5">
                       <span
                         className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium capitalize ${
                           run.status === 'completed'
                             ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                             : run.status === 'running'
-                            ? 'bg-sky-50 text-sky-700 border border-sky-200'
-                            : run.status === 'skipped'
-                            ? 'bg-slate-100 text-slate-600'
-                            : 'bg-rose-50 text-rose-700 border border-rose-200'
+                              ? 'bg-sky-50 text-sky-700 border border-sky-200'
+                              : run.status === 'skipped'
+                                ? 'bg-slate-100 text-slate-600'
+                                : 'bg-rose-50 text-rose-700 border border-rose-200'
                         }`}
                       >
                         {run.status}

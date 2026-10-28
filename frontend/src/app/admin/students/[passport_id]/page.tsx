@@ -22,27 +22,41 @@ function StudentDetailContent() {
   // Add skill form state
   const [skillName, setSkillName] = useState('')
   const [badgeCode, setBadgeCode] = useState('BDG-AI-001')
-  const [awardedOn, setAwardedOn] = useState(new Date().toISOString().slice(0, 10))
+  const [awardedOn, setAwardedOn] = useState(
+    new Date().toISOString().slice(0, 10),
+  )
   const [submittingSkill, setSubmittingSkill] = useState(false)
   const [skillError, setSkillError] = useState<string | null>(null)
   const [showAddForm, setShowAddForm] = useState(false)
 
-  const loadStudent = async () => {
-    if (!passportId) return
-    try {
-      setLoading(true)
-      const data = await fetchAdminStudent(passportId)
-      setStudent(data)
-      setError(null)
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to load student details')
-    } finally {
-      setLoading(false)
-    }
-  }
-
   useEffect(() => {
-    loadStudent()
+    if (!passportId) return
+    let ignore = false
+    async function init() {
+      try {
+        const data = await fetchAdminStudent(passportId)
+        if (!ignore) {
+          setStudent(data)
+          setError(null)
+        }
+      } catch (err: unknown) {
+        if (!ignore) {
+          setError(
+            err instanceof Error
+              ? err.message
+              : 'Failed to load student details',
+          )
+        }
+      } finally {
+        if (!ignore) {
+          setLoading(false)
+        }
+      }
+    }
+    void init()
+    return () => {
+      ignore = true
+    }
   }, [passportId])
 
   const handleAddSkill = async (e: React.FormEvent) => {
@@ -74,7 +88,11 @@ function StudentDetailContent() {
 
   const handleRemoveSkill = async (skillId: string, name: string) => {
     if (!passportId) return
-    if (!confirm(`Remove skill "${name}"? This will automatically issue a new passport version.`)) {
+    if (
+      !confirm(
+        `Remove skill "${name}"? This will automatically issue a new passport version.`,
+      )
+    ) {
       return
     }
     try {
@@ -96,7 +114,10 @@ function StudentDetailContent() {
   if (error || !student) {
     return (
       <div className="space-y-4">
-        <Link href="/admin/students" className="text-xs text-indigo-600 font-medium hover:underline">
+        <Link
+          href="/admin/students"
+          className="text-xs text-indigo-600 font-medium hover:underline"
+        >
           ← Back to Students
         </Link>
         <div className="p-6 bg-rose-50 border border-rose-200 rounded-2xl text-rose-800 text-sm">
@@ -112,7 +133,10 @@ function StudentDetailContent() {
     <div className="space-y-8">
       {/* Back button & Breadcrumb */}
       <div className="flex items-center gap-2 text-xs text-slate-500">
-        <Link href="/admin/students" className="hover:text-slate-900 transition-colors">
+        <Link
+          href="/admin/students"
+          className="hover:text-slate-900 transition-colors"
+        >
           Students
         </Link>
         <span>/</span>
@@ -123,7 +147,9 @@ function StudentDetailContent() {
       <div className="bg-white p-6 md:p-8 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div className="space-y-2">
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-slate-900">{student.full_name}</h1>
+            <h1 className="text-2xl font-bold text-slate-900">
+              {student.full_name}
+            </h1>
             {student.admin_managed ? (
               <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-purple-50 text-purple-700 border border-purple-200">
                 Admin Managed
@@ -141,7 +167,10 @@ function StudentDetailContent() {
           </div>
           <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500">
             <span>
-              Email: <strong className="font-mono text-slate-700">{student.email}</strong>
+              Email:{' '}
+              <strong className="font-mono text-slate-700">
+                {student.email}
+              </strong>
             </span>
             <span>•</span>
             <span>
@@ -163,9 +192,22 @@ function StudentDetailContent() {
               target="_blank"
               className="inline-flex items-center gap-2 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg text-xs font-semibold transition-colors"
             >
-              Verify Code: <span className="font-mono text-indigo-600">{latestVersion.verification_code}</span>
-              <svg className="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+              Verify Code:{' '}
+              <span className="font-mono text-indigo-600">
+                {latestVersion.verification_code}
+              </span>
+              <svg
+                className="w-3.5 h-3.5 text-slate-400"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                />
               </svg>
             </Link>
           </div>
@@ -175,23 +217,46 @@ function StudentDetailContent() {
       {/* Sheet vs Admin Managed Info Banner */}
       {!student.admin_managed ? (
         <div className="p-4 rounded-xl bg-blue-50/80 border border-blue-200/80 text-blue-900 text-xs flex items-center gap-3">
-          <svg className="w-5 h-5 text-blue-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          <svg
+            className="w-5 h-5 text-blue-500 shrink-0"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="2"
+              d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+            />
           </svg>
           <div>
-            <strong>Google Sheet Managed Student:</strong> Skills and name changes for this student originate from BTU&apos;s Google Sheet.
-            To add, remove, or modify skills, edit the sheet and trigger a sync.
+            <strong>Google Sheet Managed Student:</strong> Skills and name
+            changes for this student originate from BTU&apos;s Google Sheet. To
+            add, remove, or modify skills, edit the sheet and trigger a sync.
           </div>
         </div>
       ) : (
         <div className="p-4 rounded-xl bg-purple-50/80 border border-purple-200/80 text-purple-900 text-xs flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <svg className="w-5 h-5 text-purple-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+            <svg
+              className="w-5 h-5 text-purple-500 shrink-0"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+                d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
+              />
             </svg>
             <div>
-              <strong>Admin Managed Student:</strong> You have full control over skills.
-              Adding or removing a skill will automatically issue a new passport version, generate multi-page PDFs, and anchor to Polygon Amoy.
+              <strong>Admin Managed Student:</strong> You have full control over
+              skills. Adding or removing a skill will automatically issue a new
+              passport version, generate multi-page PDFs, and anchor to Polygon
+              Amoy.
             </div>
           </div>
           <button
@@ -207,9 +272,12 @@ function StudentDetailContent() {
       {showAddForm && student.admin_managed && (
         <div className="bg-white p-6 rounded-2xl border border-purple-200 shadow-sm space-y-4 animate-in fade-in duration-150">
           <div className="flex items-center justify-between">
-            <h2 className="text-base font-bold text-slate-900">Add Skill to Student</h2>
+            <h2 className="text-base font-bold text-slate-900">
+              Add Skill to Student
+            </h2>
             <span className="text-xs text-purple-600 font-semibold">
-              Will create Version {latestVersion ? latestVersion.version_number + 1 : 1}
+              Will create Version{' '}
+              {latestVersion ? latestVersion.version_number + 1 : 1}
             </span>
           </div>
 
@@ -219,7 +287,10 @@ function StudentDetailContent() {
             </div>
           )}
 
-          <form onSubmit={handleAddSkill} className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <form
+            onSubmit={handleAddSkill}
+            className="grid grid-cols-1 md:grid-cols-3 gap-4"
+          >
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
                 Skill Name *
@@ -244,8 +315,12 @@ function StudentDetailContent() {
                 className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500"
               >
                 <option value="BDG-AI-001">BDG-AI-001 (AI Skill)</option>
-                <option value="BDG-AI-002">BDG-AI-002 (AI Applied Skill)</option>
-                <option value="BDG-AI-003">BDG-AI-003 (AI Advanced Skill)</option>
+                <option value="BDG-AI-002">
+                  BDG-AI-002 (AI Applied Skill)
+                </option>
+                <option value="BDG-AI-003">
+                  BDG-AI-003 (AI Advanced Skill)
+                </option>
                 <option value="Foundation">Foundation Badge</option>
                 <option value="Stamp">Stamp Badge</option>
               </select>
@@ -276,7 +351,9 @@ function StudentDetailContent() {
                 disabled={submittingSkill}
                 className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-semibold transition-colors disabled:opacity-50"
               >
-                {submittingSkill ? 'Issuing Version...' : 'Confirm & Issue New Version'}
+                {submittingSkill
+                  ? 'Issuing Version...'
+                  : 'Confirm & Issue New Version'}
               </button>
             </div>
           </form>
@@ -285,18 +362,23 @@ function StudentDetailContent() {
 
       {/* Version Records Breakdown */}
       <div className="space-y-6">
-        <h2 className="text-lg font-bold text-slate-900">Passport Version Ledger</h2>
+        <h2 className="text-lg font-bold text-slate-900">
+          Passport Version Ledger
+        </h2>
 
         {student.versions.length === 0 ? (
           <div className="p-8 bg-white rounded-2xl border border-slate-200 text-center text-slate-400 text-xs">
-            No versions issued for this student yet. Add a skill to create Version 1.
+            No versions issued for this student yet. Add a skill to create
+            Version 1.
           </div>
         ) : (
           student.versions.map((ver, idx) => (
             <div
               key={ver.id}
               className={`bg-white rounded-2xl border ${
-                idx === 0 ? 'border-indigo-200/80 shadow-xs' : 'border-slate-200'
+                idx === 0
+                  ? 'border-indigo-200/80 shadow-xs'
+                  : 'border-slate-200'
               } overflow-hidden`}
             >
               {/* Version Header */}
@@ -315,8 +397,8 @@ function StudentDetailContent() {
                       ver.anchor_status === 'confirmed'
                         ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                         : ver.anchor_status === 'pending'
-                        ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                        : 'bg-rose-50 text-rose-700 border border-rose-200'
+                          ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                          : 'bg-rose-50 text-rose-700 border border-rose-200'
                     }`}
                   >
                     Anchor: {ver.anchor_status}
@@ -324,7 +406,9 @@ function StudentDetailContent() {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500 font-mono">
-                  <span>Issued: {new Date(ver.issued_at).toLocaleDateString()}</span>
+                  <span>
+                    Issued: {new Date(ver.issued_at).toLocaleDateString()}
+                  </span>
                   <span>•</span>
                   <span>Code: {ver.verification_code}</span>
                   {ver.tx_hash && (
@@ -350,25 +434,41 @@ function StudentDetailContent() {
                     <tr>
                       <th className="px-6 py-2.5 font-semibold">#</th>
                       <th className="px-6 py-2.5 font-semibold">Skill Title</th>
-                      <th className="px-6 py-2.5 font-semibold">Badge / Stamp</th>
-                      <th className="px-6 py-2.5 font-semibold">Date Awarded</th>
+                      <th className="px-6 py-2.5 font-semibold">
+                        Badge / Stamp
+                      </th>
+                      <th className="px-6 py-2.5 font-semibold">
+                        Date Awarded
+                      </th>
                       {student.admin_managed && idx === 0 && (
-                        <th className="px-6 py-2.5 font-semibold text-right">Actions</th>
+                        <th className="px-6 py-2.5 font-semibold text-right">
+                          Actions
+                        </th>
                       )}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {ver.skills.length === 0 ? (
                       <tr>
-                        <td colSpan={5} className="px-6 py-6 text-center text-slate-400">
+                        <td
+                          colSpan={5}
+                          className="px-6 py-6 text-center text-slate-400"
+                        >
                           No skills recorded on this version.
                         </td>
                       </tr>
                     ) : (
                       ver.skills.map((skill, sIdx) => (
-                        <tr key={skill.id || sIdx} className="hover:bg-slate-50/50">
-                          <td className="px-6 py-3 font-mono text-slate-400">{skill.position}</td>
-                          <td className="px-6 py-3 font-medium text-slate-900">{skill.skill}</td>
+                        <tr
+                          key={skill.id || sIdx}
+                          className="hover:bg-slate-50/50"
+                        >
+                          <td className="px-6 py-3 font-mono text-slate-400">
+                            {skill.position}
+                          </td>
+                          <td className="px-6 py-3 font-medium text-slate-900">
+                            {skill.skill}
+                          </td>
                           <td className="px-6 py-3 font-mono text-slate-600">
                             {skill.badge ? (
                               <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700">
@@ -384,7 +484,9 @@ function StudentDetailContent() {
                           {student.admin_managed && idx === 0 && (
                             <td className="px-6 py-3 text-right">
                               <button
-                                onClick={() => handleRemoveSkill(skill.id, skill.skill)}
+                                onClick={() =>
+                                  handleRemoveSkill(skill.id, skill.skill)
+                                }
                                 className="text-rose-600 hover:text-rose-800 font-semibold transition-colors"
                               >
                                 Remove
@@ -418,4 +520,3 @@ export default function AdminStudentDetailPage() {
     </Suspense>
   )
 }
-

@@ -1,3 +1,5 @@
+import { readAccessToken } from '@/lib/supabase/client'
+
 export interface AdminSkillEntry {
   id: string
   skill: string
@@ -76,15 +78,62 @@ export interface AdminVersionPendingList {
   versions: AdminVersionPending[]
 }
 
+export type SkillLevel = 'AI Skill' | 'AI Applied Skill' | 'AI Advanced Skill'
+
+export const SKILL_LEVELS: SkillLevel[] = [
+  'AI Skill',
+  'AI Applied Skill',
+  'AI Advanced Skill',
+]
+
+export interface AdminCatalogSkill {
+  id: string
+  name: string
+  name_ka: string
+  category: string
+  badge: string
+  description: string
+}
+
+export interface AdminCatalogSkillInput {
+  name: string
+  name_ka: string
+  category: SkillLevel
+  description: string
+}
+
+export interface AwardStudentInput {
+  email: string
+  first_name: string
+  last_name: string
+}
+
+export interface AwardRowResult {
+  email: string
+  status: 'synced' | 'failed' | 'pending' | 'skipped'
+  error: string
+  passport_id: string
+  version: string
+}
+
+export interface AdminAwardResponse {
+  rows: AwardRowResult[]
+  sync_result: {
+    status: 'completed' | 'skipped' | 'failed'
+    rows_read: number
+    versions_created: number
+    error: string | null
+  }
+}
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
 
-function getHeaders(): HeadersInit {
-  // Use demo-admin token locally or read from sessionStorage/cookie if available
+async function getHeaders(): Promise<HeadersInit> {
+  // The signed-in Supabase session decides who is an admin. The demo token only
+  // works against a backend that has no Supabase configured (local demo).
   const token =
-    typeof window !== 'undefined'
-      ? window.localStorage.getItem('admin_token') || 'demo-admin'
-      : 'demo-admin'
-
+    (await readAccessToken()) ??
+    (process.env.NEXT_PUBLIC_SUPABASE_URL ? '' : 'demo-admin')
   return {
     'Content-Type': 'application/json',
     Authorization: `Bearer ${token}`,
@@ -104,41 +153,33 @@ export async function fetchAdminStudents(params?: {
   if (params?.limit !== undefined) query.set('limit', String(params.limit))
 
   const res = await fetch(`${API_BASE}/admin/students?${query.toString()}`, {
-    headers: getHeaders(),
+    headers: await getHeaders(),
   })
   if (!res.ok) throw new Error(`Failed to load students: ${res.statusText}`)
   return res.json()
 }
 
-export async function fetchAdminStudent(passportId: string): Promise<AdminStudentDetail> {
-  const res = await fetch(`${API_BASE}/admin/students/${encodeURIComponent(passportId)}`, {
-    headers: getHeaders(),
-  })
+export async function fetchAdminStudent(
+  passportId: string,
+): Promise<AdminStudentDetail> {
+  const res = await fetch(
+    `${API_BASE}/admin/students/${encodeURIComponent(passportId)}`,
+    {
+      headers: await getHeaders(),
+    },
+  )
   if (!res.ok) throw new Error(`Failed to load student: ${res.statusText}`)
   return res.json()
 }
 
-export async function createAdminStudent(data: {
-  email: string
-  full_name: string
-}): Promise<AdminStudentDetail> {
-  const res = await fetch(`${API_BASE}/admin/students`, {
-    method: 'POST',
-    headers: getHeaders(),
-    body: JSON.stringify(data),
-  })
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw new Error(err.code || `Failed to create student`)
-  }
-  return res.json()
-}
-
 export async function deleteAdminStudent(passportId: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/admin/students/${encodeURIComponent(passportId)}`, {
-    method: 'DELETE',
-    headers: getHeaders(),
-  })
+  const res = await fetch(
+    `${API_BASE}/admin/students/${encodeURIComponent(passportId)}`,
+    {
+      method: 'DELETE',
+      headers: await getHeaders(),
+    },
+  )
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
     throw new Error(err.code || `Failed to delete student`)
@@ -147,15 +188,15 @@ export async function deleteAdminStudent(passportId: string): Promise<void> {
 
 export async function addAdminSkill(
   passportId: string,
-  skill: { skill: string; badge?: string; awarded_on?: string | null }
+  skill: { skill: string; badge?: string; awarded_on?: string | null },
 ): Promise<AdminStudentDetail> {
   const res = await fetch(
     `${API_BASE}/admin/students/${encodeURIComponent(passportId)}/skills`,
     {
       method: 'POST',
-      headers: getHeaders(),
+      headers: await getHeaders(),
       body: JSON.stringify(skill),
-    }
+    },
   )
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
@@ -166,14 +207,14 @@ export async function addAdminSkill(
 
 export async function removeAdminSkill(
   passportId: string,
-  skillId: string
+  skillId: string,
 ): Promise<AdminStudentDetail> {
   const res = await fetch(
     `${API_BASE}/admin/students/${encodeURIComponent(passportId)}/skills/${encodeURIComponent(skillId)}`,
     {
       method: 'DELETE',
-      headers: getHeaders(),
-    }
+      headers: await getHeaders(),
+    },
   )
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
@@ -182,9 +223,11 @@ export async function removeAdminSkill(
   return res.json()
 }
 
-export async function fetchAdminSyncRuns(limit = 50): Promise<AdminSyncRunList> {
+export async function fetchAdminSyncRuns(
+  limit = 50,
+): Promise<AdminSyncRunList> {
   const res = await fetch(`${API_BASE}/admin/sync-runs?limit=${limit}`, {
-    headers: getHeaders(),
+    headers: await getHeaders(),
   })
   if (!res.ok) throw new Error(`Failed to load sync runs: ${res.statusText}`)
   return res.json()
@@ -197,7 +240,7 @@ export async function triggerAdminSync(): Promise<{
 }> {
   const res = await fetch(`${API_BASE}/admin/sync`, {
     method: 'POST',
-    headers: getHeaders(),
+    headers: await getHeaders(),
   })
   if (!res.ok) throw new Error(`Failed to trigger sync: ${res.statusText}`)
   return res.json()
@@ -205,23 +248,131 @@ export async function triggerAdminSync(): Promise<{
 
 export async function fetchAdminPendingVersions(): Promise<AdminVersionPendingList> {
   const res = await fetch(`${API_BASE}/admin/versions/pending`, {
-    headers: getHeaders(),
+    headers: await getHeaders(),
   })
-  if (!res.ok) throw new Error(`Failed to load pending versions: ${res.statusText}`)
+  if (!res.ok)
+    throw new Error(`Failed to load pending versions: ${res.statusText}`)
   return res.json()
 }
 
-export async function retryAdminAnchor(versionId: string): Promise<{ status: string }> {
+export async function retryAdminAnchor(
+  versionId: string,
+): Promise<{ status: string }> {
   const res = await fetch(
     `${API_BASE}/admin/versions/${encodeURIComponent(versionId)}/anchor`,
     {
       method: 'POST',
-      headers: getHeaders(),
-    }
+      headers: await getHeaders(),
+    },
   )
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
     throw new Error(err.code || `Failed to retry anchor`)
   }
   return res.json()
+}
+
+const ERROR_MESSAGES: Record<string, string> = {
+  skill_name_taken: 'A skill with this name already exists.',
+  skill_not_found: 'That skill was not found.',
+  sheet_unavailable:
+    'The Google Sheet could not be reached. Nothing was saved. Try again in a minute.',
+  award_level_required: 'Choose a level for this award.',
+  unauthorized: 'Please sign in with your BTU account.',
+  domain_not_allowed: 'Only BTU accounts can use the admin panel.',
+  admin_not_found: 'Your account is not on the admin list.',
+  email_domain_not_allowed: 'Email domain is not allowed.',
+  invalid_email: 'Not a valid email address.',
+  missing_full_name: 'New student: add a first and last name.',
+  already_awarded: 'Already has this skill.',
+  passport_id_taken: 'Passport ID already belongs to another student.',
+}
+
+export function adminErrorMessage(code: string): string {
+  return ERROR_MESSAGES[code] ?? code
+}
+
+async function failure(res: Response, fallback: string): Promise<Error> {
+  const err = await res.json().catch(() => ({}))
+  return new Error(adminErrorMessage(err.code ?? fallback))
+}
+
+export async function fetchAdminSkills(): Promise<AdminCatalogSkill[]> {
+  const res = await fetch(`${API_BASE}/admin/skills`, {
+    headers: await getHeaders(),
+  })
+  if (!res.ok) throw await failure(res, 'Failed to load skills')
+  const body: { skills: AdminCatalogSkill[] } = await res.json()
+  return body.skills
+}
+
+export async function createAdminCatalogSkill(
+  input: AdminCatalogSkillInput,
+): Promise<AdminCatalogSkill> {
+  const res = await fetch(`${API_BASE}/admin/skills`, {
+    method: 'POST',
+    headers: await getHeaders(),
+    body: JSON.stringify(input),
+  })
+  if (!res.ok) throw await failure(res, 'Failed to create skill')
+  return res.json()
+}
+
+export async function updateAdminCatalogSkill(
+  id: string,
+  input: Partial<AdminCatalogSkillInput>,
+): Promise<AdminCatalogSkill> {
+  const res = await fetch(
+    `${API_BASE}/admin/skills/${encodeURIComponent(id)}`,
+    {
+      method: 'PATCH',
+      headers: await getHeaders(),
+      body: JSON.stringify(input),
+    },
+  )
+  if (!res.ok) throw await failure(res, 'Failed to update skill')
+  return res.json()
+}
+
+export async function awardAdminSkill(input: {
+  skill_id: string
+  level: SkillLevel | null
+  awarded_on: string | null
+  students: AwardStudentInput[]
+}): Promise<AdminAwardResponse> {
+  const res = await fetch(`${API_BASE}/admin/awards`, {
+    method: 'POST',
+    headers: await getHeaders(),
+    body: JSON.stringify(input),
+  })
+  if (!res.ok) throw await failure(res, 'Failed to award skill')
+  return res.json()
+}
+
+export function parseAwardStudents(text: string): AwardStudentInput[] {
+  // One student per line: "email" or "email, First Last". A line with several
+  // emails adds each of them without a name.
+  return text
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .flatMap((line): AwardStudentInput[] => {
+      const tokens = line.split(/[\s,;]+/).filter(Boolean)
+      const emails = tokens.filter((token) => token.includes('@'))
+      const [email, ...others] = emails
+      if (email === undefined) {
+        return [{ email: line, first_name: '', last_name: '' }]
+      }
+      if (others.length > 0) {
+        return emails.map((item) => ({
+          email: item,
+          first_name: '',
+          last_name: '',
+        }))
+      }
+      const [first = '', ...last] = tokens.filter(
+        (token) => !token.includes('@'),
+      )
+      return [{ email, first_name: first, last_name: last.join(' ') }]
+    })
 }

@@ -5,16 +5,19 @@ Sheet-managed students (admin_managed=False) are read-only from the admin
 panel's perspective — their skills can only be changed via the Google Sheet.
 """
 
-from postgrest import CountMethod
-
+import re
 import unicodedata
 import uuid
+from collections.abc import Iterable, Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from typing import Annotated, Any, Literal, cast
 
-from fastapi import APIRouter, Header, Query
+from fastapi import APIRouter, Depends, Header, Query
 from fastapi.responses import Response
+from postgrest import CountMethod
 
+from passport_api.api.sync import get_sync_store
 from passport_api.auth import require_admin
 from passport_api.chain import chain_from_settings, publish_anchor
 from passport_api.db import get_supabase
@@ -27,12 +30,16 @@ from passport_api.fingerprint import (
     verification_id_hash,
 )
 from passport_api.pdf import PassportPdf, get_storage, publish_pdfs
-from passport_api.settings import settings
 from passport_api.schemas import (
+    AdminAwardRequest,
+    AdminAwardResponse,
+    AdminCatalogSkill,
+    AdminCatalogSkillCreate,
+    AdminCatalogSkillList,
+    AdminCatalogSkillUpdate,
     AdminSkillAdd,
     AdminSkillEntry,
     AdminStudent,
-    AdminStudentCreate,
     AdminStudentDetail,
     AdminStudentList,
     AdminSyncRun,
@@ -40,12 +47,26 @@ from passport_api.schemas import (
     AdminVersion,
     AdminVersionPending,
     AdminVersionPendingList,
+    AwardRowResult,
     Skill,
     SyncResult,
 )
+from passport_api.settings import email_domain_allowed, settings
+from passport_api.sheet_admin import (
+    ALREADY_AWARDED,
+    AdminGspreadSheet,
+    AdminSheet,
+    AwardInput,
+)
 from passport_api.sync import (
+    CatalogSkill,
     GspreadSheet,
+    RowOutcome,
+    Sheet,
+    SheetUnavailableError,
     SupabaseSyncStore,
+    SyncStore,
+    badge_for_category,
     run_sync,
 )
 
@@ -449,30 +470,6 @@ class _DemoStore:
             versions=s["versions"],
         )
 
-    def create_student(self, body: AdminStudentCreate) -> AdminStudentDetail:
-        email = body.email.strip().lower()
-        if not email.endswith("@btu.edu.ge"):
-            raise APIError(422, "domain_not_allowed")
-        for s in self.students.values():
-            if s["email"] == email:
-                raise APIError(409, "student_email_taken")
-        import secrets
-
-        charset = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
-        pid = "BTU-" + "".join(secrets.choice(charset) for _ in range(10))
-        new_s: dict[str, Any] = {
-            "id": uuid.uuid4(),
-            "email": email,
-            "full_name": body.full_name.strip(),
-            "passport_id": pid,
-            "admin_managed": True,
-            "deleted_at": None,
-            "created_at": datetime.now(UTC),
-            "versions": [],
-        }
-        self.students[pid] = new_s
-        return self.get_student(pid)
-
     def delete_student(self, passport_id: str) -> None:
         s = self.students.get(passport_id)
         if s is None:
@@ -697,66 +694,8 @@ def get_student(
 
 
 # ---------------------------------------------------------------------------
-# Students — write
+# Students — write (new students are created by awarding a skill, see /admin/awards)
 # ---------------------------------------------------------------------------
-
-
-@router.post("/students", response_model=AdminStudentDetail, status_code=201)
-def create_student(
-    body: AdminStudentCreate,
-    authorization: Annotated[str | None, Header()] = None,
-) -> AdminStudentDetail:
-    require_admin(authorization)
-
-    email = _nfc(str(body.email)).lower()
-    if not email.endswith("@btu.edu.ge"):
-        raise APIError(422, "domain_not_allowed")
-
-    try:
-        # Check uniqueness
-        existing = (
-            get_supabase().table("students").select("id").eq("email", email).limit(1).execute()
-        )
-        if _table_rows(existing.data):
-            raise APIError(409, "student_email_taken")
-
-        # Generate a unique passport_id
-        taken_resp = get_supabase().table("students").select("passport_id").execute()
-        taken_ids: set[str] = {str(r["passport_id"]) for r in _table_rows(taken_resp.data)}
-
-        import secrets  # noqa: PLC0415
-
-        alphabet = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
-        for _ in range(32):
-            raw = "".join(secrets.choice(alphabet) for _ in range(10))
-            pid = f"BTU-{raw}"
-            if pid not in taken_ids:
-                break
-        else:
-            raise RuntimeError("passport_id_exhausted")
-
-        resp = (
-            get_supabase()
-            .table("students")
-            .insert(
-                {
-                    "email": email,
-                    "full_name": _nfc(body.full_name),
-                    "passport_id": pid,
-                    "admin_managed": True,
-                }
-            )
-            .execute()
-        )
-        rows = _table_rows(resp.data)
-        if not rows:
-            raise RuntimeError("student_not_created")
-
-        return get_student(pid, authorization)
-    except RuntimeError as exc:
-        if "supabase_not_configured" in str(exc):
-            return _demo_store.create_student(body)
-        raise
 
 
 @router.delete("/students/{passport_id}", status_code=204)
@@ -931,12 +870,306 @@ def trigger_sync(
     authorization: Annotated[str | None, Header()] = None,
 ) -> SyncResult:
     require_admin(authorization)
-    try:
-        store = SupabaseSyncStore()
-        sheet = GspreadSheet()
-        return run_sync(store, sheet)
-    except Exception:
+    if not (settings.supabase_url and settings.supabase_service_role_key):
         return _demo_store.trigger_sync()
+    return run_sync(SupabaseSyncStore(), GspreadSheet())
+
+
+# ---------------------------------------------------------------------------
+# Skills catalog (Skills tab first, then the skills table)
+# ---------------------------------------------------------------------------
+
+_SKILL_COLUMNS = "id, name, name_ka, category, badge, description"
+_SKILL_ID = re.compile(r"^SKL-(\d+)$")
+_EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def get_admin_sheet() -> AdminSheet:
+    return AdminGspreadSheet()
+
+
+_admin_sheet_dependency = Depends(get_admin_sheet)
+_sync_store_dependency = Depends(get_sync_store)
+
+
+@contextmanager
+def _sheet_errors() -> Iterator[None]:
+    try:
+        yield
+    except SheetUnavailableError as exc:
+        raise APIError(503, "sheet_unavailable") from exc
+
+
+def _skills_table() -> Any:
+    try:
+        return get_supabase().table("skills")
+    except RuntimeError as exc:
+        if "supabase_not_configured" in str(exc):
+            raise APIError(503, "sheet_unavailable") from exc
+        raise
+
+
+def _catalog_row(row: dict[str, object]) -> AdminCatalogSkill:
+    return AdminCatalogSkill(
+        id=str(row["id"]),
+        name=str(row["name"]),
+        name_ka=str(row.get("name_ka") or ""),
+        category=str(row.get("category") or ""),
+        badge=str(row.get("badge") or ""),
+        description=str(row.get("description") or ""),
+    )
+
+
+def _db_skills() -> list[AdminCatalogSkill]:
+    response = _skills_table().select(_SKILL_COLUMNS).order("id").execute()
+    return [_catalog_row(row) for row in _table_rows(response.data)]
+
+
+def _as_catalog(skill: AdminCatalogSkill) -> CatalogSkill:
+    return CatalogSkill(
+        id=skill.id,
+        name=skill.name,
+        category=skill.category,
+        badge=skill.badge,
+        description=skill.description,
+        name_ka=skill.name_ka,
+    )
+
+
+def _as_admin_skill(skill: CatalogSkill) -> AdminCatalogSkill:
+    return AdminCatalogSkill(
+        id=skill.id,
+        name=skill.name,
+        name_ka=skill.name_ka or "",
+        category=skill.category,
+        badge=skill.badge,
+        description=skill.description,
+    )
+
+
+def _upsert_skill(skill: CatalogSkill) -> None:
+    _skills_table().upsert(
+        {
+            "id": skill.id,
+            "name": skill.name,
+            "name_ka": skill.name_ka or "",
+            "category": skill.category,
+            "badge": skill.badge,
+            "description": skill.description,
+            "updated_at": _now(),
+        },
+        on_conflict="id",
+    ).execute()
+
+
+def _name_key(name: str) -> str:
+    return _nfc(name).casefold()
+
+
+def _next_skill_id(ids: Iterable[str]) -> str:
+    numbers = [int(match.group(1)) for i in ids if (match := _SKILL_ID.match(i.upper()))]
+    return f"SKL-{max(numbers, default=0) + 1:03d}"
+
+
+@router.get("/skills", response_model=AdminCatalogSkillList)
+def list_skills(
+    authorization: Annotated[str | None, Header()] = None,
+) -> AdminCatalogSkillList:
+    require_admin(authorization)
+    return AdminCatalogSkillList(skills=_db_skills())
+
+
+@router.post("/skills", response_model=AdminCatalogSkill, status_code=201)
+def create_skill(
+    body: AdminCatalogSkillCreate,
+    authorization: Annotated[str | None, Header()] = None,
+    sheet: AdminSheet = _admin_sheet_dependency,
+) -> AdminCatalogSkill:
+    require_admin(authorization)
+    name = _nfc(body.name)
+    key = _name_key(name)
+    db_skills = _db_skills()
+    if any(_name_key(skill.name) == key for skill in db_skills):
+        raise APIError(409, "skill_name_taken")
+    with _sheet_errors():
+        tab = sheet.ensure_skills_tab([_as_catalog(skill) for skill in db_skills])
+    # A skill already in the tab but missing from the database means an earlier save
+    # stopped halfway. Finish it instead of creating a second row.
+    unfinished = next((skill for skill in tab if _name_key(skill.name) == key), None)
+    if unfinished is not None:
+        _upsert_skill(unfinished)
+        return _as_admin_skill(unfinished)
+    skill = CatalogSkill(
+        id=_next_skill_id([*(s.id for s in db_skills), *(s.id for s in tab)]),
+        name=name,
+        category=body.category,
+        badge=badge_for_category(body.category),
+        description=_nfc(body.description),
+        name_ka=_nfc(body.name_ka),
+    )
+    with _sheet_errors():
+        sheet.append_skill(skill)
+    _upsert_skill(skill)
+    return _as_admin_skill(skill)
+
+
+@router.patch("/skills/{skill_id}", response_model=AdminCatalogSkill)
+def update_skill(
+    skill_id: str,
+    body: AdminCatalogSkillUpdate,
+    authorization: Annotated[str | None, Header()] = None,
+    sheet: AdminSheet = _admin_sheet_dependency,
+) -> AdminCatalogSkill:
+    require_admin(authorization)
+    skill_id = skill_id.strip().upper()
+    db_skills = _db_skills()
+    with _sheet_errors():
+        tab = sheet.ensure_skills_tab([_as_catalog(skill) for skill in db_skills])
+    current = next((skill for skill in tab if skill.id == skill_id), None)
+    if current is None:
+        stored = next((skill for skill in db_skills if skill.id == skill_id), None)
+        current = None if stored is None else _as_catalog(stored)
+    if current is None:
+        raise APIError(404, "skill_not_found")
+    name = current.name if body.name is None else _nfc(body.name)
+    category = current.category if body.category is None else body.category
+    merged = CatalogSkill(
+        id=skill_id,
+        name=name,
+        category=category,
+        badge=badge_for_category(category),
+        description=current.description if body.description is None else _nfc(body.description),
+        name_ka=(current.name_ka or "") if body.name_ka is None else _nfc(body.name_ka),
+    )
+    key = _name_key(name)
+    others = [*db_skills, *(_as_admin_skill(skill) for skill in tab)]
+    if any(other.id != skill_id and _name_key(other.name) == key for other in others):
+        raise APIError(409, "skill_name_taken")
+    with _sheet_errors():
+        if not sheet.update_skill(merged):
+            sheet.append_skill(merged)
+    _upsert_skill(merged)
+    return _as_admin_skill(merged)
+
+
+# ---------------------------------------------------------------------------
+# Awards: rows go to the Sheet, then the sync copies them into the database
+# ---------------------------------------------------------------------------
+
+
+class _RecordingSheet:
+    """Passes everything to the real sheet and remembers the per-row sync outcomes."""
+
+    def __init__(self, inner: Sheet) -> None:
+        self._inner = inner
+        self.outcomes: dict[int, RowOutcome] = {}
+
+    def read_rows(self) -> list[dict[str, object]]:
+        return self._inner.read_rows()
+
+    def read_catalog(self) -> list[CatalogSkill]:
+        reader = getattr(self._inner, "read_catalog", None)
+        return cast(list[CatalogSkill], reader()) if callable(reader) else []
+
+    def write_back(self, outcomes: list[RowOutcome]) -> None:
+        self.outcomes.update({outcome.index: outcome for outcome in outcomes})
+        self._inner.write_back(outcomes)
+
+
+@router.post("/awards", response_model=AdminAwardResponse)
+def award_skill(
+    body: AdminAwardRequest,
+    authorization: Annotated[str | None, Header()] = None,
+    sheet: AdminSheet = _admin_sheet_dependency,
+    store: SyncStore = _sync_store_dependency,
+) -> AdminAwardResponse:
+    require_admin(authorization)
+    response = (
+        _skills_table().select(_SKILL_COLUMNS).eq("id", body.skill_id.strip().upper()).execute()
+    )
+    rows = _table_rows(response.data)
+    if not rows:
+        raise APIError(404, "skill_not_found")
+    skill = _catalog_row(rows[0])
+    level = body.level or skill.category
+    badge = badge_for_category(level)
+    if not badge:
+        raise APIError(422, "award_level_required")
+    awarded_on = (body.awarded_on or datetime.now(UTC).date()).isoformat()
+
+    order: list[str] = []
+    results: dict[str, AwardRowResult] = {}
+    awards: list[AwardInput] = []
+    for student in body.students:
+        email = _nfc(student.email).lower()
+        if email in results or any(a.email == email for a in awards):
+            continue
+        order.append(email)
+        if not _EMAIL.match(email):
+            results[email] = AwardRowResult(email=email, status="failed", error="invalid_email")
+        elif not email_domain_allowed(email):
+            results[email] = AwardRowResult(
+                email=email, status="failed", error="email_domain_not_allowed"
+            )
+        else:
+            awards.append(
+                AwardInput(
+                    email=email,
+                    first_name=_nfc(student.first_name),
+                    last_name=_nfc(student.last_name),
+                    skill_id=skill.id,
+                    skill_name=skill.name,
+                    category=level,
+                    badge=badge,
+                    description=skill.description,
+                    awarded_on=awarded_on,
+                )
+            )
+
+    placed: dict[str, int] = {}
+    if awards:
+        with _sheet_errors():
+            placements = sheet.append_awards(awards, set(store.current_students()))
+        for placement in placements:
+            if placement.row_number is not None:
+                placed[placement.email] = placement.row_number
+            else:
+                results[placement.email] = AwardRowResult(
+                    email=placement.email,
+                    status="skipped" if placement.error == ALREADY_AWARDED else "failed",
+                    error=placement.error,
+                )
+
+    sync_result = SyncResult(status="skipped", rows_read=0, versions_created=0, error=None)
+    if placed:
+        recorder = _RecordingSheet(sheet)
+        try:
+            sync_result = run_sync(store, recorder)
+        except Exception:
+            sync_result = SyncResult(
+                status="failed", rows_read=0, versions_created=0, error="sync_failed"
+            )
+        for email, row_number in placed.items():
+            outcome = recorder.outcomes.get(sheet.data_index(row_number))
+            if outcome is None:
+                # Not synced yet (another sync was running, or it failed). The rows are in
+                # the sheet, so the next scheduled sync picks them up.
+                results[email] = AwardRowResult(email=email, status="pending")
+            elif outcome.status == "SYNCED":
+                results[email] = AwardRowResult(
+                    email=email,
+                    status="synced",
+                    passport_id=outcome.passport_id,
+                    version=outcome.version,
+                )
+            else:
+                results[email] = AwardRowResult(
+                    email=email,
+                    status="failed",
+                    error=outcome.error,
+                    passport_id=outcome.passport_id,
+                )
+    return AdminAwardResponse(rows=[results[email] for email in order], sync_result=sync_result)
 
 
 # ---------------------------------------------------------------------------

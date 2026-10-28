@@ -41,10 +41,10 @@ def require_admin(authorization: str | None) -> str:
     Checks:
     1. Valid Supabase JWT with a btu.edu.ge email (reuses email_from_authorization).
     2. Email is present in the admin_users table.
-    Allows 'demo-admin' token for local demo testing.
+    The 'demo-admin' token is accepted only when Supabase is not configured (local demo).
     """
     token = _bearer_token(authorization)
-    if token == "demo-admin":  # noqa: S105
+    if token == "demo-admin" and not settings.supabase_url:  # noqa: S105
         return "admin@btu.edu.ge"
     email = email_from_authorization(authorization)
     response = (
