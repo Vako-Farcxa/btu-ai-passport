@@ -28,13 +28,13 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html
-    lang="ka"
-    className={`${sans.variable} ${serif.variable} h-full antialiased`}
+      lang="ka"
+      className={`${sans.variable} ${serif.variable} h-full antialiased`}
     >
-    <body className="flex min-h-full flex-col">
-    <LocaleLang />
-    {children}
-    </body>
+      <body className="flex min-h-full flex-col">
+        <LocaleLang />
+        {children}
+      </body>
     </html>
   )
 }

@@ -164,8 +164,8 @@ test('a student downloads the PDF for the selected language', async ({
   await page.getByRole('button', { name: 'PDF-ის ჩამოტვირთვა' }).first().click()
   await expect(
     page
-    .getByRole('alert')
-    .filter({ hasText: 'ამ ვერსიის PDF ჯერ მზად არ არის.' }),
+      .getByRole('alert')
+      .filter({ hasText: 'ამ ვერსიის PDF ჯერ მზად არ არის.' }),
   ).toBeVisible()
   await expect(page.getByText('პასპორტის ID')).toBeVisible()
   await expect(page.getByText(OWN_ID)).toBeVisible()

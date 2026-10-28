@@ -5,11 +5,11 @@ import { useEffect } from 'react'
 import { useLocale } from '@/i18n/use-locale'
 
 export function LocaleLang() {
-    const [locale] = useLocale()
+  const [locale] = useLocale()
 
-    useEffect(() => {
-        document.documentElement.lang = locale
-    }, [locale])
+  useEffect(() => {
+    document.documentElement.lang = locale
+  }, [locale])
 
-    return null
+  return null
 }

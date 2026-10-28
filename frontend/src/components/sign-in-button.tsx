@@ -28,17 +28,17 @@ export function SignInButton({
 
   return (
     <div className={tone === 'gold' ? 'sign-in cover-sign-in' : 'sign-in'}>
-    <PrimaryButton type="button" tone={tone} onClick={() => void onClick()}>
-    {label}
-    </PrimaryButton>
-    {notice ? (
-      <p
-      role="alert"
-      className={tone === 'gold' ? 'cover-alert' : 'page-alert'}
-      >
-      {notice}
-      </p>
-    ) : null}
+      <PrimaryButton type="button" tone={tone} onClick={() => void onClick()}>
+        {label}
+      </PrimaryButton>
+      {notice ? (
+        <p
+          role="alert"
+          className={tone === 'gold' ? 'cover-alert' : 'page-alert'}
+        >
+          {notice}
+        </p>
+      ) : null}
     </div>
   )
 }

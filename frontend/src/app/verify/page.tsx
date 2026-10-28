@@ -50,60 +50,60 @@ export default function VerifyPage() {
 
   return (
     <OpenBook
-    locale={locale}
-    onLocale={setLocale}
-    folio={result ? '03' : '02'}
-    result={result !== null}
-    >
-    <div className="verify-page">
-    <Link className="back-link" href="/">
-    ← {copy.back}
-    </Link>
-    <span className="eyebrow">{copy.verifyEyebrow}</span>
-    <h1 id="page-title">{copy.title}</h1>
-    <p className="intro">{copy.intro}</p>
-    <form onSubmit={onSubmit} aria-busy={loading}>
-    <label htmlFor="verification-code">{copy.codeLabel}</label>
-    <input
-    id="verification-code"
-    name="code"
-    value={code}
-    autoComplete="off"
-    spellCheck={false}
-    placeholder="RXRP-F90C-ZRBZ-EP7T"
-    aria-invalid={prompt}
-    aria-describedby={prompt ? 'code-hint' : undefined}
-    onChange={(event) => setCode(event.target.value)}
-    />
-    <PrimaryButton
-    type="submit"
-    tone="navy"
-    disabled={loading}
-    aria-busy={loading}
-    >
-    {loading ? (
-      <>
-      <Spinner />
-      {copy.checking}
-      </>
-    ) : (
-      copy.check
-    )}
-    </PrimaryButton>
-    {prompt ? (
-      <p id="code-hint" role="alert">
-      {copy.prompt}
-      </p>
-    ) : null}
-    </form>
-    {result ? (
-      <VerifyResultCard
-      key={`${result.outcome}-${code}`}
       locale={locale}
-      result={result}
-      />
-    ) : null}
-    </div>
+      onLocale={setLocale}
+      folio={result ? '03' : '02'}
+      result={result !== null}
+    >
+      <div className="verify-page">
+        <Link className="back-link" href="/">
+          ← {copy.back}
+        </Link>
+        <span className="eyebrow">{copy.verifyEyebrow}</span>
+        <h1 id="page-title">{copy.title}</h1>
+        <p className="intro">{copy.intro}</p>
+        <form onSubmit={onSubmit} aria-busy={loading}>
+          <label htmlFor="verification-code">{copy.codeLabel}</label>
+          <input
+            id="verification-code"
+            name="code"
+            value={code}
+            autoComplete="off"
+            spellCheck={false}
+            placeholder="RXRP-F90C-ZRBZ-EP7T"
+            aria-invalid={prompt}
+            aria-describedby={prompt ? 'code-hint' : undefined}
+            onChange={(event) => setCode(event.target.value)}
+          />
+          <PrimaryButton
+            type="submit"
+            tone="navy"
+            disabled={loading}
+            aria-busy={loading}
+          >
+            {loading ? (
+              <>
+                <Spinner />
+                {copy.checking}
+              </>
+            ) : (
+              copy.check
+            )}
+          </PrimaryButton>
+          {prompt ? (
+            <p id="code-hint" role="alert">
+              {copy.prompt}
+            </p>
+          ) : null}
+        </form>
+        {result ? (
+          <VerifyResultCard
+            key={`${result.outcome}-${code}`}
+            locale={locale}
+            result={result}
+          />
+        ) : null}
+      </div>
     </OpenBook>
   )
 }
