@@ -910,6 +910,32 @@ button:disabled {
   letter-spacing: 0.04em;
 }
 
+.copy-code {
+  margin-left: 8px;
+  width: 32px;
+  height: 32px;
+  border: 1px solid #cbbd9d;
+  border-radius: 8px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+  background: transparent;
+  color: var(--navy-800);
+  transition: background 0.18s;
+}
+
+.copy-code:hover {
+  background: rgba(177, 138, 67, 0.16);
+}
+
+.copy-feedback {
+  margin-left: 8px;
+  font-size: 13px;
+  color: var(--success-700);
+}
+
 .version-list {
   list-style: none;
   margin: 12px 0 0;
@@ -995,6 +1021,7 @@ button:disabled {
 .primary-button:focus-visible,
 .text-link:focus-visible,
 .share-link:focus-visible,
+.copy-code:focus-visible,
 .back-link:focus-visible,
 .transaction-link:focus-visible,
 .verify-page input:focus-visible {
@@ -1004,6 +1031,7 @@ button:disabled {
 
 .page-content .primary-button:focus-visible,
 .page-content .text-link:focus-visible,
+.page-content .copy-code:focus-visible,
 .page-content .back-link:focus-visible,
 .page-content .transaction-link:focus-visible {
   outline-color: var(--navy-900);

@@ -174,3 +174,66 @@ test('a student downloads the PDF for the selected language', async ({
   ).toHaveCount(0)
   await expect(page.getByText(OTHER_ID)).toHaveCount(0)
 })
+
+test('a student copies a verification code with feedback', async ({
+  page,
+  context,
+}) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+  await page.route(API, async (route) => {
+    await route.fulfill({ json: caller })
+  })
+  await page.goto('/passport')
+  const buttons = page.getByRole('button', { name: 'Copy code' })
+  await expect(buttons).toHaveCount(2)
+  await buttons.first().click()
+  await expect(page.getByText('Copied')).toBeVisible()
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
+    'A1B2-C3D4-E5F6-G7H8',
+  )
+  await expect(page.getByText('Copied')).toHaveCount(0, { timeout: 4000 })
+
+  await buttons.nth(1).click()
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
+    'K9M2-N3P4-Q5R6-S7T8',
+  )
+
+  await page.getByRole('button', { name: 'ქართული' }).click()
+  await expect(
+    page.getByRole('button', { name: 'კოდის კოპირება' }),
+  ).toHaveCount(2)
+})
+
+test('when the clipboard is refused the code text is selected', async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText: () => Promise.reject(new Error('denied')) },
+    })
+  })
+  await page.route(API, async (route) => {
+    await route.fulfill({ json: caller })
+  })
+  await page.goto('/passport')
+  await page.getByRole('button', { name: 'Copy code' }).first().click()
+  await expect(page.getByText(/Could not copy/).first()).toBeVisible()
+  const selected = await page.evaluate(() => window.getSelection()?.toString())
+  expect(selected).toBe('A1B2-C3D4-E5F6-G7H8')
+})
+
+test('the copy button is keyboard reachable with a visible focus ring', async ({
+  page,
+}) => {
+  await page.route(API, async (route) => {
+    await route.fulfill({ json: caller })
+  })
+  await page.goto('/passport')
+  const button = page.getByRole('button', { name: 'Copy code' }).first()
+  await button.focus()
+  await expect(button).toBeFocused()
+  const outline = await button.evaluate(
+    (element) => getComputedStyle(element).outlineStyle,
+  )
+  expect(outline).not.toBe('none')
+})

@@ -5,6 +5,7 @@ import { useState } from 'react'
 
 import { OpenBook, PrimaryButton } from '@/components/book'
 import { SignInButton } from '@/components/sign-in-button'
+import { CopyCode } from '@/components/copy-code'
 import { ShareLinkButton } from '@/components/share-link-button'
 import { SkillList } from '@/components/skill-list'
 import { Spinner } from '@/components/ui/spinner'
@@ -183,7 +184,7 @@ function VersionFacts({
       <p className="meta-line">
         <span className="meta-label">{copy.verificationCode}</span>
         {': '}
-        <span className="code-value">{version.verification_code}</span>
+        <CopyCode code={version.verification_code} locale={locale} />
       </p>
       <SkillList skills={version.skills} locale={locale} />
       {version.anchor.tx_url ? (
