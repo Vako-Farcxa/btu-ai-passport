@@ -107,7 +107,6 @@ export interface AwardStudentInput {
   first_name: string
   last_name: string
   // Only used for students who are not in the Sheet yet.
-  student_id?: string
   program?: string
   education_level?: string
 }

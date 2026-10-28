@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import React, { useEffect, useState } from 'react'
 
+import { EDUCATION_LEVELS, programsForLevel } from '@/lib/btu-programs'
 import {
   SKILL_LEVELS,
   adminErrorMessage,
@@ -38,7 +39,6 @@ export function AddStudentDialog({
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
   const [email, setEmail] = useState('')
-  const [studentId, setStudentId] = useState('')
   const [program, setProgram] = useState('')
   const [educationLevel, setEducationLevel] = useState('')
   const [skillId, setSkillId] = useState('')
@@ -110,7 +110,6 @@ export function AddStudentDialog({
             email: email.trim().toLowerCase(),
             first_name: firstName.trim(),
             last_name: lastName.trim(),
-            student_id: studentId.trim(),
             program: program.trim(),
             education_level: educationLevel.trim(),
           },
@@ -288,25 +287,9 @@ export function AddStudentDialog({
                   className={inputClass}
                 />
                 <p className="text-[11px] text-slate-400 mt-1">
-                  Only the allowed university domains are accepted.
+                  Only the allowed university domains are accepted. The student
+                  ID and passport ID are assigned automatically.
                 </p>
-              </div>
-              <div>
-                <label
-                  htmlFor="new-student-id"
-                  className="block text-xs font-semibold text-slate-700 mb-1"
-                >
-                  Student ID
-                </label>
-                <input
-                  id="new-student-id"
-                  type="text"
-                  maxLength={100}
-                  placeholder="e.g. BTU-T-0042"
-                  value={studentId}
-                  onChange={(e) => setStudentId(e.target.value)}
-                  className={inputClass}
-                />
               </div>
               <div>
                 <label
@@ -315,20 +298,22 @@ export function AddStudentDialog({
                 >
                   Education level
                 </label>
-                <input
+                <select
                   id="new-education-level"
-                  type="text"
-                  list="education-levels"
-                  maxLength={100}
                   value={educationLevel}
-                  onChange={(e) => setEducationLevel(e.target.value)}
+                  onChange={(e) => {
+                    setEducationLevel(e.target.value)
+                    setProgram('')
+                  }}
                   className={inputClass}
-                />
-                <datalist id="education-levels">
-                  <option value="Bachelor's" />
-                  <option value="Master's" />
-                  <option value="Doctoral" />
-                </datalist>
+                >
+                  <option value="">Choose a level...</option>
+                  {EDUCATION_LEVELS.map((item) => (
+                    <option key={item} value={item}>
+                      {item}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div className="sm:col-span-2">
                 <label
@@ -337,15 +322,24 @@ export function AddStudentDialog({
                 >
                   Program
                 </label>
-                <input
+                <select
                   id="new-program"
-                  type="text"
-                  maxLength={200}
-                  placeholder="e.g. Computer Science and Artificial Intelligence"
                   value={program}
+                  disabled={!educationLevel}
                   onChange={(e) => setProgram(e.target.value)}
-                  className={inputClass}
-                />
+                  className={`${inputClass} disabled:opacity-60`}
+                >
+                  <option value="">
+                    {educationLevel
+                      ? 'Choose a program...'
+                      : 'Choose an education level first'}
+                  </option>
+                  {programsForLevel(educationLevel).map((item) => (
+                    <option key={item} value={item}>
+                      {item}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
 
@@ -414,6 +408,9 @@ export function AddStudentDialog({
                     onChange={(e) => setAwardedOn(e.target.value)}
                     className={inputClass}
                   />
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    Leave empty to use today&apos;s date
+                  </p>
                 </div>
               </div>
               <p className="text-[11px] text-slate-400">

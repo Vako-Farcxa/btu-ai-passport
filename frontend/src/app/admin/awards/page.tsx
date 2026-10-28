@@ -200,7 +200,7 @@ function AwardForm() {
               className={inputClass}
             />
             <p className="text-[11px] text-slate-400 mt-1">
-              Leave empty for today.
+              Leave empty to use today&apos;s date
             </p>
           </div>
         </div>

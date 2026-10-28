@@ -47,7 +47,11 @@ describe('AddStudentDialog', () => {
     expect(await screen.findByLabelText(/first name/i)).toBeInTheDocument()
     expect(screen.getByLabelText(/last name/i)).toBeInTheDocument()
     expect(screen.getByLabelText(/btu email/i)).toBeInTheDocument()
-    expect(screen.getByLabelText(/student id/i)).toBeInTheDocument()
+    // IDs are assigned by the system, never typed.
+    expect(screen.queryByLabelText(/student id/i)).toBeNull()
+    expect(screen.queryByLabelText(/passport id/i)).toBeNull()
+    expect(screen.queryByLabelText(/skill id/i)).toBeNull()
+    expect(screen.getByText(/leave empty to use today/i)).toBeInTheDocument()
     expect(screen.getByLabelText(/program/i)).toBeInTheDocument()
     expect(screen.getByLabelText(/education level/i)).toBeInTheDocument()
     expect(screen.getByLabelText(/skill \*/i)).toBeInTheDocument()
@@ -91,9 +95,8 @@ describe('AddStudentDialog', () => {
     fill(/first name/i, 'Nino')
     fill(/last name/i, 'Beridze')
     fill(/btu email/i, 'N@btu.edu.ge')
-    fill(/student id/i, 'BTU-T-1')
-    fill(/program/i, 'CS')
     fill(/education level/i, "Bachelor's")
+    fill(/program/i, 'Digital Marketing')
     await waitFor(() =>
       expect(
         screen.getByRole('option', { name: /Prompting/ }),
@@ -111,8 +114,7 @@ describe('AddStudentDialog', () => {
             email: 'n@btu.edu.ge',
             first_name: 'Nino',
             last_name: 'Beridze',
-            student_id: 'BTU-T-1',
-            program: 'CS',
+            program: 'Digital Marketing',
             education_level: "Bachelor's",
           },
         ],
@@ -120,6 +122,26 @@ describe('AddStudentDialog', () => {
     )
     expect(await screen.findByText(/BTU-ABC/)).toBeInTheDocument()
     expect(onDone).toHaveBeenCalled()
+  })
+
+  it('offers programs for the chosen level only', async () => {
+    render(<AddStudentDialog onClose={() => {}} />)
+    await screen.findByLabelText(/first name/i)
+    expect(screen.getByLabelText(/program/i)).toBeDisabled()
+    fill(/education level/i, "Master's")
+    expect(
+      screen.getByRole('option', {
+        name: 'International Security and Technologies',
+      }),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('option', { name: 'Psychology in the Digital World' }),
+    ).toBeNull()
+    fill(/program/i, 'Digital Marketing')
+    fill(/education level/i, "Bachelor's")
+    expect((screen.getByLabelText(/program/i) as HTMLSelectElement).value).toBe(
+      '',
+    )
   })
 
   it('closes on Escape', async () => {
