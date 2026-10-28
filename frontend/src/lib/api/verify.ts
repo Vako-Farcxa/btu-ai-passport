@@ -18,21 +18,55 @@ export function presentSkills(skills: Skill[], locale: Locale): Skill[] {
   return locale === 'en' || locale === 'ka' ? skills : skills
 }
 
-const DATE_LOCALES: Record<Locale, string> = { en: 'en-GB', ka: 'ka-GE' }
+// Month names are listed here instead of coming from Intl, because some browsers
+// ship no Georgian locale data and would show English months in the Georgian page.
+const MONTHS: Record<Locale, string[]> = {
+  en: [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ],
+  ka: [
+    'იან',
+    'თებ',
+    'მარ',
+    'აპრ',
+    'მაი',
+    'ივნ',
+    'ივლ',
+    'აგვ',
+    'სექ',
+    'ოქტ',
+    'ნოე',
+    'დეკ',
+  ],
+}
 
-/** "28 Oct 2026" style date for a YYYY-MM-DD value, or null if it is not a date. */
+/** "28 Oct 2026" or "28 ოქტ. 2026" for a YYYY-MM-DD value, or null if it is not a date. */
 export function formatIssuedDate(value: string, locale: Locale): string | null {
   const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value)
   if (!match) return null
   const [, year, month, day] = match
   const date = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)))
-  if (Number.isNaN(date.getTime())) return null
-  return new Intl.DateTimeFormat(DATE_LOCALES[locale], {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-    timeZone: 'UTC',
-  }).format(date)
+  if (
+    date.getUTCFullYear() !== Number(year) ||
+    date.getUTCMonth() !== Number(month) - 1 ||
+    date.getUTCDate() !== Number(day)
+  ) {
+    return null
+  }
+  const name = MONTHS[locale][date.getUTCMonth()]
+  const dot = locale === 'ka' ? '.' : ''
+  return `${date.getUTCDate()} ${name}${dot} ${date.getUTCFullYear()}`
 }
 
 /** The "a newer version exists" note, or null when it cannot be shown. */

@@ -61,7 +61,9 @@ export default function Home() {
               </Link>
             </div>
             <div className="cover-footer">
-              BUSINESS AND TECHNOLOGY UNIVERSITY
+              {locale === 'en'
+                ? copy.universityName.toUpperCase()
+                : copy.universityName}
             </div>
           </div>
         </div>

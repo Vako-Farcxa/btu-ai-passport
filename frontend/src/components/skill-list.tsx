@@ -6,7 +6,7 @@ import { useRef } from 'react'
 import { useSkillMotion } from '@/components/motion'
 import { messages, type Locale } from '@/i18n/messages'
 import type { Skill } from '@/lib/api/types'
-import { presentSkills } from '@/lib/api/verify'
+import { formatIssuedDate, presentSkills } from '@/lib/api/verify'
 import { stampFor } from '@/lib/stamps'
 
 export function SkillList({
@@ -46,7 +46,10 @@ export function SkillList({
                 ) : null}
               </div>
               <time dateTime={skill.awarded_on ?? undefined}>
-                {skill.awarded_on ?? copy.dateUnavailable}
+                {skill.awarded_on
+                  ? (formatIssuedDate(skill.awarded_on, locale) ??
+                    skill.awarded_on)
+                  : copy.dateUnavailable}
               </time>
               {stamp ? (
                 <Image

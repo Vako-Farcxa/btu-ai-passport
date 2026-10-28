@@ -78,6 +78,13 @@ describe('newer version notice', () => {
     expect(newerVersionNotice(parse({ latest_version: null }), 'en')).toBeNull()
   })
 
+  it('formats dates with fixed month names in both languages', () => {
+    expect(formatIssuedDate('2025-06-01', 'en')).toBe('1 Jun 2025')
+    expect(formatIssuedDate('2025-06-01', 'ka')).toBe('1 ივნ. 2025')
+    expect(formatIssuedDate('2026-10-28', 'ka')).toBe('28 ოქტ. 2026')
+    expect(formatIssuedDate('2026-02-30', 'en')).toBeNull()
+  })
+
   it('is hidden for a date that does not parse', () => {
     const result = parse({ latest_version: 3, latest_issued_at: 'yesterday' })
     expect(newerVersionNotice(result, 'en')).toBeNull()
