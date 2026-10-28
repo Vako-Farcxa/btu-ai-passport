@@ -242,7 +242,7 @@ class AwardStudent(BaseModel):
     first_name: str = Field(default="", max_length=100)
     last_name: str = Field(default="", max_length=100)
     # Also only for new students. Students who already have a row keep what they have.
-    student_id: str = Field(default="", max_length=100)
+    # IDs are never sent by the client: the server reuses or mints them.
     program: str = Field(default="", max_length=200)
     education_level: str = Field(default="", max_length=100)
 

@@ -524,6 +524,7 @@ def award_skill(
         raise APIError(422, "award_level_required")
     awarded_on = (body.awarded_on or datetime.now(UTC).date()).isoformat()
 
+    known = store.current_students()
     order: list[str] = []
     results: dict[str, AwardRowResult] = {}
     awards: list[AwardInput] = []
@@ -542,9 +543,9 @@ def award_skill(
             awards.append(
                 AwardInput(
                     email=email,
+                    passport_id=known[email].passport_id if email in known else "",
                     first_name=_nfc(student.first_name),
                     last_name=_nfc(student.last_name),
-                    student_id=_nfc(student.student_id),
                     program=_nfc(student.program),
                     education_level=_nfc(student.education_level),
                     skill_id=skill.id,
@@ -559,7 +560,7 @@ def award_skill(
     placed: dict[str, int] = {}
     if awards:
         with _sheet_errors():
-            placements = sheet.append_awards(awards, set(store.current_students()))
+            placements = sheet.append_awards(awards, set(known))
         for placement in placements:
             if placement.row_number is not None:
                 placed[placement.email] = placement.row_number

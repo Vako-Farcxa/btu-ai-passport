@@ -18,6 +18,7 @@ from passport_api.sheet_admin import (
     AwardInput,
     AwardPlacement,
     build_award_rows,
+    next_student_id,
 )
 from passport_api.sync import (
     SKILLS_HEADER,
@@ -26,6 +27,8 @@ from passport_api.sync import (
     MemorySyncStore,
     RowOutcome,
     SheetUnavailableError,
+    StudentRecord,
+    VersionRecord,
     catalog_from_values,
     find_header_row,
     records_from_values,
@@ -183,13 +186,87 @@ def test_existing_student_keeps_their_details_over_the_request() -> None:
     rows, _ = build_award_rows(
         HEADER,
         [existing_row()],
-        [award("ada@btu.edu.ge", student_id="OTHER", program="Other")],
+        [award("ada@btu.edu.ge", program="Other")],
         set(),
         first_row=6,
     )
     row = dict(zip(HEADER, rows[0], strict=True))
     assert row["Student ID"] == "BTU-T-0001"
     assert row["Program"] == "Computer Science"
+
+
+def test_next_student_id_follows_the_sheet_format() -> None:
+    assert next_student_id([]) == "BTU-T-0001"
+    assert next_student_id(["BTU-T-0021", "btu-t-1010", "BTU-T-0005", "junk", ""]) == "BTU-T-1011"
+    assert next_student_id(["BTU-T-9001", "BTU-T-9001"]) == "BTU-T-9002"
+
+
+def test_new_students_get_unique_consecutive_student_ids() -> None:
+    rows, _ = build_award_rows(
+        HEADER,
+        [existing_row()],
+        [award("a@btu.edu.ge", first_name="A"), award("b@btu.edu.ge", first_name="B")],
+        set(),
+        first_row=10,
+    )
+    ids = [r[HEADER.index("Student ID")] for r in rows]
+    assert ids == ["BTU-T-0002", "BTU-T-0003"]
+    assert "BTU-T-0001" not in ids
+
+
+def test_existing_student_reuses_their_student_and_passport_id() -> None:
+    old = existing_row()
+    rows, _ = build_award_rows(
+        HEADER,
+        [old],
+        [award("ada@btu.edu.ge", skill_id="SKL-009", skill_name="Other")],
+        set(),
+        first_row=6,
+    )
+    row = dict(zip(HEADER, rows[0], strict=True))
+    assert row["Student ID"] == "BTU-T-0001"
+    assert row["Passport ID (Existing)"] == "BTU-AI-000125"
+    # The same student awarded twice in one request still gets one ID.
+    twice, _ = build_award_rows(
+        HEADER,
+        [],
+        [
+            award("n@btu.edu.ge", first_name="N"),
+            award("n@btu.edu.ge", first_name="N", skill_id="SKL-009", skill_name="Other"),
+        ],
+        set(),
+        first_row=5,
+    )
+    assert twice[0][HEADER.index("Student ID")] == twice[1][HEADER.index("Student ID")]
+
+
+def test_student_with_a_blank_id_in_the_sheet_gets_one_only_if_no_row_has_one() -> None:
+    blank = existing_row(skill_id="SKL-001")
+    blank[HEADER.index("Student ID")] = ""
+    rows, _ = build_award_rows(HEADER, [blank], [award("ada@btu.edu.ge")], set(), first_row=6)
+    assert rows[0][HEADER.index("Student ID")] == "BTU-T-0001"
+    # An earlier row of the same student that has an ID wins over a later blank one.
+    kept, _ = build_award_rows(
+        HEADER,
+        [existing_row(), blank],
+        [award("ada@btu.edu.ge")],
+        set(),
+        first_row=7,
+    )
+    assert kept[0][HEADER.index("Student ID")] == "BTU-T-0001"
+
+
+def test_database_passport_id_is_written_for_a_student_with_no_sheet_row() -> None:
+    rows, _ = build_award_rows(
+        HEADER,
+        [existing_row()],
+        [award("db@btu.edu.ge", passport_id="BTU-AI-000999")],
+        {"db@btu.edu.ge"},
+        first_row=6,
+    )
+    row = dict(zip(HEADER, rows[0], strict=True))
+    assert row["Passport ID (Existing)"] == "BTU-AI-000999"
+    assert row["Student ID"] == "BTU-T-0002"
 
 
 def test_two_awards_get_consecutive_rows_and_record_ids() -> None:
@@ -740,7 +817,6 @@ def test_new_student_details_land_in_the_sheet_row(
                     "email": "tamar@btu.edu.ge",
                     "first_name": "Tamar",
                     "last_name": "Chikovani",
-                    "student_id": "BTU-T-0042",
                     "program": "Law",
                     "education_level": "Master's",
                 }
@@ -749,11 +825,67 @@ def test_new_student_details_land_in_the_sheet_row(
     )
     assert response.json()["rows"][0]["status"] == "synced"
     row = dict(zip(HEADER, sheet.grid[-1], strict=True))
-    assert row["Student ID"] == "BTU-T-0042"
+    # Minted by the system: one above the highest ID already in the Sheet (BTU-T-0001).
+    assert row["Student ID"] == "BTU-T-0002"
     assert row["Program"] == "Law"
     assert row["Education Level"] == "Master's"
     assert row["Student Status"] == "Active"
     assert row["Passport ID (Existing)"] == ""
+
+
+def test_clients_cannot_send_ids(env: tuple[FakeDb, FakeAdminSheet, MemorySyncStore]) -> None:
+    db, sheet, _ = env
+    seed_skill(db)
+    response = client.post(
+        "/admin/awards",
+        headers=AUTH,
+        json={
+            "skill_id": "SKL-002",
+            "students": [
+                {"email": "x@btu.edu.ge", "first_name": "X", "last_name": "Y", "student_id": "Z"}
+            ],
+        },
+    )
+    assert response.status_code == 422
+    assert len(sheet.grid) == 5  # nothing was appended
+
+
+def test_database_student_without_a_sheet_row_keeps_their_passport_id(
+    env: tuple[FakeDb, FakeAdminSheet, MemorySyncStore],
+) -> None:
+    db, sheet, store = env
+    seed_skill(db)
+    store.students.append(
+        StudentRecord(email="db@btu.edu.ge", full_name="Db Student", passport_id="BTU-AI-000999")
+    )
+    store.versions.append(
+        VersionRecord(
+            passport_id="BTU-AI-000999",
+            email="db@btu.edu.ge",
+            version_number=1,
+            holder_name="Db Student",
+            verification_code="code",
+            verification_id_hash="hash",
+            skill_fingerprint="f" * 64,
+            content_hash="c" * 64,
+            anchor_status="pending",
+            pdf_en_path=None,
+            pdf_ka_path=None,
+            tx_hash=None,
+            issued_at="2026-10-01T00:00:00+00:00",
+            skills=(),
+        )
+    )
+    response = client.post(
+        "/admin/awards",
+        headers=AUTH,
+        json={"skill_id": "SKL-002", "students": [{"email": "db@btu.edu.ge"}]},
+    )
+    assert response.status_code == 200
+    row = dict(zip(HEADER, sheet.grid[-1], strict=True))
+    assert row["Passport ID (Existing)"] == "BTU-AI-000999"
+    # No Sheet row existed, so it is a genuinely new Student ID.
+    assert row["Student ID"] == "BTU-T-0002"
 
 
 def test_direct_student_creation_is_gone(

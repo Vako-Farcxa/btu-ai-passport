@@ -6,7 +6,7 @@ same layout the sync reads, and the sync then copies them into the database.
 
 import logging
 import re
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from typing import Any, Protocol, cast
 
@@ -28,6 +28,9 @@ from passport_api.sync import (
 
 _log = logging.getLogger(__name__)
 _RECORD_ID = re.compile(r"^REC-(\d+)$", re.IGNORECASE)
+# Student IDs in the sheet look like BTU-T-0042. A new one is the highest number + 1.
+_STUDENT_ID = re.compile(r"^BTU-T-(\d+)$", re.IGNORECASE)
+_STUDENT_ID_WIDTH = 4
 # Columns copied from a student's earlier row so one student looks the same on every row.
 _STUDENT_COLUMNS = (
     "student id",
@@ -39,6 +42,15 @@ _STUDENT_COLUMNS = (
 )
 _RECORD_ID_COLUMNS = ("record id",)
 _STATUS_COLUMNS = ("student status",)
+
+
+def next_student_id(taken: Iterable[str]) -> str:
+    """The next unused BTU-T-#### number, above every student ID already in use."""
+    numbers = [
+        int(match.group(1)) for value in taken if (match := _STUDENT_ID.match(value.strip()))
+    ]
+    return f"BTU-T-{max(numbers, default=0) + 1:0{_STUDENT_ID_WIDTH}d}"
+
 
 ALREADY_AWARDED = "already_awarded"
 MISSING_FULL_NAME = "missing_full_name"
@@ -56,9 +68,11 @@ class AwardInput:
     description: str
     awarded_on: str
     # Used only when the student has no row in the sheet yet.
-    student_id: str = ""
     program: str = ""
     education_level: str = ""
+    # The passport the database already holds for this email, if any. Written into the new
+    # row so the sheet matches the database. Never minted here: the sync mints new ones.
+    passport_id: str = ""
 
 
 @dataclass(frozen=True)
@@ -234,10 +248,23 @@ def build_award_rows(
     earlier: dict[str, Sequence[object]] = {}
     awarded: set[tuple[str, str]] = set()
     highest_record = 0
+    # What each student already has in the sheet, taken from any of their rows.
+    own_student_id: dict[str, str] = {}
+    own_passport_id: dict[str, str] = {}
+    used_student_ids: set[str] = set()
+    student_id_column = _column(header, ("student id",))
+    passport_column = _column(header, ("passport id (existing)",))
     for old in data:
         email = cell_at(old, email_column).lower()
+        existing_student_id = cell_at(old, student_id_column)
+        if existing_student_id:
+            used_student_ids.add(existing_student_id)
         if email:
             earlier[email] = old
+            if existing_student_id:
+                own_student_id[email] = existing_student_id
+            if cell_at(old, passport_column):
+                own_passport_id[email] = cell_at(old, passport_column)
             awarded.add((email, cell_at(old, columns["skill_id"]).upper()))
             awarded.add((email, cell_at(old, columns["skill"]).lower()))
         match = _RECORD_ID.match(cell_at(old, record_column))
@@ -277,13 +304,19 @@ def build_award_rows(
             if status_column is not None:
                 row[status_column] = "Active"
             for names, text in (
-                (("student id",), award.student_id.strip()),
                 (("program",), award.program.strip()),
                 (("education level",), award.education_level.strip()),
             ):
                 text_column = _column(header, names)
                 if text_column is not None:
                     row[text_column] = text
+        # IDs are reused when the student already has one, and minted only when they do not.
+        student_id = own_student_id.get(email) or next_student_id(used_student_ids)
+        if student_id_column is not None:
+            row[student_id_column] = student_id
+        passport_id = own_passport_id.get(email) or award.passport_id.strip()
+        if passport_column is not None:
+            row[passport_column] = passport_id
         values.update(
             email=email,
             skill=award.skill_name,
@@ -306,4 +339,8 @@ def build_award_rows(
         awarded.add((email, award.skill_id.upper()))
         awarded.add((email, award.skill_name.lower()))
         earlier[email] = list(row)
+        used_student_ids.add(student_id)
+        own_student_id[email] = student_id
+        if passport_id:
+            own_passport_id[email] = passport_id
     return rows, placements
