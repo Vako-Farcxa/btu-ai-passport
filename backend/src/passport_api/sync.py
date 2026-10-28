@@ -78,6 +78,58 @@ class CatalogSkill:
     category: str
     badge: str
     description: str
+    # Georgian name from the Skills tab. None means "leave the stored value alone".
+    name_ka: str | None = None
+
+
+SKILLS_TAB = "Skills"
+SKILLS_HEADER = ("skill_id", "name_en", "name_ka", "category", "description")
+
+
+def badge_for_category(category: str) -> str:
+    return _CATEGORY_BADGES.get(category.strip().lower(), "")
+
+
+def catalog_from_values(values: list[list[object]]) -> list[CatalogSkill]:
+    """Skills from the Skills tab grid. The header row is the first row with skill_id."""
+    header_index = next(
+        (
+            index
+            for index, row in enumerate(values)
+            if "skill_id" in {_cell(cell).lower() for cell in row}
+        ),
+        None,
+    )
+    if header_index is None:
+        return []
+    columns = {
+        _cell(cell).lower(): position
+        for position, cell in reversed(list(enumerate(values[header_index])))
+        if _cell(cell)
+    }
+    skills: list[CatalogSkill] = []
+    for row in values[header_index + 1 :]:
+        skill_id = _tab_field(row, columns, "skill_id").upper()
+        name = _tab_field(row, columns, "name_en")
+        if not skill_id or not name:
+            continue
+        category = _tab_field(row, columns, "category")
+        skills.append(
+            CatalogSkill(
+                id=skill_id,
+                name=name,
+                category=category,
+                badge=badge_for_category(category),
+                description=_tab_field(row, columns, "description"),
+                name_ka=_tab_field(row, columns, "name_ka"),
+            )
+        )
+    return skills
+
+
+def _tab_field(row: list[object], columns: dict[str, int], name: str) -> str:
+    position = columns.get(name)
+    return _cell(row[position]) if position is not None and position < len(row) else ""
 
 
 class SheetUnavailableError(Exception):
@@ -270,6 +322,29 @@ class FakeSheet:
         self.writes.append(list(outcomes))
 
 
+def open_spreadsheet() -> Any:
+    """The configured Google spreadsheet, opened with the service account."""
+    if not settings.sheet_id or not settings.google_service_account_json:
+        raise SheetUnavailableError("sheet_not_configured")
+    try:
+        parsed = json.loads(settings.google_service_account_json)
+    except json.JSONDecodeError as exc:
+        raise SheetUnavailableError("sheet_not_configured") from exc
+    if not isinstance(parsed, dict):
+        raise SheetUnavailableError("sheet_not_configured")
+    info = cast(dict[str, Any], parsed)
+    key = info.get("private_key")
+    if isinstance(key, str) and "\\n" in key:
+        # Hosting dashboards often keep escaped newlines in pasted JSON.
+        info["private_key"] = key.replace("\\n", "\n")
+    try:
+        client = gspread.service_account_from_dict(info, scopes=_SHEETS_SCOPES)
+        return client.open_by_key(settings.sheet_id)
+    except Exception as exc:
+        _log.warning("sheet_read_failed: %s", type(exc).__name__, exc_info=True)
+        raise SheetUnavailableError("sheet_unavailable") from exc
+
+
 class GspreadSheet:
     def __init__(self) -> None:
         self._worksheet: Any = None
@@ -277,25 +352,10 @@ class GspreadSheet:
         self._first_data_row = 0
 
     def read_rows(self) -> list[dict[str, object]]:
-        if not settings.sheet_id or not settings.google_service_account_json:
-            raise SheetUnavailableError("sheet_not_configured")
+        spreadsheet = open_spreadsheet()
         try:
-            parsed = json.loads(settings.google_service_account_json)
-        except json.JSONDecodeError as exc:
-            raise SheetUnavailableError("sheet_not_configured") from exc
-        if not isinstance(parsed, dict):
-            raise SheetUnavailableError("sheet_not_configured")
-        info = cast(dict[str, Any], parsed)
-        key = info.get("private_key")
-        if isinstance(key, str) and "\\n" in key:
-            # Hosting dashboards often keep escaped newlines in pasted JSON.
-            info["private_key"] = key.replace("\\n", "\n")
-        try:
-            client = gspread.service_account_from_dict(info, scopes=_SHEETS_SCOPES)
-            worksheet = client.open_by_key(settings.sheet_id).get_worksheet(0)
+            worksheet = spreadsheet.get_worksheet(0)
             values = worksheet.get_all_values()
-        except SheetUnavailableError:
-            raise
         except Exception as exc:
             _log.warning("sheet_read_failed: %s", type(exc).__name__, exc_info=True)
             raise SheetUnavailableError("sheet_unavailable") from exc
@@ -306,6 +366,18 @@ class GspreadSheet:
         self._header = header
         self._first_data_row = 0 if header_index is None else header_index + 2
         return records
+
+    def read_catalog(self) -> list[CatalogSkill]:
+        """Skills from the optional Skills tab. Empty when the tab does not exist."""
+        spreadsheet = open_spreadsheet()
+        try:
+            worksheet = spreadsheet.worksheet(SKILLS_TAB)
+        except gspread.WorksheetNotFound:
+            return []
+        except Exception as exc:
+            _log.warning("catalog_read_failed: %s", type(exc).__name__, exc_info=True)
+            raise SheetUnavailableError("sheet_unavailable") from exc
+        return catalog_from_values(cast(list[list[object]], worksheet.get_all_values()))
 
     def write_back(self, outcomes: list[RowOutcome]) -> None:
         if self._worksheet is None or not outcomes:
@@ -603,22 +675,16 @@ class SupabaseSyncStore:
             get_supabase().table("skill_entries").insert(skill_rows).execute()
 
     def upsert_skills(self, skills: list[CatalogSkill]) -> None:
-        if not skills:
-            return
-        get_supabase().table("skills").upsert(
-            [
-                {
-                    "id": skill.id,
-                    "name": skill.name,
-                    "category": skill.category,
-                    "badge": skill.badge,
-                    "description": skill.description,
-                    "updated_at": _now(),
-                }
-                for skill in skills
-            ],
-            on_conflict="id",
-        ).execute()
+        # name_ka is sent only for skills that carry one (the Skills tab). Older databases
+        # without that column keep working for sheets that have no Skills tab.
+        plain = [skill for skill in skills if skill.name_ka is None]
+        georgian = [skill for skill in skills if skill.name_ka is not None]
+        for batch, with_ka in ((plain, False), (georgian, True)):
+            if not batch:
+                continue
+            get_supabase().table("skills").upsert(
+                [_skill_row(skill, with_ka) for skill in batch], on_conflict="id"
+            ).execute()
 
     def remember_source(self, record_key: str, email: str) -> None:
         get_supabase().table("source_records").upsert(
@@ -792,7 +858,7 @@ def run_sync(store: SyncStore, sheet: Sheet, chain: AnchorChain | None = None) -
         )
     outcomes: list[RowOutcome] = []
     try:
-        created = _issue_versions(store, raw_rows, chain, outcomes)
+        created = _issue_versions(store, raw_rows, chain, outcomes, _read_tab_catalog(sheet))
     except Exception:
         # Release the run lock so the next scheduled sync is not blocked.
         _log.exception("sync_failed")
@@ -809,11 +875,24 @@ def run_sync(store: SyncStore, sheet: Sheet, chain: AnchorChain | None = None) -
     )
 
 
+def _read_tab_catalog(sheet: Sheet) -> list[CatalogSkill]:
+    """Skills tab rows, when the sheet has one. A failed read never blocks the sync."""
+    reader = getattr(sheet, "read_catalog", None)
+    if not callable(reader):
+        return []
+    try:
+        return list(cast(list[CatalogSkill], reader()))
+    except Exception:
+        _log.warning("catalog_read_failed", exc_info=True)
+        return []
+
+
 def _issue_versions(
     store: SyncStore,
     raw_rows: list[dict[str, object]],
     chain: AnchorChain | None,
     outcomes: list[RowOutcome] | None = None,
+    tab_catalog: list[CatalogSkill] | None = None,
 ) -> int:
     results: list[RowOutcome] = [] if outcomes is None else outcomes
     synced_at = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
@@ -830,7 +909,10 @@ def _issue_versions(
     groups, failures = _group_rows(raw_rows)
     for index, error in failures.items():
         fail([index], error)
-    store.upsert_skills(_catalog_from_groups(groups))
+    # The Skills tab is the admin-edited catalog, so it wins over text copied from award rows.
+    catalog = {skill.id: skill for skill in _catalog_from_groups(groups)}
+    catalog.update({skill.id: skill for skill in tab_catalog or []})
+    store.upsert_skills(list(catalog.values()))
     synced: set[str] = set()
     for email, group in groups.items():
         skills = tuple(
@@ -988,6 +1070,20 @@ def _anchor_pending(store: SyncStore, emails: set[str], chain: AnchorChain | Non
             tx_hash=pending.tx_hash,
             anchored_at=pending.anchored_at,
         )
+
+
+def _skill_row(skill: CatalogSkill, with_ka: bool) -> dict[str, Any]:
+    row: dict[str, Any] = {
+        "id": skill.id,
+        "name": skill.name,
+        "category": skill.category,
+        "badge": skill.badge,
+        "description": skill.description,
+        "updated_at": _now(),
+    }
+    if with_ka:
+        row["name_ka"] = skill.name_ka or ""
+    return row
 
 
 def _student_embed(value: object) -> dict[str, object] | None:

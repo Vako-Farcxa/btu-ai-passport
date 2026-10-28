@@ -1,8 +1,8 @@
 from datetime import date, datetime
-from typing import Literal
+from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 ErrorCode = Literal[
     "unauthorized",
@@ -19,6 +19,9 @@ ErrorCode = Literal[
     "sheet_managed_student",
     "student_email_taken",
     "pdf_already_exists",
+    "skill_name_taken",
+    "sheet_unavailable",
+    "award_level_required",
 ]
 
 
@@ -196,3 +199,82 @@ class AdminVersionPendingList(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     versions: list[AdminVersionPending]
+
+
+# ---------------------------------------------------------------------------
+# Skills catalog and awards
+# ---------------------------------------------------------------------------
+
+SkillLevel = Literal["AI Skill", "AI Applied Skill", "AI Advanced Skill"]
+SkillName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
+
+
+class AdminCatalogSkill(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    name: str
+    name_ka: str
+    category: str
+    badge: str
+    description: str
+
+
+class AdminCatalogSkillList(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    skills: list[AdminCatalogSkill]
+
+
+class AdminCatalogSkillCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: SkillName
+    name_ka: str = Field(default="", max_length=200)
+    category: SkillLevel
+    description: str = Field(default="", max_length=1000)
+
+
+class AdminCatalogSkillUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: SkillName | None = None
+    name_ka: str | None = Field(default=None, max_length=200)
+    category: SkillLevel | None = None
+    description: str | None = Field(default=None, max_length=1000)
+
+
+class AwardStudent(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    email: str = Field(min_length=1, max_length=320)
+    # Needed only when the student has no passport and no row in the sheet yet.
+    first_name: str = Field(default="", max_length=100)
+    last_name: str = Field(default="", max_length=100)
+
+
+class AdminAwardRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    skill_id: str = Field(min_length=1, max_length=40)
+    # Defaults to the skill's own category.
+    level: SkillLevel | None = None
+    awarded_on: date | None = None
+    students: list[AwardStudent] = Field(min_length=1, max_length=50)
+
+
+class AwardRowResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    email: str
+    status: Literal["synced", "failed", "pending", "skipped"]
+    error: str = ""
+    passport_id: str = ""
+    version: str = ""
+
+
+class AdminAwardResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    rows: list[AwardRowResult]
+    sync_result: SyncResult

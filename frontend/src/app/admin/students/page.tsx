@@ -4,7 +4,6 @@ import Link from 'next/link'
 import React, { useEffect, useState } from 'react'
 import {
   fetchAdminStudents,
-  createAdminStudent,
   deleteAdminStudent,
   type AdminStudent,
 } from '@/lib/api/admin'
@@ -14,11 +13,6 @@ export default function AdminStudentsPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [tab, setTab] = useState<'all' | 'admin' | 'archived'>('all')
-  const [isModalOpen, setIsModalOpen] = useState(false)
-  const [newEmail, setNewEmail] = useState('')
-  const [newName, setNewName] = useState('')
-  const [formError, setFormError] = useState<string | null>(null)
-  const [submitting, setSubmitting] = useState(false)
 
   const loadStudents = async () => {
     setLoading(true)
@@ -84,38 +78,6 @@ export default function AdminStudentsPage() {
     loadStudents()
   }
 
-  const handleCreateStudent = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setFormError(null)
-
-    const email = newEmail.trim().toLowerCase()
-    const name = newName.trim()
-
-    if (!name) {
-      setFormError('Please enter student full name')
-      return
-    }
-    if (!email.endsWith('@btu.edu.ge')) {
-      setFormError('Email must end with @btu.edu.ge')
-      return
-    }
-
-    try {
-      setSubmitting(true)
-      await createAdminStudent({ email, full_name: name })
-      setIsModalOpen(false)
-      setNewEmail('')
-      setNewName('')
-      await loadStudents()
-    } catch (err: unknown) {
-      setFormError(
-        err instanceof Error ? err.message : 'Failed to create student',
-      )
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
   const handleDelete = async (passportId: string, name: string) => {
     if (
       !confirm(
@@ -141,11 +103,12 @@ export default function AdminStudentsPage() {
             Student Directory
           </h1>
           <p className="text-sm text-slate-500 mt-1">
-            Manage student identities, AI skills passports, and version records.
+            Students and passports come from the Google Sheet. Add students by
+            awarding them a skill.
           </p>
         </div>
-        <button
-          onClick={() => setIsModalOpen(true)}
+        <Link
+          href="/admin/awards"
           className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors shadow-sm self-start sm:self-auto"
         >
           <svg
@@ -161,8 +124,8 @@ export default function AdminStudentsPage() {
               d="M12 4v16m8-8H4"
             />
           </svg>
-          Add Admin-Managed Student
-        </button>
+          Award a skill
+        </Link>
       </div>
 
       {/* Tabs & Search Filter */}
@@ -356,86 +319,6 @@ export default function AdminStudentsPage() {
           </table>
         </div>
       </div>
-
-      {/* Add Student Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200 space-y-5 animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-bold text-slate-900">
-                Add Admin-Managed Student
-              </h2>
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600 text-lg leading-none"
-              >
-                ✕
-              </button>
-            </div>
-
-            <p className="text-xs text-slate-500">
-              Admin-managed students are decoupled from Google Sheets. Their
-              skills can be added and removed directly from this panel.
-            </p>
-
-            {formError && (
-              <div className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs">
-                {formError}
-              </div>
-            )}
-
-            <form onSubmit={handleCreateStudent} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Full Name (First Last)
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Tamar Chikovani"
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                  className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  BTU Email Address
-                </label>
-                <input
-                  type="email"
-                  required
-                  placeholder="student.name@btu.edu.ge"
-                  value={newEmail}
-                  onChange={(e) => setNewEmail(e.target.value)}
-                  className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-                />
-                <p className="text-[11px] text-slate-400 mt-1">
-                  Must end with @btu.edu.ge
-                </p>
-              </div>
-
-              <div className="pt-2 flex items-center justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 text-xs font-medium text-slate-600 hover:text-slate-900"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-semibold hover:bg-indigo-700 disabled:opacity-50 transition-colors shadow-sm"
-                >
-                  {submitting ? 'Creating...' : 'Create Student'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
