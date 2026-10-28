@@ -22,6 +22,10 @@ ErrorCode = Literal[
     "sheet_unavailable",
     "award_level_required",
     "duplicate_email",
+    "invalid_comment",
+    "flag_already_open",
+    "flag_rate_limited",
+    "flag_not_found",
 ]
 
 
@@ -273,3 +277,73 @@ class AdminAwardResponse(BaseModel):
 
     rows: list[AwardRowResult]
     sync_result: SyncResult
+
+
+# ---------------------------------------------------------------------------
+# Flags: a student reports a problem with one version of their passport
+# ---------------------------------------------------------------------------
+
+FlagStatus = Literal["open", "resolved", "dismissed"]
+
+
+class FlagCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    version: int = Field(ge=1)
+    # The real limits (10 to 500 after trimming) are applied in the endpoint, so the answer
+    # is a readable error code. This only keeps the body small.
+    comment: str = Field(max_length=5000)
+
+
+class StudentFlag(BaseModel):
+    """A flag as its own student sees it. IDs and codes of the passport stay server side."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    version: int
+    comment: str
+    status: FlagStatus
+    admin_note: str
+    created_at: datetime
+    resolved_at: datetime | None
+    # An admin reply (resolved or dismissed) the student has not opened yet.
+    unread: bool
+
+
+class StudentFlagList(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    flags: list[StudentFlag]
+    unread: int
+
+
+class AdminFlag(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    passport_id: str
+    version: int
+    verification_code: str
+    student_email: str
+    comment: str
+    status: FlagStatus
+    admin_note: str
+    resolved_by: str | None
+    created_at: datetime
+    resolved_at: datetime | None
+
+
+class AdminFlagList(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    flags: list[AdminFlag]
+    # Open flags overall, whatever filter is applied. Shown on the dashboard.
+    open_count: int
+
+
+class AdminFlagUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    status: Literal["resolved", "dismissed"]
+    admin_note: str = Field(default="", max_length=5000)
