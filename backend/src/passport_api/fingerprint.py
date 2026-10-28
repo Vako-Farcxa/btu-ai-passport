@@ -47,8 +47,13 @@ def canonical_skills(skills: Sequence[Skill]) -> list[Skill]:
             badge=_text(skill.badge),
             awarded_on=_awarded(skill.awarded_on),
             description=_text(skill.description),
+            skill_id=skill.skill_id,
         )
-        collapsed[(item.skill, item.badge, item.awarded_on)] = item
+        key = (item.skill, item.badge, item.awarded_on)
+        earlier = collapsed.get(key)
+        if item.skill_id is None and earlier is not None:
+            item.skill_id = earlier.skill_id
+        collapsed[key] = item
     ordered = list(collapsed.values())
     ordered.sort(
         key=lambda item: (item.skill, item.badge, item.awarded_on is None, item.awarded_on or "")

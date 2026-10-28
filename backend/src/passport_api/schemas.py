@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 ErrorCode = Literal[
     "unauthorized",
@@ -26,6 +26,9 @@ class Skill(BaseModel):
     awarded_on: str | None
     # Display only. Not part of the fingerprint or the anchored content hash.
     description: str = ""
+    # Link to the skills catalog (sheet "Skill ID"). Not part of the fingerprint or the
+    # anchored content hash, and not returned by the API.
+    skill_id: str | None = Field(default=None, exclude=True)
 
 
 class Anchor(BaseModel):
