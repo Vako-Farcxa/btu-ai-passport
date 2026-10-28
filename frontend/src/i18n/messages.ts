@@ -46,6 +46,8 @@ type Copy = {
   shareLinkCopied: string
   shareLinkFailed: string
   newerVersionNotice: string
+  universityName: string
+  sealEstablished: string
   copyCode: string
   codeCopied: string
   copyCodeFailed: string
@@ -104,6 +106,8 @@ export const messages: Record<Locale, Copy> = {
     copyShareLink: 'Copy share link',
     shareLinkCopied: 'Share link copied',
     shareLinkFailed: 'Could not copy. Copy this link manually:',
+    universityName: 'Business and Technology University',
+    sealEstablished: 'EST. 2016',
     copyCode: 'Copy code',
     codeCopied: 'Copied',
     copyCodeFailed: 'Could not copy. The code is selected: press Ctrl+C.',
@@ -162,6 +166,8 @@ export const messages: Record<Locale, Copy> = {
     copyShareLink: 'ბმულის კოპირება',
     shareLinkCopied: 'ბმული დაკოპირდა',
     shareLinkFailed: 'კოპირება ვერ მოხერხდა. დააკოპირეთ ბმული ხელით:',
+    universityName: 'ბიზნესისა და ტექნოლოგიების უნივერსიტეტი',
+    sealEstablished: 'დაარს. 2016',
     copyCode: 'კოდის კოპირება',
     codeCopied: 'დაკოპირდა',
     copyCodeFailed: 'კოპირება ვერ მოხერხდა. კოდი მონიშნულია: დააჭირეთ Ctrl+C.',

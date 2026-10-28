@@ -7,27 +7,26 @@ import { messages, type Locale } from '@/i18n/messages'
 import { LocaleSwitcher } from '@/components/locale-switcher'
 import { useCoverMotion, useOpenBookMotion } from '@/components/motion'
 
-export function BrandMark() {
+export function BrandMark({ locale }: { locale: Locale }) {
+  const name = messages[locale].universityName
   return (
-    <Link
-      className="brand-mark"
-      href="/"
-      aria-label="Business and Technology University"
-    >
+    <Link className="brand-mark" href="/" aria-label={name}>
       <span className="monogram" aria-hidden="true">
         B
       </span>
-      <span className="brand-word">BUSINESS AND TECHNOLOGY UNIVERSITY</span>
+      <span className="brand-word">
+        {locale === 'en' ? name.toUpperCase() : name}
+      </span>
     </Link>
   )
 }
 
-export function Seal() {
+export function Seal({ locale }: { locale: Locale }) {
   return (
     <div className="seal" aria-hidden="true">
       <span className="seal-ring">BTU</span>
       <span className="seal-stars">✦</span>
-      <small>EST. 2016</small>
+      <small>{messages[locale].sealEstablished}</small>
     </div>
   )
 }
@@ -64,7 +63,7 @@ export function LandingDesk({
   return (
     <main ref={ref} className="desk landing">
       <header className="topbar">
-        <BrandMark />
+        <BrandMark locale={locale} />
         <LocaleSwitcher locale={locale} onChange={onLocale} />
       </header>
       {children}
@@ -91,7 +90,7 @@ export function OpenBook({
   return (
     <main ref={ref} className="desk inner-desk">
       <header className="topbar">
-        <BrandMark />
+        <BrandMark locale={locale} />
         <LocaleSwitcher locale={locale} onChange={onLocale} />
       </header>
       <div className={result ? 'open-book result-book' : 'open-book'}>
@@ -102,7 +101,7 @@ export function OpenBook({
             <span>✦</span>
           </div>
           <p>{copy.chapterBody}</p>
-          <Seal />
+          <Seal locale={locale} />
         </aside>
         <div className="book-right">
           <div className="page-content">
