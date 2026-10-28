@@ -379,6 +379,18 @@ export async function awardAdminSkill(input: {
   return res.json()
 }
 
+/** Plain-words note about the sync that ran after an award, or null when all is well. */
+export function awardSyncNotice(result: AdminAwardResponse): string | null {
+  const { status, error } = result.sync_result
+  if (status === 'skipped' && error === 'sync_in_progress') {
+    return 'Another sync is running, your rows are saved and will sync shortly.'
+  }
+  if (status === 'failed') {
+    return 'The sync failed after the rows were added to the Sheet. They will be picked up by the next scheduled sync.'
+  }
+  return null
+}
+
 export function parseAwardStudents(text: string): AwardStudentInput[] {
   // One student per line: "email" or "email, First Last". A line with several
   // emails adds each of them without a name.

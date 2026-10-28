@@ -1,3 +1,4 @@
+import dataclasses
 import hashlib
 import json
 import logging
@@ -5,7 +6,7 @@ import secrets
 import unicodedata
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any, Protocol, cast
 
 import gspread
@@ -81,6 +82,11 @@ class CatalogSkill:
     # Georgian name from the Skills tab. None means "leave the stored value alone".
     name_ka: str | None = None
 
+
+# A sync takes about a minute. A run still "running" after this long was killed (for
+# example by a deploy) and is released so it cannot block every later sync.
+STALE_LOCK_AFTER = timedelta(minutes=10)
+STALE_LOCK_ERROR = "stale_lock"
 
 SKILLS_TAB = "Skills"
 SKILLS_HEADER = ("skill_id", "name_en", "name_ka", "category", "description")
@@ -222,6 +228,7 @@ class RunRecord:
     rows_read: int
     versions_created: int
     error: str | None
+    started_at: datetime = dataclasses.field(default_factory=lambda: datetime.now(UTC))
 
 
 @dataclass(frozen=True)
@@ -260,7 +267,7 @@ class SyncStore(Protocol):
 
     def record_skipped(self) -> None: ...
 
-    def abort(self) -> None: ...
+    def abort(self, error: str = "sheet_unavailable") -> None: ...
 
     def finish(self, rows_read: int, versions_created: int) -> None: ...
 
@@ -428,6 +435,11 @@ class MemorySyncStore:
         return any(run.status == "running" for run in self.runs)
 
     def try_acquire(self) -> bool:
+        cutoff = datetime.now(UTC) - STALE_LOCK_AFTER
+        for run in self.runs:
+            if run.status == "running" and run.started_at < cutoff:
+                run.status = "failed"
+                run.error = STALE_LOCK_ERROR
         if self.has_running():
             return False
         self.runs.append(RunRecord(status="running", rows_read=0, versions_created=0, error=None))
@@ -436,8 +448,8 @@ class MemorySyncStore:
     def record_skipped(self) -> None:
         self.runs.append(RunRecord(status="skipped", rows_read=0, versions_created=0, error=None))
 
-    def abort(self) -> None:
-        self._close("failed", 0, 0, "sheet_unavailable")
+    def abort(self, error: str = "sheet_unavailable") -> None:
+        self._close("failed", 0, 0, error)
 
     def finish(self, rows_read: int, versions_created: int) -> None:
         self._close("completed", rows_read, versions_created, None)
@@ -565,7 +577,14 @@ class SupabaseSyncStore:
         )
         return bool(_table_rows(response.data))
 
+    def _release_stale_runs(self) -> None:
+        cutoff = (datetime.now(UTC) - STALE_LOCK_AFTER).isoformat()
+        get_supabase().table("sync_runs").update(
+            {"status": "failed", "error": STALE_LOCK_ERROR, "finished_at": _now()}
+        ).eq("status", "running").lt("started_at", cutoff).execute()
+
     def try_acquire(self) -> bool:
+        self._release_stale_runs()
         if self.has_running():
             return False
         try:
@@ -590,8 +609,8 @@ class SupabaseSyncStore:
             }
         ).execute()
 
-    def abort(self) -> None:
-        self._update_running("failed", 0, 0, "sheet_unavailable")
+    def abort(self, error: str = "sheet_unavailable") -> None:
+        self._update_running("failed", 0, 0, error)
 
     def finish(self, rows_read: int, versions_created: int) -> None:
         self._update_running("completed", rows_read, versions_created, None)
@@ -862,9 +881,18 @@ def run_sync(store: SyncStore, sheet: Sheet, chain: AnchorChain | None = None) -
     except Exception:
         # Release the run lock so the next scheduled sync is not blocked.
         _log.exception("sync_failed")
-        store.abort()
+        store.abort("sync_failed")
         raise
-    store.finish(len(raw_rows), created)
+    try:
+        store.finish(len(raw_rows), created)
+    except Exception:
+        # Do not leave the run "running": that would block every later sync.
+        _log.exception("sync_finish_failed")
+        try:
+            store.abort("sync_finish_failed")
+        except Exception:
+            _log.exception("sync_abort_failed")
+        raise
     try:
         sheet.write_back(sorted(outcomes, key=lambda outcome: outcome.index))
     except Exception:
