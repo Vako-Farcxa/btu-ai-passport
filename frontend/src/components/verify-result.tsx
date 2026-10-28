@@ -6,7 +6,7 @@ import { useResultMotion } from '@/components/motion'
 import { SkillList } from '@/components/skill-list'
 import { messages, type Locale } from '@/i18n/messages'
 import type { VerifyResult } from '@/lib/api/types'
-import { labelsFor } from '@/lib/api/verify'
+import { labelsFor, newerVersionNotice } from '@/lib/api/verify'
 
 const glyphs = {
   valid: '✓',
@@ -26,6 +26,7 @@ export function VerifyResultCard({
   const label = labelsFor(result.outcome, locale)
   const ref = useRef<HTMLElement>(null)
   useResultMotion(ref)
+  const notice = newerVersionNotice(result, locale)
   const found = result.outcome === 'valid' || result.outcome === 'outdated'
 
   return (
@@ -51,6 +52,11 @@ export function VerifyResultCard({
           BTU
         </div>
       </div>
+      {notice ? (
+        <p className="newer-notice" data-testid="newer-notice">
+          {notice}
+        </p>
+      ) : null}
       {found ? (
         <>
           <div className="holder">

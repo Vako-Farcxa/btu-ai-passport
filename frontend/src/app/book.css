@@ -945,6 +945,16 @@ button:disabled {
   margin-top: 12px;
 }
 
+.newer-notice {
+  margin: 14px 0 0;
+  padding: 10px 14px;
+  border-left: 3px solid var(--gold-500);
+  background: rgba(177, 138, 67, 0.12);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink-900);
+}
+
 .version-actions {
   display: flex;
   flex-wrap: wrap;

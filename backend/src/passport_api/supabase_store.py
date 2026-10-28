@@ -2,7 +2,7 @@ from typing import cast
 
 from passport_api.db import get_supabase
 from passport_api.schemas import Skill
-from passport_api.store import AnchorStatus, StoredVersion
+from passport_api.store import AnchorStatus, LatestVersion, StoredVersion
 
 
 class SupabaseStore:
@@ -42,6 +42,26 @@ class SupabaseStore:
             raise KeyError(passport_id)
         versions = cast(list[dict[str, object]], rows[0]["passport_versions"])
         return max(int(cast(int, version["version_number"])) for version in versions)
+
+    def latest_version(self, passport_id: str) -> LatestVersion:
+        response = (
+            get_supabase()
+            .table("students")
+            .select("id, passport_versions(version_number, issued_at)")
+            .eq("passport_id", passport_id)
+            .limit(1)
+            .execute()
+        )
+        rows = cast(list[dict[str, object]], response.data)
+        if not rows:
+            raise KeyError(passport_id)
+        versions = cast(list[dict[str, object]], rows[0]["passport_versions"])
+        newest = max(versions, key=lambda version: int(cast(int, version["version_number"])))
+        issued_at = newest.get("issued_at")
+        return LatestVersion(
+            version=int(cast(int, newest["version_number"])),
+            issued_on="1970-01-01" if issued_at is None else str(issued_at)[:10],
+        )
 
     def versions_for_email(self, email: str) -> tuple[StoredVersion, ...]:
         response = (

@@ -17,7 +17,13 @@ const foundFields = {
 
 export const verifyResultSchema = z.discriminatedUnion('outcome', [
   z.object({ outcome: z.literal('valid'), ...foundFields }),
-  z.object({ outcome: z.literal('outdated'), ...foundFields }),
+  z.object({
+    outcome: z.literal('outdated'),
+    ...foundFields,
+    // Added by newer backends. Older ones omit them, so the note is optional.
+    latest_version: z.number().int().positive().nullish(),
+    latest_issued_at: z.string().nullish(),
+  }),
   z.object({ outcome: z.literal('not_found') }),
   z.object({ outcome: z.literal('error') }),
 ])

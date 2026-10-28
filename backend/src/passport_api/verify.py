@@ -24,6 +24,13 @@ class VerifyFound(BaseModel):
     tx_url: str
 
 
+class VerifyOutdated(VerifyFound):
+    """Outdated result. Says that a newer version exists, never its code."""
+
+    latest_version: int
+    latest_issued_at: str
+
+
 class VerifyNotFound(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -36,7 +43,9 @@ class VerifyError(BaseModel):
     outcome: str
 
 
-def verify_code(store: VersionStore, raw_code: str) -> VerifyFound | VerifyNotFound | VerifyError:
+def verify_code(
+    store: VersionStore, raw_code: str
+) -> VerifyFound | VerifyOutdated | VerifyNotFound | VerifyError:
     if not raw_code.strip():
         raise APIError(422, "code_required")
     found = store.find(raw_code)
@@ -44,12 +53,20 @@ def verify_code(store: VersionStore, raw_code: str) -> VerifyFound | VerifyNotFo
         return VerifyNotFound(outcome="not_found")
     if found.anchor_status != "confirmed" or not found.tx_hash:
         return VerifyError(outcome="error")
-    is_latest = found.version == store.max_version(found.passport_id)
-    return VerifyFound(
-        outcome="valid" if is_latest else "outdated",
-        holder_name=found.holder_name,
-        version=found.version,
-        is_latest=is_latest,
-        skills=list(found.skills),
-        tx_url=f"{EXPLORER}{found.tx_hash}",
+    latest = store.latest_version(found.passport_id)
+    is_latest = found.version >= latest.version
+    fields = {
+        "holder_name": found.holder_name,
+        "version": found.version,
+        "is_latest": is_latest,
+        "skills": list(found.skills),
+        "tx_url": f"{EXPLORER}{found.tx_hash}",
+    }
+    if is_latest:
+        return VerifyFound(outcome="valid", **fields)
+    return VerifyOutdated(
+        outcome="outdated",
+        latest_version=latest.version,
+        latest_issued_at=latest.issued_on,
+        **fields,
     )

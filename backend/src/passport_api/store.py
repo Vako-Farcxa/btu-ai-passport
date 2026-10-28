@@ -22,10 +22,20 @@ class StoredVersion:
     pdf_ka_path: str | None = None
 
 
+@dataclass(frozen=True)
+class LatestVersion:
+    """Public facts about a passport's newest version. Never includes its code."""
+
+    version: int
+    issued_on: str
+
+
 class VersionStore(Protocol):
     def find(self, code: str) -> StoredVersion | None: ...
 
     def max_version(self, passport_id: str) -> int: ...
+
+    def latest_version(self, passport_id: str) -> LatestVersion: ...
 
 
 class MemoryStore:
@@ -46,6 +56,13 @@ class MemoryStore:
         if not numbers:
             raise KeyError(passport_id)
         return max(numbers)
+
+    def latest_version(self, passport_id: str) -> LatestVersion:
+        versions = [version for version in self._versions if version.passport_id == passport_id]
+        if not versions:
+            raise KeyError(passport_id)
+        newest = max(versions, key=lambda version: version.version)
+        return LatestVersion(version=newest.version, issued_on=newest.issued_at[:10])
 
     def replace_passport(self, passport_id: str, versions: tuple[StoredVersion, ...]) -> None:
         self._versions = [

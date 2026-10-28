@@ -45,6 +45,7 @@ type Copy = {
   copyShareLink: string
   shareLinkCopied: string
   shareLinkFailed: string
+  newerVersionNotice: string
 }
 
 export const messages: Record<Locale, Copy> = {
@@ -100,6 +101,8 @@ export const messages: Record<Locale, Copy> = {
     copyShareLink: 'Copy share link',
     shareLinkCopied: 'Share link copied',
     shareLinkFailed: 'Could not copy. Copy this link manually:',
+    newerVersionNotice:
+      'A newer version (v{version}) of this passport was issued on {date}. Ask the holder for their latest code.',
   },
   ka: {
     title: 'პასპორტის შემოწმება',
@@ -153,6 +156,8 @@ export const messages: Record<Locale, Copy> = {
     copyShareLink: 'ბმულის კოპირება',
     shareLinkCopied: 'ბმული დაკოპირდა',
     shareLinkFailed: 'კოპირება ვერ მოხერხდა. დააკოპირეთ ბმული ხელით:',
+    newerVersionNotice:
+      'ამ პასპორტის უფრო ახალი ვერსია (v{version}) გაიცა {date}-ზე. სთხოვეთ მფლობელს უახლესი კოდი.',
   },
 }
 
