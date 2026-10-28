@@ -6,6 +6,7 @@ import { useState } from 'react'
 import { OpenBook, PrimaryButton } from '@/components/book'
 import { SignInButton } from '@/components/sign-in-button'
 import { CopyCode } from '@/components/copy-code'
+import { FlagBadge, FlagDialog, MyFlags } from '@/components/flags'
 import { ShareLinkButton } from '@/components/share-link-button'
 import { SkillList } from '@/components/skill-list'
 import { Spinner } from '@/components/ui/spinner'
@@ -17,6 +18,8 @@ import {
   orderedVersions,
   PassportRequestError,
 } from '@/lib/api/passport'
+import { flagForVersion } from '@/lib/api/flags'
+import { useMyFlags } from '@/lib/api/use-flags'
 import { useMyPassport } from '@/lib/api/use-passport'
 import type { PassportVersion } from '@/lib/api/types'
 import { readAccessToken } from '@/lib/supabase/client'
@@ -26,12 +29,14 @@ export default function PassportPage() {
   const session = useMyPassport()
   const [pdfNotice, setPdfNotice] = useState<string | null>(null)
   const [downloading, setDownloading] = useState<number | null>(null)
+  const [flagging, setFlagging] = useState<number | null>(null)
   const copy = messages[locale]
 
   const passport = session.kind === 'ready' ? session.body.passport : null
   const versions = session.kind === 'ready' ? orderedVersions(session.body) : []
   const current = versions.find((version) => version.is_current) ?? versions[0]
   const holder = current?.holder_name
+  const myFlags = useMyFlags(passport !== null)
 
   async function onDownload(version: number) {
     if (downloading !== null) return
@@ -119,39 +124,85 @@ export default function PassportPage() {
             </p>
           ) : null}
           <h2>{copy.history}</h2>
+          <div className="flags-bar">
+            <MyFlags
+              flags={myFlags.flags}
+              unread={myFlags.unread}
+              failed={myFlags.failed}
+              locale={locale}
+              onOpened={() => void myFlags.markSeen()}
+            />
+          </div>
           <ol className="version-list">
-            {versions.map((version) => (
-              <li key={version.version} className="version-card">
-                <h3>
-                  {copy.versionLabel} {version.version}
-                  {version.is_current ? ` · ${copy.currentVersion}` : ''}
-                </h3>
-                <VersionFacts locale={locale} version={version} />
-                <div className="version-actions">
-                  <PrimaryButton
-                    type="button"
-                    tone="navy"
-                    disabled={downloading !== null}
-                    aria-busy={downloading === version.version}
-                    onClick={() => void onDownload(version.version)}
-                  >
-                    {downloading === version.version ? (
-                      <>
-                        <Spinner />
-                        {copy.preparingPdf}
-                      </>
-                    ) : (
-                      copy.downloadPdf
+            {versions.map((version) => {
+              const flag = flagForVersion(myFlags.flags, version.version)
+              return (
+                <li key={version.version} className="version-card">
+                  <div className="version-head">
+                    <div className="version-title">
+                      <h3>
+                        {copy.versionLabel} {version.version}
+                        {version.is_current ? ` · ${copy.currentVersion}` : ''}
+                      </h3>
+                      <ShareLinkButton
+                        code={version.verification_code}
+                        locale={locale}
+                      />
+                    </div>
+                    {flag ? (
+                      <FlagBadge
+                        flag={flag}
+                        locale={locale}
+                        onOpened={() => void myFlags.markSeen()}
+                      />
+                    ) : null}
+                  </div>
+                  <VersionFacts locale={locale} version={version} />
+                  <div className="version-actions">
+                    <PrimaryButton
+                      type="button"
+                      tone="navy"
+                      disabled={downloading !== null}
+                      aria-busy={downloading === version.version}
+                      onClick={() => void onDownload(version.version)}
+                    >
+                      {downloading === version.version ? (
+                        <>
+                          <Spinner />
+                          {copy.preparingPdf}
+                        </>
+                      ) : (
+                        copy.downloadPdf
+                      )}
+                    </PrimaryButton>
+                    {version.anchor.tx_url ? (
+                      <a className="action-button" href={version.anchor.tx_url}>
+                        {copy.transaction}
+                        <span aria-hidden="true">↗</span>
+                      </a>
+                    ) : null}
+                    {flag?.status === 'open' ? null : (
+                      <button
+                        type="button"
+                        className="flag-link"
+                        onClick={() => setFlagging(version.version)}
+                      >
+                        {copy.flagIssue}
+                      </button>
                     )}
-                  </PrimaryButton>
-                  <ShareLinkButton
-                    code={version.verification_code}
-                    locale={locale}
-                  />
-                </div>
-              </li>
-            ))}
+                  </div>
+                </li>
+              )
+            })}
           </ol>
+          {flagging !== null ? (
+            <FlagDialog
+              version={flagging}
+              locale={locale}
+              onClose={() => setFlagging(null)}
+              onSent={() => void myFlags.reload()}
+            />
+          ) : null}
         </section>
       ) : null}
       {session.kind === 'signed_out' ? (
@@ -187,12 +238,6 @@ function VersionFacts({
         <CopyCode code={version.verification_code} locale={locale} />
       </p>
       <SkillList skills={version.skills} locale={locale} />
-      {version.anchor.tx_url ? (
-        <a className="transaction-link" href={version.anchor.tx_url}>
-          {copy.transaction}
-          <span aria-hidden="true">↗</span>
-        </a>
-      ) : null}
     </>
   )
 }

@@ -314,6 +314,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   invalid_last_name:
     'Last name must be 2 to 50 letters (Latin or Georgian). No digits or symbols.',
   duplicate_email: 'The same email is listed more than once.',
+  invalid_comment: 'The note must be 500 characters or fewer.',
+  flag_not_found: 'That flag no longer exists.',
   missing_full_name: 'New student: add a first and last name.',
   already_awarded: 'Already has this skill.',
   passport_id_taken: 'Passport ID already belongs to another student.',
@@ -422,4 +424,56 @@ export function parseAwardStudents(text: string): AwardStudentInput[] {
       )
       return [{ email, first_name: first, last_name: last.join(' ') }]
     })
+}
+
+// ---------------------------------------------------------------------------
+// Student flags
+// ---------------------------------------------------------------------------
+
+export type AdminFlagStatus = 'open' | 'resolved' | 'dismissed'
+
+export interface AdminFlag {
+  id: string
+  passport_id: string
+  version: number
+  verification_code: string
+  student_email: string
+  comment: string
+  status: AdminFlagStatus
+  admin_note: string
+  resolved_by: string | null
+  created_at: string
+  resolved_at: string | null
+}
+
+export interface AdminFlagList {
+  flags: AdminFlag[]
+  open_count: number
+}
+
+export const FLAG_NOTE_MAX = 500
+
+export async function fetchAdminFlags(
+  status?: AdminFlagStatus,
+): Promise<AdminFlagList> {
+  const query = status ? `?status=${status}` : ''
+  const res = await fetch(`${API_BASE}/admin/flags${query}`, {
+    headers: await getHeaders(),
+    cache: 'no-store',
+  })
+  if (!res.ok) throw await failure(res, 'Failed to load flags')
+  return res.json()
+}
+
+export async function updateAdminFlag(
+  id: string,
+  input: { status: 'resolved' | 'dismissed'; admin_note: string },
+): Promise<AdminFlag> {
+  const res = await fetch(`${API_BASE}/admin/flags/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: await getHeaders(),
+    body: JSON.stringify(input),
+  })
+  if (!res.ok) throw await failure(res, 'Failed to update the flag')
+  return res.json()
 }

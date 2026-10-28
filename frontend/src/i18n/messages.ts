@@ -54,6 +54,33 @@ type Copy = {
   copyCode: string
   codeCopied: string
   copyCodeFailed: string
+  flagIssue: string
+  flagDialogTitle: string
+  flagCommentLabel: string
+  flagCommentHint: string
+  flagSubmit: string
+  flagSending: string
+  flagCancel: string
+  flagClose: string
+  flagSent: string
+  flagTooShort: string
+  flagTooLong: string
+  flagAlreadyOpen: string
+  flagRateLimited: string
+  flagError: string
+  flagLoadError: string
+  flagStatuses: Record<'open' | 'resolved' | 'dismissed', string>
+  flagBadgeLabel: string
+  flagDetailsTitle: string
+  flagYourComment: string
+  flagReplyTitle: string
+  flagNoReply: string
+  flagSentOn: string
+  flagAnsweredOn: string
+  myFlags: string
+  myFlagsTitle: string
+  myFlagsEmpty: string
+  newReply: string
 }
 
 export const messages: Record<Locale, Copy> = {
@@ -130,6 +157,38 @@ export const messages: Record<Locale, Copy> = {
     copyCodeFailed: 'Could not copy. The code is selected: press Ctrl+C.',
     newerVersionNotice:
       'A newer version (v{version}) of this passport was issued on {date}. Ask the holder for their latest code.',
+    flagIssue: 'Flag an issue',
+    flagDialogTitle: 'Flag an issue with version {version}',
+    flagCommentLabel: 'What looks wrong?',
+    flagCommentHint: 'Between 10 and 500 characters. {count} / 500',
+    flagSubmit: 'Send flag',
+    flagSending: 'Sending',
+    flagCancel: 'Cancel',
+    flagClose: 'Close',
+    flagSent: 'Thank you. Your flag was sent to the BTU team.',
+    flagTooShort: 'Please write at least 10 characters.',
+    flagTooLong: 'Please keep it to 500 characters or fewer.',
+    flagAlreadyOpen: 'This version already has an open flag.',
+    flagRateLimited:
+      'You have sent several flags recently. Try again in an hour.',
+    flagError: 'The flag could not be sent. Try again later.',
+    flagLoadError: 'Your flags could not be loaded.',
+    flagStatuses: {
+      open: 'Flag open',
+      resolved: 'Flag resolved',
+      dismissed: 'Flag dismissed',
+    },
+    flagBadgeLabel: 'Flag status for version {version}: {status}. Show details',
+    flagDetailsTitle: 'Flag on version {version}',
+    flagYourComment: 'Your comment',
+    flagReplyTitle: 'Reply from BTU',
+    flagNoReply: 'No reply yet. The BTU team will look at it.',
+    flagSentOn: 'Sent {date}',
+    flagAnsweredOn: 'Answered {date}',
+    myFlags: 'My flags',
+    myFlagsTitle: 'My flags',
+    myFlagsEmpty: 'You have not flagged anything.',
+    newReply: 'New reply',
   },
   ka: {
     title: 'პასპორტის შემოწმება',
@@ -204,6 +263,39 @@ export const messages: Record<Locale, Copy> = {
     copyCodeFailed: 'კოპირება ვერ მოხერხდა. კოდი მონიშნულია: დააჭირეთ Ctrl+C.',
     newerVersionNotice:
       'ამ პასპორტის უფრო ახალი ვერსია (v{version}) გაიცა {date}-ზე. სთხოვეთ მფლობელს უახლესი კოდი.',
+    flagIssue: 'პრობლემის აღნიშვნა',
+    flagDialogTitle: 'პრობლემის აღნიშვნა, ვერსია {version}',
+    flagCommentLabel: 'რა არის არასწორი?',
+    flagCommentHint: '10-დან 500 სიმბოლომდე. {count} / 500',
+    flagSubmit: 'გაგზავნა',
+    flagSending: 'იგზავნება',
+    flagCancel: 'გაუქმება',
+    flagClose: 'დახურვა',
+    flagSent: 'გმადლობთ. თქვენი შეტყობინება გაეგზავნა BTU-ის გუნდს.',
+    flagTooShort: 'დაწერეთ მინიმუმ 10 სიმბოლო.',
+    flagTooLong: 'მაქსიმუმ 500 სიმბოლო.',
+    flagAlreadyOpen: 'ამ ვერსიაზე უკვე არის ღია შეტყობინება.',
+    flagRateLimited:
+      'ახლახან რამდენიმე შეტყობინება გააგზავნეთ. სცადეთ ერთ საათში.',
+    flagError: 'შეტყობინება ვერ გაიგზავნა. სცადეთ მოგვიანებით.',
+    flagLoadError: 'თქვენი შეტყობინებები ვერ ჩაიტვირთა.',
+    flagStatuses: {
+      open: 'შეტყობინება ღიაა',
+      resolved: 'შეტყობინება გადაწყდა',
+      dismissed: 'შეტყობინება უარყოფილია',
+    },
+    flagBadgeLabel:
+      'შეტყობინების სტატუსი, ვერსია {version}: {status}. დეტალების ნახვა',
+    flagDetailsTitle: 'შეტყობინება, ვერსია {version}',
+    flagYourComment: 'თქვენი კომენტარი',
+    flagReplyTitle: 'BTU-ის პასუხი',
+    flagNoReply: 'პასუხი ჯერ არ არის. BTU-ის გუნდი განიხილავს.',
+    flagSentOn: 'გაიგზავნა {date}',
+    flagAnsweredOn: 'გაეცა პასუხი {date}',
+    myFlags: 'ჩემი შეტყობინებები',
+    myFlagsTitle: 'ჩემი შეტყობინებები',
+    myFlagsEmpty: 'ჯერ არაფერი გაგიგზავნიათ.',
+    newReply: 'ახალი პასუხი',
   },
 }
 

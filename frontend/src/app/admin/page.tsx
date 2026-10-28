@@ -5,6 +5,7 @@ import React, { useEffect, useState } from 'react'
 import { AddStudentDialog } from '@/components/admin/add-student-dialog'
 import {
   describeSyncResult,
+  fetchAdminFlags,
   fetchAdminStudents,
   fetchAdminPendingVersions,
   fetchAdminSyncRuns,
@@ -18,6 +19,7 @@ export default function AdminDashboardPage() {
   const [pendingAnchorsCount, setPendingAnchorsCount] = useState<number | null>(
     null,
   )
+  const [openFlags, setOpenFlags] = useState<number | null>(null)
   const [syncRuns, setSyncRuns] = useState<AdminSyncRun[]>([])
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
@@ -27,11 +29,14 @@ export default function AdminDashboardPage() {
   const loadData = async () => {
     setLoading(true)
     try {
-      const [studentsData, pendingData, runsData] = await Promise.all([
-        fetchAdminStudents({ limit: 100 }),
-        fetchAdminPendingVersions(),
-        fetchAdminSyncRuns(5),
-      ])
+      const [studentsData, pendingData, runsData, flagsData] =
+        await Promise.all([
+          fetchAdminStudents({ limit: 100 }),
+          fetchAdminPendingVersions(),
+          fetchAdminSyncRuns(5),
+          fetchAdminFlags('open'),
+        ])
+      setOpenFlags(flagsData.open_count)
       setTotalStudents(studentsData.total)
       setAdminManagedCount(
         studentsData.students.filter((s) => s.admin_managed).length,
@@ -155,7 +160,7 @@ export default function AdminDashboardPage() {
       )}
 
       {/* Metrics Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-5">
         <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs">
           <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
             Total Students
@@ -200,6 +205,31 @@ export default function AdminDashboardPage() {
               className="text-indigo-600 font-medium hover:underline"
             >
               Inspect →
+            </Link>
+          </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs">
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+            Open Flags
+          </p>
+          <div className="mt-2 flex items-baseline gap-2">
+            <span
+              className={`text-3xl font-extrabold ${
+                (openFlags ?? 0) > 0 ? 'text-rose-600' : 'text-slate-900'
+              }`}
+            >
+              {loading ? '—' : (openFlags ?? 0)}
+            </span>
+            <span className="text-xs text-slate-500">from students</span>
+          </div>
+          <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+            <span>Reports on passports</span>
+            <Link
+              href="/admin/flags"
+              className="text-indigo-600 font-medium hover:underline"
+            >
+              Review →
             </Link>
           </div>
         </div>
