@@ -5,8 +5,6 @@ Sheet-managed students (admin_managed=False) are read-only from the admin
 panel's perspective — their skills can only be changed via the Google Sheet.
 """
 
-from postgrest import CountMethod
-
 import unicodedata
 import uuid
 from datetime import UTC, datetime
@@ -14,6 +12,7 @@ from typing import Annotated, Any, Literal, cast
 
 from fastapi import APIRouter, Header, Query
 from fastapi.responses import Response
+from postgrest import CountMethod
 
 from passport_api.auth import require_admin
 from passport_api.chain import chain_from_settings, publish_anchor
@@ -27,7 +26,6 @@ from passport_api.fingerprint import (
     verification_id_hash,
 )
 from passport_api.pdf import PassportPdf, get_storage, publish_pdfs
-from passport_api.settings import settings
 from passport_api.schemas import (
     AdminSkillAdd,
     AdminSkillEntry,

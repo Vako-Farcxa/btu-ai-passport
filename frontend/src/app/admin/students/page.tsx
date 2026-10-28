@@ -11,7 +11,6 @@ import {
 
 export default function AdminStudentsPage() {
   const [students, setStudents] = useState<AdminStudent[]>([])
-  const [total, setTotal] = useState<number>(0)
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [tab, setTab] = useState<'all' | 'admin' | 'archived'>('all')
@@ -22,8 +21,8 @@ export default function AdminStudentsPage() {
   const [submitting, setSubmitting] = useState(false)
 
   const loadStudents = async () => {
+    setLoading(true)
     try {
-      setLoading(true)
       const data = await fetchAdminStudents({
         search: search.trim() || undefined,
         includeDeleted: tab === 'archived',
@@ -38,7 +37,6 @@ export default function AdminStudentsPage() {
         filtered = filtered.filter((s) => s.deleted_at !== null)
       }
       setStudents(filtered)
-      setTotal(data.total)
     } catch (err: unknown) {
       console.error(err)
     } finally {
@@ -47,7 +45,38 @@ export default function AdminStudentsPage() {
   }
 
   useEffect(() => {
-    loadStudents()
+    let ignore = false
+    async function init() {
+      try {
+        const data = await fetchAdminStudents({
+          includeDeleted: tab === 'archived',
+          limit: 100,
+        })
+        if (!ignore) {
+          let filtered = data.students
+          if (tab === 'admin') {
+            filtered = filtered.filter((s) => s.admin_managed && !s.deleted_at)
+          } else if (tab === 'all') {
+            filtered = filtered.filter((s) => !s.deleted_at)
+          } else if (tab === 'archived') {
+            filtered = filtered.filter((s) => s.deleted_at !== null)
+          }
+          setStudents(filtered)
+        }
+      } catch (err: unknown) {
+        if (!ignore) {
+          console.error(err)
+        }
+      } finally {
+        if (!ignore) {
+          setLoading(false)
+        }
+      }
+    }
+    void init()
+    return () => {
+      ignore = true
+    }
   }, [tab])
 
   const handleSearchSubmit = (e: React.FormEvent) => {
@@ -79,14 +108,20 @@ export default function AdminStudentsPage() {
       setNewName('')
       await loadStudents()
     } catch (err: unknown) {
-      setFormError(err instanceof Error ? err.message : 'Failed to create student')
+      setFormError(
+        err instanceof Error ? err.message : 'Failed to create student',
+      )
     } finally {
       setSubmitting(false)
     }
   }
 
   const handleDelete = async (passportId: string, name: string) => {
-    if (!confirm(`Are you sure you want to archive student ${name}? This will preserve historical records but prevent new access.`)) {
+    if (
+      !confirm(
+        `Are you sure you want to archive student ${name}? This will preserve historical records but prevent new access.`,
+      )
+    ) {
       return
     }
     try {
@@ -102,7 +137,9 @@ export default function AdminStudentsPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Student Directory</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+            Student Directory
+          </h1>
           <p className="text-sm text-slate-500 mt-1">
             Manage student identities, AI skills passports, and version records.
           </p>
@@ -111,8 +148,18 @@ export default function AdminStudentsPage() {
           onClick={() => setIsModalOpen(true)}
           className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors shadow-sm self-start sm:self-auto"
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+          <svg
+            className="w-4 h-4"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="2"
+              d="M12 4v16m8-8H4"
+            />
           </svg>
           Add Admin-Managed Student
         </button>
@@ -155,7 +202,10 @@ export default function AdminStudentsPage() {
         </div>
 
         {/* Search Input */}
-        <form onSubmit={handleSearchSubmit} className="flex items-center gap-2 max-w-sm w-full">
+        <form
+          onSubmit={handleSearchSubmit}
+          className="flex items-center gap-2 max-w-sm w-full"
+        >
           <div className="relative flex-1">
             <input
               type="text"
@@ -195,7 +245,9 @@ export default function AdminStudentsPage() {
               <tr>
                 <th className="px-6 py-3 font-semibold">Student Name</th>
                 <th className="px-6 py-3 font-semibold">Email</th>
-                <th className="px-6 py-3 font-semibold">Permanent Passport ID</th>
+                <th className="px-6 py-3 font-semibold">
+                  Permanent Passport ID
+                </th>
                 <th className="px-6 py-3 font-semibold">Source</th>
                 <th className="px-6 py-3 font-semibold">Versions</th>
                 <th className="px-6 py-3 font-semibold">Latest Anchor</th>
@@ -205,19 +257,28 @@ export default function AdminStudentsPage() {
             <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-slate-400 text-xs">
+                  <td
+                    colSpan={7}
+                    className="px-6 py-12 text-center text-slate-400 text-xs"
+                  >
                     Loading student directory...
                   </td>
                 </tr>
               ) : students.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-slate-400 text-xs">
+                  <td
+                    colSpan={7}
+                    className="px-6 py-12 text-center text-slate-400 text-xs"
+                  >
                     No students found matching your criteria.
                   </td>
                 </tr>
               ) : (
                 students.map((student) => (
-                  <tr key={student.id} className="hover:bg-slate-50/60 transition-colors">
+                  <tr
+                    key={student.id}
+                    className="hover:bg-slate-50/60 transition-colors"
+                  >
                     <td className="px-6 py-4 font-medium text-slate-900">
                       <Link
                         href={`/admin/students/${student.passport_id}`}
@@ -229,7 +290,9 @@ export default function AdminStudentsPage() {
                         </span>
                       </Link>
                     </td>
-                    <td className="px-6 py-4 text-xs font-mono text-slate-600">{student.email}</td>
+                    <td className="px-6 py-4 text-xs font-mono text-slate-600">
+                      {student.email}
+                    </td>
                     <td className="px-6 py-4">
                       <span className="font-mono text-xs px-2 py-0.5 rounded-md bg-slate-100 text-slate-800 border border-slate-200">
                         {student.passport_id}
@@ -255,8 +318,8 @@ export default function AdminStudentsPage() {
                           student.latest_anchor_status === 'confirmed'
                             ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                             : student.latest_anchor_status === 'pending'
-                            ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                            : 'bg-rose-50 text-rose-700 border border-rose-200'
+                              ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                              : 'bg-rose-50 text-rose-700 border border-rose-200'
                         }`}
                       >
                         {student.latest_anchor_status ?? 'N/A'}
@@ -273,7 +336,12 @@ export default function AdminStudentsPage() {
                         <>
                           <span className="text-slate-300">|</span>
                           <button
-                            onClick={() => handleDelete(student.passport_id, student.full_name)}
+                            onClick={() =>
+                              handleDelete(
+                                student.passport_id,
+                                student.full_name,
+                              )
+                            }
                             className="text-rose-600 hover:text-rose-800 font-medium transition-colors"
                           >
                             Archive
@@ -294,7 +362,9 @@ export default function AdminStudentsPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200 space-y-5 animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-bold text-slate-900">Add Admin-Managed Student</h2>
+              <h2 className="text-lg font-bold text-slate-900">
+                Add Admin-Managed Student
+              </h2>
               <button
                 onClick={() => setIsModalOpen(false)}
                 className="text-slate-400 hover:text-slate-600 text-lg leading-none"
@@ -304,8 +374,8 @@ export default function AdminStudentsPage() {
             </div>
 
             <p className="text-xs text-slate-500">
-              Admin-managed students are decoupled from Google Sheets. Their skills can be added and
-              removed directly from this panel.
+              Admin-managed students are decoupled from Google Sheets. Their
+              skills can be added and removed directly from this panel.
             </p>
 
             {formError && (
@@ -341,7 +411,9 @@ export default function AdminStudentsPage() {
                   onChange={(e) => setNewEmail(e.target.value)}
                   className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
                 />
-                <p className="text-[11px] text-slate-400 mt-1">Must end with @btu.edu.ge</p>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Must end with @btu.edu.ge
+                </p>
               </div>
 
               <div className="pt-2 flex items-center justify-end gap-3">

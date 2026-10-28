@@ -7,7 +7,11 @@ export const metadata: Metadata = {
   description: 'Manage students, skills, sheet syncs, and blockchain anchoring',
 }
 
-export default function AdminLayout({ children }: { children: React.ReactNode }) {
+export default function AdminLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col md:flex-row font-sans">
       {/* Sidebar */}
@@ -134,7 +138,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             Public Verify Page
           </Link>
           <div className="text-[11px] text-slate-500">
-            Authenticated as <span className="text-slate-300 font-mono">admin@btu.edu.ge</span>
+            Authenticated as{' '}
+            <span className="text-slate-300 font-mono">admin@btu.edu.ge</span>
           </div>
         </div>
       </aside>
@@ -156,11 +161,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               Student Portal
             </Link>
             <span>•</span>
-            <span className="font-mono text-slate-400">Polygon Amoy Testnet</span>
+            <span className="font-mono text-slate-400">
+              Polygon Amoy Testnet
+            </span>
           </div>
         </header>
 
-        <div className="p-6 md:p-8 flex-1 max-w-7xl w-full mx-auto">{children}</div>
+        <div className="p-6 md:p-8 flex-1 max-w-7xl w-full mx-auto">
+          {children}
+        </div>
       </main>
     </div>
   )

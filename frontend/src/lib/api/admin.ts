@@ -110,10 +110,15 @@ export async function fetchAdminStudents(params?: {
   return res.json()
 }
 
-export async function fetchAdminStudent(passportId: string): Promise<AdminStudentDetail> {
-  const res = await fetch(`${API_BASE}/admin/students/${encodeURIComponent(passportId)}`, {
-    headers: getHeaders(),
-  })
+export async function fetchAdminStudent(
+  passportId: string,
+): Promise<AdminStudentDetail> {
+  const res = await fetch(
+    `${API_BASE}/admin/students/${encodeURIComponent(passportId)}`,
+    {
+      headers: getHeaders(),
+    },
+  )
   if (!res.ok) throw new Error(`Failed to load student: ${res.statusText}`)
   return res.json()
 }
@@ -135,10 +140,13 @@ export async function createAdminStudent(data: {
 }
 
 export async function deleteAdminStudent(passportId: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/admin/students/${encodeURIComponent(passportId)}`, {
-    method: 'DELETE',
-    headers: getHeaders(),
-  })
+  const res = await fetch(
+    `${API_BASE}/admin/students/${encodeURIComponent(passportId)}`,
+    {
+      method: 'DELETE',
+      headers: getHeaders(),
+    },
+  )
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
     throw new Error(err.code || `Failed to delete student`)
@@ -147,7 +155,7 @@ export async function deleteAdminStudent(passportId: string): Promise<void> {
 
 export async function addAdminSkill(
   passportId: string,
-  skill: { skill: string; badge?: string; awarded_on?: string | null }
+  skill: { skill: string; badge?: string; awarded_on?: string | null },
 ): Promise<AdminStudentDetail> {
   const res = await fetch(
     `${API_BASE}/admin/students/${encodeURIComponent(passportId)}/skills`,
@@ -155,7 +163,7 @@ export async function addAdminSkill(
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify(skill),
-    }
+    },
   )
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
@@ -166,14 +174,14 @@ export async function addAdminSkill(
 
 export async function removeAdminSkill(
   passportId: string,
-  skillId: string
+  skillId: string,
 ): Promise<AdminStudentDetail> {
   const res = await fetch(
     `${API_BASE}/admin/students/${encodeURIComponent(passportId)}/skills/${encodeURIComponent(skillId)}`,
     {
       method: 'DELETE',
       headers: getHeaders(),
-    }
+    },
   )
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
@@ -182,7 +190,9 @@ export async function removeAdminSkill(
   return res.json()
 }
 
-export async function fetchAdminSyncRuns(limit = 50): Promise<AdminSyncRunList> {
+export async function fetchAdminSyncRuns(
+  limit = 50,
+): Promise<AdminSyncRunList> {
   const res = await fetch(`${API_BASE}/admin/sync-runs?limit=${limit}`, {
     headers: getHeaders(),
   })
@@ -207,17 +217,20 @@ export async function fetchAdminPendingVersions(): Promise<AdminVersionPendingLi
   const res = await fetch(`${API_BASE}/admin/versions/pending`, {
     headers: getHeaders(),
   })
-  if (!res.ok) throw new Error(`Failed to load pending versions: ${res.statusText}`)
+  if (!res.ok)
+    throw new Error(`Failed to load pending versions: ${res.statusText}`)
   return res.json()
 }
 
-export async function retryAdminAnchor(versionId: string): Promise<{ status: string }> {
+export async function retryAdminAnchor(
+  versionId: string,
+): Promise<{ status: string }> {
   const res = await fetch(
     `${API_BASE}/admin/versions/${encodeURIComponent(versionId)}/anchor`,
     {
       method: 'POST',
       headers: getHeaders(),
-    }
+    },
   )
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))

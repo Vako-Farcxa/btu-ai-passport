@@ -61,11 +61,8 @@ def test_no_token_returns_401(monkeypatch: pytest.MonkeyPatch) -> None:
     _use_test_jwks(monkeypatch)
     # require_admin calls email_from_authorization which needs DB; mock supabase
     with patch("passport_api.auth.get_supabase") as mock_db:
-        chain = (
-            mock_db.return_value.table.return_value
-            .select.return_value.eq.return_value
-            .limit.return_value.execute.return_value
-        )
+        query = mock_db.return_value.table.return_value.select.return_value.eq.return_value
+        chain = query.limit.return_value.execute.return_value
         chain.data = []
         resp = client.get("/admin/students")
     assert resp.status_code == 401
@@ -86,11 +83,8 @@ def test_btu_non_admin_returns_403(monkeypatch: pytest.MonkeyPatch) -> None:
     _use_test_jwks(monkeypatch)
     # Valid btu token but not in admin_users table (empty result)
     with patch("passport_api.auth.get_supabase") as mock_db:
-        chain = (
-            mock_db.return_value.table.return_value
-            .select.return_value.eq.return_value
-            .limit.return_value.execute.return_value
-        )
+        query = mock_db.return_value.table.return_value.select.return_value.eq.return_value
+        chain = query.limit.return_value.execute.return_value
         chain.data = []
         resp = client.get(
             "/admin/students",
@@ -250,8 +244,7 @@ def test_soft_delete_already_deleted_returns_409(monkeypatch: pytest.MonkeyPatch
         q = MagicMock()
         q.execute.return_value.data = [student_row]
         limit_mock = (
-            mock_db.return_value.table.return_value
-            .select.return_value.eq.return_value.limit
+            mock_db.return_value.table.return_value.select.return_value.eq.return_value.limit
         )
         limit_mock.return_value = q
         resp = client.delete(
@@ -282,8 +275,7 @@ def test_add_skill_sheet_managed_student_returns_422(monkeypatch: pytest.MonkeyP
         q = MagicMock()
         q.execute.return_value.data = [student_row]
         limit_mock = (
-            mock_db.return_value.table.return_value
-            .select.return_value.eq.return_value.limit
+            mock_db.return_value.table.return_value.select.return_value.eq.return_value.limit
         )
         limit_mock.return_value = q
         resp = client.post(
@@ -377,8 +369,7 @@ def test_retry_confirmed_anchor_returns_409(monkeypatch: pytest.MonkeyPatch) -> 
         q = MagicMock()
         q.execute.return_value.data = [version_row]
         limit_mock = (
-            mock_db.return_value.table.return_value
-            .select.return_value.eq.return_value.limit
+            mock_db.return_value.table.return_value.select.return_value.eq.return_value.limit
         )
         limit_mock.return_value = q
         resp = client.post(
@@ -411,8 +402,7 @@ def test_regenerate_pdf_exists_no_force_returns_409(monkeypatch: pytest.MonkeyPa
         q = MagicMock()
         q.execute.return_value.data = [version_row]
         limit_mock = (
-            mock_db.return_value.table.return_value
-            .select.return_value.eq.return_value.limit
+            mock_db.return_value.table.return_value.select.return_value.eq.return_value.limit
         )
         limit_mock.return_value = q
         resp = client.post(
@@ -434,8 +424,7 @@ def test_anchor_version_not_found(monkeypatch: pytest.MonkeyPatch) -> None:
         q = MagicMock()
         q.execute.return_value.data = []
         limit_mock = (
-            mock_db.return_value.table.return_value
-            .select.return_value.eq.return_value.limit
+            mock_db.return_value.table.return_value.select.return_value.eq.return_value.limit
         )
         limit_mock.return_value = q
         resp = client.post(
