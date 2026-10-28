@@ -14,7 +14,6 @@ export function SiteFooter({ locale }: { locale: Locale }) {
       <p className="site-footer-team">
         <span>{copy.teamLabel}:</span> {copy.team}
       </p>
-      <p className="site-footer-disclaimer">{copy.disclaimer}</p>
       <nav className="site-footer-links" aria-label={copy.footerLabel}>
         <Link href="/about">{copy.navAbout}</Link>
         <span aria-hidden="true">·</span>

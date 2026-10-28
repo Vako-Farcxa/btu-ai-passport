@@ -1590,11 +1590,6 @@ button:disabled {
   color: var(--gold-300);
 }
 
-.site-footer .site-footer-disclaimer {
-  max-width: 640px;
-  margin: 4px auto 0;
-}
-
 .site-footer-links {
   margin-top: 8px;
   display: flex;

@@ -23,11 +23,11 @@ afterEach(() => {
 
 describe('site footer', () => {
   it.each(['en', 'ka'] as const)(
-    'shows the disclaimer and links in %s',
+    'shows the project line, team and links in %s',
     (locale) => {
       render(<SiteFooter locale={locale} />)
       const copy = trust[locale]
-      expect(screen.getByText(copy.disclaimer)).toBeTruthy()
+      expect(screen.getByText(copy.projectLine)).toBeTruthy()
       expect(screen.getByText(copy.team, { exact: false })).toBeTruthy()
       expect(
         screen.getByRole('link', { name: copy.navAbout }).getAttribute('href'),

@@ -43,12 +43,12 @@ describe('trust copy', () => {
     for (const text of strings(trust.en)) {
       expect(text).not.toMatch(/[\u10a0-\u10ff]/)
     }
-    expect(trust.ka.disclaimer).toMatch(/[\u10a0-\u10ff]/)
+    expect(trust.ka.pages.about.intro).toMatch(/[\u10a0-\u10ff]/)
   })
 
-  it('says hackathon project and not official in the disclaimer and the landing note', () => {
-    expect(trust.en.disclaimer).toMatch(/not an official BTU service/i)
-    expect(trust.en.disclaimer).toMatch(/hackathon/i)
+  it('says hackathon project and not official on About and in the landing note', () => {
+    expect(trust.en.pages.about.intro).toMatch(/not an official BTU service/i)
+    expect(trust.en.pages.about.intro).toMatch(/hackathon/i)
     expect(messages.en.landingNote).toMatch(/HACKATHON/)
     expect(messages.ka.landingNote).toContain('ჰაკათონ')
   })

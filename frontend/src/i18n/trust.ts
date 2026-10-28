@@ -18,8 +18,6 @@ export type InfoPageCopy = {
 }
 
 export type TrustCopy = {
-  /** One short line about what the project is not. */
-  disclaimer: string
   projectLine: string
   team: string
   teamLabel: string
@@ -53,8 +51,6 @@ const TEAM_KA = [
 ] as const
 
 const en: TrustCopy = {
-  disclaimer:
-    'Not an official BTU service. This is a student hackathon project, shown as a demo.',
   projectLine: 'BTU AI Skills Digital Passport · Student hackathon project',
   team: TEAM.join(' · '),
   teamLabel: 'Team',
@@ -226,8 +222,6 @@ const en: TrustCopy = {
 }
 
 const ka: TrustCopy = {
-  disclaimer:
-    'ეს არ არის BTU-ის ოფიციალური სერვისი. ეს სტუდენტური ჰაკათონის პროექტია და დემოს სახით არის ნაჩვენები.',
   projectLine:
     'BTU AI უნარების ციფრული პასპორტი · სტუდენტური ჰაკათონის პროექტი',
   team: TEAM_KA.join(' · '),
