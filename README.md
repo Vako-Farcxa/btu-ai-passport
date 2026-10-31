@@ -8,10 +8,18 @@
 
 A paper certificate can be forged and a PDF can be edited. This project gives each student a passport of AI skills that anyone can check. A team keeps awards in a Google Sheet, students sign in with their btu.edu.ge account to see their passport and download English or Georgian PDFs, and anyone can check a passport with its verification code. Every version is anchored on a public blockchain, so a changed passport can be told apart from the original, and a revoked one is shown as revoked.
 
-It is also a test-engineering showcase: the interesting part is how it is checked. More than 1,400 automated tests run on every push, including tests on a real Postgres, tests on a real EVM, and browser tests with accessibility checks. See [Testing](#testing).
+It is also a test-engineering showcase: the interesting part is how it is checked. More than 1,500 automated tests run on every push, including tests on a real Postgres, tests on a real EVM, browser tests with accessibility checks, and browser tests against the real backend. See [Testing](#testing).
 
 > **Disclaimer:** this is a student hackathon project. It is a demo and **not an official BTU service**.
 > **Testnet:** passport versions are anchored on the **Polygon Amoy test network**. Test network data can be reset, so there is no guarantee a record stays available.
+
+## Try it
+
+Sign-in is limited to btu.edu.ge accounts, but the public verify page needs no account. Open the live result for a sample passport:
+
+**[Verify `NAM8-DQQV-7BX5-9MNZ`](https://btu-ai-passport.vercel.app/verify?code=NAM8-DQQV-7BX5-9MNZ)** (or paste the code into the field at [/verify](https://btu-ai-passport.vercel.app/verify)).
+
+It is a fictional student's latest passport version, so it shows **Valid, latest version** with the on-chain check. All names and data are fictional sample data. (The first request can take up to a minute while the free API server wakes up.)
 
 | Home | Admin sign-in gate |
 | --- | --- |
@@ -42,7 +50,7 @@ The screenshots were taken on the live site. All names and data are fictional sa
 - Blockchain anchoring on Polygon Amoy, with a public transaction link per version.
 - Admin panel behind an allow-list: award skills, add students, manage the skills catalog, watch syncs and anchors, review student flags, revoke a version or archive a student.
 - Activity log: every change made in the admin panel is recorded with who did it and when (`/admin/audit`). A failed log write never blocks the change itself.
-- Google Sheet stays the source of truth. A sync runs every 15 minutes and writes the result back to each row.
+- Google Sheet stays the source of truth. A scheduled sync (GitHub Actions) runs every few hours and writes the result back to each row.
 - Students can flag an issue on a version and read the admin reply.
 - English and Georgian interface, About, Privacy and Terms pages.
 
@@ -55,7 +63,7 @@ flowchart LR
     Admin(["Admin"]) --> Web
     Web["Next.js<br/>(Vercel)"] -->|"REST + Supabase JWT"| API["FastAPI<br/>(Render)"]
     Web -->|Google sign-in| DB
-    Sheet["Google Sheet<br/>(source of truth)"] -->|every 15 min| Sync["Sync<br/>(GitHub Actions cron)"]
+    Sheet["Google Sheet<br/>(source of truth)"] -->|every few hours| Sync["Sync<br/>(GitHub Actions cron)"]
     Sync -->|"POST /internal/sync"| API
     API <-->|"students, versions, PDFs, audit log"| DB[("Supabase<br/>Postgres, Auth, Storage")]
     API -->|"status written back per row"| Sheet
@@ -85,10 +93,11 @@ How a passport gets from the Sheet to a verifiable record:
 - `frontend/`: Next.js app (sign-in, passport, public verify page, admin panel)
 - `backend/`: FastAPI service (sheet sync, PDFs, verification, Amoy anchoring)
 - `supabase/`: database migrations
-- `specs/`: spec-kit specification, plan and tasks
+- `docs/contract/`: contract ABI and Solidity source
 - `docs/screenshots/`: images used in this README
+- `docs/sheet-format.md`: the Google Sheet column contract
 - `docs/RESTORE.md`: how to restore a backup
-- `.github/workflows/sync.yml`: runs the sheet sync every 15 minutes
+- `.github/workflows/sync.yml`: requests the sheet sync every 15 minutes; GitHub's free scheduler delays it, so it really runs about every 4 hours
 - `.github/workflows/backup.yml`: nightly encrypted backup of the database and the Sheet (`docs/RESTORE.md` explains how to restore)
 - `.github/workflows/ci.yml`: tests and checks on every push and pull request (`.github/scripts/` has the migration check, `.github/dependabot.yml` the update schedule)
 
@@ -110,7 +119,7 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:3000. Try verifying with the demo code `K9M2-N3P4-Q5R6-S7T8` against the demo backend.
+Open http://localhost:3000. Without Supabase variables the backend serves built-in demo data, and `K9M2-N3P4-Q5R6-S7T8` is its (outdated, version 1) sample code. The live site's sample code is in [Try it](#try-it).
 
 ## Verify a passport yourself
 
@@ -118,7 +127,7 @@ Every passport version is anchored on the **Polygon Amoy test network** in the `
 
 - Contract address: [`0xf436Ba2A2cd1dc78f1543A1E7e8a9f20B2C40c32`](https://amoy.polygonscan.com/address/0xf436Ba2A2cd1dc78f1543A1E7e8a9f20B2C40c32)
 - ABI: [`docs/contract/PassportAnchor.abi.json`](docs/contract/PassportAnchor.abi.json)
-- Source: [`specs/001-ai-skills-passport/contracts/PassportAnchor.sol`](specs/001-ai-skills-passport/contracts/PassportAnchor.sol). Once the source is published on Polygonscan ("Verify and Publish", Solidity 0.8.26, optimizer settings of the deployment), its Read Contract tab works directly. Until then use the script below, or load the ABI in Remix ("At Address").
+- Source: [`docs/contract/PassportAnchor.sol`](docs/contract/PassportAnchor.sol). Once the source is published on Polygonscan ("Verify and Publish", Solidity 0.8.26, optimizer settings of the deployment), its Read Contract tab works directly. Until then use the script below, or load the ABI in Remix ("At Address").
 
 The contract stores one mapping, `anchors(verificationIdHash) -> contentHash`. A slot can be written once and never changed.
 
@@ -164,7 +173,7 @@ Reads are cached in memory: a filled slot for 24 hours (it cannot change), an em
 
 ## Google Sheet
 
-The sync reads BTU's official test sheet layout (title rows above the header, with `BTU Email (Test)`, `Passport ID (Existing)`, `Skill Name`, `Date Earned` and so on) as well as the old `email, full_name, skill, badge, awarded_on` layout. Existing Passport IDs are kept. A new student needs a full name of letters only (Latin or Georgian) and, if a passport ID is typed, 4 to 40 capital letters, digits and dashes. A date must be `YYYY-MM-DD` or empty. If any row of a student has a bad value, none of that student's rows are saved and each row says why, so nothing is guessed. After each run it writes `Passport Sync Status` (`SYNCED`/`FAILED`), `Synced Passport Version` (`V1`, `V2`...), `Synced At (UTC)` and `Sync Error / Notes` back to each row. Full rules: `specs/001-ai-skills-passport/contracts/sheet.md`.
+The sync reads BTU's official test sheet layout (title rows above the header, with `BTU Email (Test)`, `Passport ID (Existing)`, `Skill Name`, `Date Earned` and so on) as well as the old `email, full_name, skill, badge, awarded_on` layout. Existing Passport IDs are kept. A new student needs a full name of letters only (Latin or Georgian) and, if a passport ID is typed, 4 to 40 capital letters, digits and dashes. A date must be `YYYY-MM-DD` or empty. If any row of a student has a bad value, none of that student's rows are saved and each row says why, so nothing is guessed. After each run it writes `Passport Sync Status` (`SYNCED`/`FAILED`), `Synced Passport Version` (`V1`, `V2`...), `Synced At (UTC)` and `Sync Error / Notes` back to each row. Full rules: [`docs/sheet-format.md`](docs/sheet-format.md).
 
 Setup: share the sheet with the service account as Editor, set `SHEET_ID` and `GOOGLE_SERVICE_ACCOUNT_JSON` in `backend/.env`, and set `ALLOWED_EMAIL_DOMAINS=btu.edu.ge,example.org` to accept the test emails. Run the files in `supabase/migrations/` in order.
 
@@ -200,13 +209,14 @@ Run it by hand and check it, then restore: see [`docs/RESTORE.md`](docs/RESTORE.
 
 ## Testing
 
-More than 1,400 automated tests run on every push and pull request (GitHub Actions, `.github/workflows/ci.yml`, no secrets needed):
+More than 1,500 automated tests run on every push and pull request (GitHub Actions, `.github/workflows/ci.yml`, no secrets needed):
 
 | Suite | Tests | Coverage | What it covers | Run it locally |
 | --- | --- | --- | --- | --- |
-| Backend (pytest) | 922 | 96% of lines, 95% with branches | API, sync and Sheet rules, verification, on-chain check, PDFs, rate limits, security headers, health checks, audit log, backup and restore, error shape | `cd backend && uv run pytest` |
-| Frontend unit and component (Vitest) | 410 | 74% of statements, 70% of branches | validation, formatting, API client, hooks, components, admin pages, sign-in callback | `cd frontend && npm test` |
-| End-to-end (Playwright, Chromium) | 71 | user flows | see the list below | `cd frontend && npm run e2e` |
+| Backend (pytest) | 925 | 96% of lines, 95% with branches | API, sync and Sheet rules, verification, on-chain check, PDFs, rate limits, security headers, health checks, audit log, backup and restore, error shape | `cd backend && uv run pytest` |
+| Frontend unit and component (Vitest) | 474 | 77% of statements, 73% of branches | validation, formatting, API client, hooks, components, admin pages, sign-in callback | `cd frontend && npm test` |
+| End-to-end, API mocked (Playwright, Chromium) | 107 | user flows, phone-size accessibility, first-paint language | see the list below | `cd frontend && npm run e2e` |
+| End-to-end, real backend (Playwright, Chromium) | 5 | front end and FastAPI together, nothing mocked | valid, outdated, unknown, revoked, tampered and pending codes, and the admin gate | `cd frontend && npm run e2e:real` (needs `uv`) |
 
 Coverage numbers come from `uv run pytest --cov=passport_api --cov-branch` and `npm run test:coverage`. The frontend number is lower on purpose: animation code and the Supabase browser session are exercised by the Playwright specs instead of by unit tests that would only repeat mocks.
 
@@ -221,6 +231,9 @@ Coverage numbers come from `uv run pytest --cov=passport_api --cov-branch` and `
 - **Mutation checks.** The riskiest tests were checked by removing the code they protect and watching them fail.
 - **End-to-end flows.** Verify a valid, outdated, pending, revoked, tampered and unknown code, in English and Georgian; a student flags a version; an admin answers the flag; an admin adds a student; the activity log; sign-in and keyboard use; security headers and the rate-limit message.
 - **Accessibility.** `@axe-core/playwright` scans the public pages, a verify result, the student passport page with the flag dialog, and the admin pages for serious WCAG A and AA violations. The scan found real contrast and label problems, which are fixed. Every page also has a skip link, and header and footer targets are at least 44 px tall (both are tested).
+- **Real backend.** The mocked browser specs are fast, but they cannot notice that the front end and the API stopped agreeing. A separate CI job starts the real FastAPI app with seeded fixture data (`backend/scripts/serve_e2e.py`, no secrets, the blockchain replaced by a scripted contract) and the real Next.js build, and drives them with an unmocked browser. A renamed JSON field or a broken CORS or security header fails that job while the mocked suite stays green.
+- **Phone size.** The accessibility scan also runs at 390 px wide (public pages, a verify result, an admin page). It found an unnamed logo link and admin tables that keyboard users could not scroll, both fixed.
+- **First paint.** With JavaScript switched off, the server HTML of every page is checked for the right language (saved choice, then Accept-Language), so a visitor never sees the wrong language flash.
 - **Stable browser tests.** Tests wait until React has attached its handlers before clicking, which removed a flaky empty-code check.
 
 ### CI jobs
@@ -230,6 +243,7 @@ The CI jobs, with the check names GitHub shows:
 - **Backend:** `ruff format --check`, `ruff check`, `mypy` (strict) and `pytest` with a coverage report.
 - **Frontend:** `tsc`, ESLint, Prettier, Vitest with a coverage report and a production `next build` that must have an https API address.
 - **E2E (Playwright):** the specs against the production build, with every API call mocked in the browser.
+- **E2E real backend (Playwright):** the same production build against the real FastAPI backend with seeded fixture data and nothing mocked.
 - **Migrations:** every file in `supabase/migrations` applied in order to an empty Postgres 17, the newest one applied twice, and the sync and admin functions checked.
 - **Secret scan:** gitleaks over the full history, fails on any leaked key.
 
@@ -238,7 +252,7 @@ Dependabot opens weekly pull requests for Python, npm and GitHub Actions updates
 Before opening a pull request, run the same checks locally:
 
 - Backend: `uv run ruff format . && uv run ruff check . && uv run mypy . && uv run pytest`
-- Frontend: `npm run check` and `npm run e2e`
+- Frontend: `npm run check`, `npm run e2e` and `npm run e2e:real`
 
 ## Team
 

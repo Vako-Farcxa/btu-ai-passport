@@ -2,12 +2,12 @@ import { describe, expect, it, vi } from 'vitest'
 
 import robots from '@/app/robots'
 import sitemap from '@/app/sitemap'
-import { metadata as root } from '@/app/layout'
-import { metadata as admin } from '@/app/admin/layout'
-import { metadata as about } from '@/app/about/page'
-import { metadata as privacy } from '@/app/privacy/page'
-import { metadata as terms } from '@/app/terms/page'
-import { metadata as verify } from '@/app/verify/page'
+import { metadata as root } from '@/app/[lang]/layout'
+import { metadata as admin } from '@/app/[lang]/admin/layout'
+import { metadata as about } from '@/app/[lang]/about/page'
+import { metadata as privacy } from '@/app/[lang]/privacy/page'
+import { metadata as terms } from '@/app/[lang]/terms/page'
+import { metadata as verify } from '@/app/[lang]/verify/page'
 
 vi.mock('next/font/google', () => {
   const font = () => ({ variable: '' })
@@ -44,6 +44,7 @@ describe('page metadata', () => {
   it('lists the public pages in the sitemap', () => {
     const urls = sitemap().map((entry) => entry.url)
     expect(urls).toContain('https://btu-ai-passport.vercel.app/about')
+    expect(urls).toContain('https://btu-ai-passport.vercel.app/privacy')
     expect(urls.some((url) => url.includes('/admin'))).toBe(false)
   })
 })

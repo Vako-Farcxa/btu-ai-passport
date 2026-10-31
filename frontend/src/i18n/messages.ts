@@ -410,10 +410,3 @@ export const messages: Record<Locale, Copy> = {
     versionRevokedPdf: 'ეს ვერსია გაუქმებულია, ამიტომ მისი PDF მიუწვდომელია.',
   },
 }
-
-export function preferredLocale(language: string): Locale {
-  const value = language.toLowerCase()
-  if (value.startsWith('ka')) return 'ka'
-  if (value.startsWith('en')) return 'en'
-  return 'ka'
-}

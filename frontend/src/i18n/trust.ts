@@ -33,8 +33,6 @@ export type TrustCopy = {
   errorTitle: string
   errorBody: string
   tryAgain: string
-  removalWithEmail: string
-  removalWithoutEmail: string
   pages: Record<InfoPageId, InfoPageCopy>
 }
 
@@ -68,10 +66,6 @@ const en: TrustCopy = {
   errorBody:
     'An unexpected error happened. You can try again or go back to the home page.',
   tryAgain: 'Try again',
-  removalWithEmail:
-    'To ask for your data to be corrected or removed, write to {email}. We will remove your passport from the database and the Sheet. The hashes already written to the blockchain stay.',
-  removalWithoutEmail:
-    'To ask for your data to be corrected or removed, contact the team members named on the About page. We will remove your passport from the database and the Sheet. The hashes already written to the blockchain stay.',
   pages: {
     about: {
       title: 'About this project',
@@ -128,46 +122,58 @@ const en: TrustCopy = {
     privacy: {
       title: 'Privacy',
       intro:
-        'This is a student demo. We keep the data needed to issue and verify passports and nothing more.',
+        'What this site shows, what it stores, where it is stored, and who to ask about it.',
       sections: [
         {
-          heading: 'What we store',
-          list: true,
+          heading: 'What the site shows',
           body: [
-            'Your name and your university email address.',
-            'Passport data: passport ID, awarded skills and their dates, version numbers, verification codes and PDF files.',
-            'The source is a Google Sheet kept by the team. It also holds the student ID, program and education level.',
-            'Sign-in goes through Supabase. We use your email address to find your passport.',
-            'Reports you send about a passport: your comment, its status and any reply.',
+            'The public verify page shows, for a verification code, the holder name, the passport version, the skills with their dates and a link to the blockchain transaction. It never shows an email address, a passport ID, a student ID or the codes of other versions.',
+            'A signed-in student sees only their own passport. The admin team can see everything that is stored.',
           ],
         },
         {
-          heading: 'What a verifier sees',
+          heading: 'Where the data comes from',
           body: [
-            'Anyone with a code sees the holder name, the version, the skills with their dates and a link to the blockchain transaction. They do not see your email address, passport ID, student ID or the codes of other versions. A signed-in student sees only their own passport. Admins, who are the team, can see everything stored.',
+            'Names, skills and verification codes come from the BTU test sheet, a Google Sheet kept by the project team. It also holds a student ID, program and education level, which are never shown publicly.',
+            'The people, emails and awards in that sheet are fictional demonstration data, not records of real students.',
+          ],
+        },
+        {
+          heading: 'Signing in with Google',
+          body: [
+            'Signing in uses Google. The site reads only your email address and your name, to check that you may sign in and to find your passport. It does not receive your Google password and does not read your mail, files or contacts.',
+          ],
+        },
+        {
+          heading: 'Where it is stored',
+          list: true,
+          body: [
+            'Supabase stores the database (students, passports, versions, verification codes, reports and the admin activity log), the sign-in accounts and the PDF files.',
+            'The API runs on Render and the web pages on Vercel. They process requests but do not keep their own copy of the data.',
+            'Reports you send about a passport are stored with your comment, its status and any reply.',
           ],
         },
         {
           heading: 'Blockchain',
           body: [
-            'Only hashes are written to the blockchain. They are not readable as personal data. A blockchain record cannot be deleted, even on a test network.',
+            'For each passport version, a hash (a fingerprint) is written to the public Polygon Amoy test network. A hash contains no name, email, skill or any other personal data and cannot be turned back into them. A blockchain record cannot be deleted.',
           ],
         },
         {
-          heading: 'Cookies',
+          heading: 'Cookies, tracking and ads',
           body: [
-            'We use one cookie to remember your language, plus the Supabase sign-in session. There are no advertising or tracking cookies.',
+            'The site sets one cookie to remember your language and keeps the Supabase sign-in session. There is no analytics, no advertising and no tracking, and nothing is sold or shared for marketing.',
           ],
         },
         {
-          heading: 'Correction and removal',
-          body: ['{removal}'],
-        },
-        {
-          heading: 'How long we keep it',
+          heading: 'Contact, correction and removal',
           body: [
-            'This is a demo. Data is kept while the demo runs and may be deleted at any time.',
+            'To ask what is stored about you, or to have your data corrected or removed, write to vpartskhaladze@gmail.com. Your passport will be removed from the database and the Sheet. The hashes already on the blockchain stay, and they contain no personal data.',
           ],
+          link: {
+            label: 'vpartskhaladze@gmail.com',
+            href: 'mailto:vpartskhaladze@gmail.com',
+          },
         },
       ],
     },
@@ -241,10 +247,6 @@ const ka: TrustCopy = {
   errorBody:
     'მოულოდნელი შეცდომა მოხდა. სცადეთ ხელახლა ან დაბრუნდით მთავარ გვერდზე.',
   tryAgain: 'ხელახლა ცდა',
-  removalWithEmail:
-    'მონაცემების გასასწორებლად ან წასაშლელად მოგვწერეთ: {email}. პასპორტს ბაზიდან და Sheet-იდან წავშლით. ბლოკჩეინზე უკვე ჩაწერილი ჰეშები დარჩება.',
-  removalWithoutEmail:
-    'მონაცემების გასასწორებლად ან წასაშლელად მიმართეთ გუნდის წევრებს, რომელთა სახელებიც მითითებულია „შესახებ“ გვერდზე. პასპორტს ბაზიდან და Sheet-იდან წავშლით. ბლოკჩეინზე უკვე ჩაწერილი ჰეშები დარჩება.',
   pages: {
     about: {
       title: 'ამ პროექტის შესახებ',
@@ -301,46 +303,58 @@ const ka: TrustCopy = {
     privacy: {
       title: 'კონფიდენციალურობა',
       intro:
-        'ეს სტუდენტური დემოა. ვინახავთ მხოლოდ იმ მონაცემებს, რომლებიც პასპორტის გასაცემად და გადასამოწმებლად არის საჭირო.',
+        'რას აჩვენებს ეს საიტი, რას ინახავს, სად ინახება და ვის მივმართოთ კითხვებით.',
       sections: [
         {
-          heading: 'რას ვინახავთ',
-          list: true,
+          heading: 'რას აჩვენებს საიტი',
           body: [
-            'თქვენს სახელს და უნივერსიტეტის ელფოსტას.',
-            'პასპორტის მონაცემებს: პასპორტის ID, მინიჭებული უნარები და მათი თარიღები, ვერსიების ნომრები, გადამოწმების კოდები და PDF ფაილები.',
-            'წყარო არის გუნდის მიერ მართული Google Sheet, სადაც ასევე წერია სტუდენტის ID, პროგრამა და განათლების საფეხური.',
-            'შესვლა ხდება Supabase-ის მეშვეობით. ელფოსტას პასპორტის მოსაძებნად ვიყენებთ.',
-            'პასპორტთან დაკავშირებით გაგზავნილ შეტყობინებებს: თქვენს კომენტარს, მის სტატუსს და პასუხს.',
+            'საჯარო გადამოწმების გვერდი კოდის მიხედვით აჩვენებს მფლობელის სახელს, პასპორტის ვერსიას, უნარებს თარიღებით და ბლოკჩეინის ტრანზაქციის ბმულს. ის არასდროს აჩვენებს ელფოსტას, პასპორტის ID-ს, სტუდენტის ID-ს ან სხვა ვერსიების კოდებს.',
+            'შესული სტუდენტი მხოლოდ საკუთარ პასპორტს ხედავს. ადმინისტრატორთა გუნდს შეუძლია ნახოს ყველაფერი, რაც ინახება.',
           ],
         },
         {
-          heading: 'რას ხედავს გადამმოწმებელი',
+          heading: 'საიდან მოდის მონაცემები',
           body: [
-            'ნებისმიერი, ვისაც კოდი აქვს, ხედავს მფლობელის სახელს, ვერსიას, უნარებს თარიღებით და ბლოკჩეინის ტრანზაქციის ბმულს. თქვენი ელფოსტა, პასპორტის ID, სტუდენტის ID და სხვა ვერსიების კოდები არ ჩანს. შესული სტუდენტი მხოლოდ საკუთარ პასპორტს ხედავს. ადმინისტრატორები, ანუ გუნდი, ხედავენ ყველაფერს, რაც ინახება.',
+            'სახელები, უნარები და გადამოწმების კოდები მოდის BTU-ის სატესტო ცხრილიდან, რომელსაც პროექტის გუნდი მართავს Google Sheet-ში. იქ ასევე წერია სტუდენტის ID, პროგრამა და განათლების საფეხური, რომლებიც საჯაროდ არასდროს ჩანს.',
+            'ამ ცხრილში მოცემული ადამიანები, ელფოსტები და მინიჭებული უნარები გამოგონილი საჩვენებელი მონაცემებია და არა რეალური სტუდენტების ჩანაწერები.',
+          ],
+        },
+        {
+          heading: 'Google-ით შესვლა',
+          body: [
+            'შესვლა ხდება Google-ის მეშვეობით. საიტი კითხულობს მხოლოდ თქვენს ელფოსტას და სახელს, რათა შეამოწმოს, შეგიძლიათ თუ არა შესვლა, და იპოვოს თქვენი პასპორტი. ის არ იღებს თქვენს Google პაროლს და არ კითხულობს თქვენს წერილებს, ფაილებს ან კონტაქტებს.',
+          ],
+        },
+        {
+          heading: 'სად ინახება',
+          list: true,
+          body: [
+            'Supabase ინახავს ბაზას (სტუდენტები, პასპორტები, ვერსიები, გადამოწმების კოდები, შეტყობინებები და ადმინისტრატორების აქტივობის ჟურნალი), შესვლის ანგარიშებს და PDF ფაილებს.',
+            'API მუშაობს Render-ზე, ვებგვერდები კი Vercel-ზე. ისინი ამუშავებენ მოთხოვნებს, მაგრამ მონაცემების საკუთარ ასლს არ ინახავენ.',
+            'პასპორტთან დაკავშირებით გაგზავნილი შეტყობინებები ინახება თქვენი კომენტარით, სტატუსითა და პასუხით.',
           ],
         },
         {
           heading: 'ბლოკჩეინი',
           body: [
-            'ბლოკჩეინზე მხოლოდ ჰეშები იწერება. პირად მონაცემებად ისინი წაკითხვადი არ არის. ბლოკჩეინის ჩანაწერის წაშლა შეუძლებელია, სატესტო ქსელშიც კი.',
+            'პასპორტის თითოეული ვერსიისთვის საჯარო Polygon Amoy სატესტო ქსელში იწერება ჰეში (თითის ანაბეჭდი). ჰეში არ შეიცავს სახელს, ელფოსტას, უნარებს ან სხვა პირად მონაცემებს და მისგან მათი აღდგენა შეუძლებელია. ბლოკჩეინის ჩანაწერის წაშლა შეუძლებელია.',
           ],
         },
         {
-          heading: 'ქუქი-ფაილები',
+          heading: 'ქუქი-ფაილები, თვალთვალი და რეკლამა',
           body: [
-            'ვიყენებთ ერთ ქუქის ენის დასამახსოვრებლად და Supabase-ის შესვლის სესიას. სარეკლამო ან თვალთვალის ქუქი-ფაილები არ გვაქვს.',
+            'საიტი ადგენს ერთ ქუქის ენის დასამახსოვრებლად და ინახავს Supabase-ის შესვლის სესიას. არ გვაქვს ანალიტიკა, რეკლამა ან თვალთვალი და არაფერი იყიდება ან გადაეცემა მარკეტინგისთვის.',
           ],
         },
         {
-          heading: 'გასწორება და წაშლა',
-          body: ['{removal}'],
-        },
-        {
-          heading: 'რამდენ ხანს ვინახავთ',
+          heading: 'კონტაქტი, გასწორება და წაშლა',
           body: [
-            'ეს დემოა. მონაცემები ინახება დემოს მუშაობის განმავლობაში და ნებისმიერ დროს შეიძლება წაიშალოს.',
+            'იმის გასაგებად, რა ინახება თქვენ შესახებ, ან მონაცემების გასასწორებლად ან წასაშლელად მოგვწერეთ: vpartskhaladze@gmail.com. თქვენს პასპორტს ბაზიდან და Sheet-იდან წავშლით. ბლოკჩეინზე უკვე ჩაწერილი ჰეშები დარჩება და ისინი პირად მონაცემებს არ შეიცავს.',
           ],
+          link: {
+            label: 'vpartskhaladze@gmail.com',
+            href: 'mailto:vpartskhaladze@gmail.com',
+          },
         },
       ],
     },

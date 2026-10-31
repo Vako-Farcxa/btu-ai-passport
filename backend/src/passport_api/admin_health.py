@@ -7,8 +7,10 @@ calls it.
 Rules, each one an alert with a severity (warning = amber, critical = red):
 
 - the last finished sync failed (critical, with the stored reason code),
-- no sync has completed for more than 60 minutes (warning, critical after 3 hours); the sync
-  cron runs every 15 minutes, so an hour of silence means it is not running or always failing,
+- no sync has completed for more than 8 hours (warning, critical after 24 hours); the sync is
+  scheduled with GitHub Actions, which delays scheduled runs on its free shared runners (about
+  every 4 hours in practice, up to 7), so only a longer silence means it is not running or
+  always failing,
 - an anchor is failed_permanent (critical, an admin has to act),
 - an anchor has been pending or retrying for more than 60 minutes (warning),
 - the database consistency report lists problems, or could not be produced (warning).
@@ -25,8 +27,8 @@ from passport_api.db import get_supabase
 from passport_api.schemas import AdminHealth, HealthAlert
 from passport_api.store import normalize_anchor_status
 
-SYNC_STALE_AFTER = timedelta(minutes=60)
-SYNC_CRITICAL_AFTER = timedelta(hours=3)
+SYNC_STALE_AFTER = timedelta(hours=8)
+SYNC_CRITICAL_AFTER = timedelta(hours=24)
 ANCHOR_STUCK_AFTER = timedelta(minutes=60)
 _REASON_MAX = 120
 
@@ -97,8 +99,8 @@ def evaluate(
                 HealthAlert(
                     code="sync_stale",
                     severity="critical" if age > SYNC_CRITICAL_AFTER else "warning",
-                    message=f"No sync has completed for {_duration(age)}. It should run every "
-                    "15 minutes.",
+                    message=f"No sync has completed for {_duration(age)}. It normally runs every "
+                    "few hours.",
                 )
             )
 

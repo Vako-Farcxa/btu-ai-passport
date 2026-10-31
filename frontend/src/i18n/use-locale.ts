@@ -1,24 +1,39 @@
 'use client'
 
-import { useSyncExternalStore } from 'react'
+import { createContext, useContext, useSyncExternalStore } from 'react'
 
-import { preferredLocale, type Locale } from '@/i18n/messages'
+import type { Locale } from '@/i18n/messages'
+import {
+  LOCALE_COOKIE as COOKIE,
+  localeFromCookie,
+  negotiateLocale,
+} from '@/i18n/negotiate'
 import { writeCookie } from '@/lib/cookies'
 
-const COOKIE = 'passport_locale'
 const EVENT = 'passport-locale'
+
+/**
+ * The language the server rendered this request in (decided in `proxy.ts` from the saved
+ * choice or Accept-Language). It is the snapshot React hydrates with, so the first paint
+ * and the server HTML agree. Without a provider (tests, error pages) it is English.
+ */
+export const ServerLocaleContext = createContext<Locale>('en')
 
 function readCookie(): Locale | null {
   const row = document.cookie
     .split('; ')
     .find((part) => part.startsWith(`${COOKIE}=`))
-  const value = row?.split('=')[1]
-  if (value === 'en' || value === 'ka') return value
-  return null
+  return localeFromCookie(row?.split('=')[1])
 }
 
 function readClientLocale(): Locale {
-  return readCookie() ?? preferredLocale(window.navigator.language)
+  const languages = window.navigator.languages
+  return (
+    readCookie() ??
+    negotiateLocale(
+      languages.length > 0 ? languages.join(',') : window.navigator.language,
+    )
+  )
 }
 
 function subscribe(onChange: () => void) {
@@ -27,10 +42,11 @@ function subscribe(onChange: () => void) {
 }
 
 export function useLocale(): [Locale, (locale: Locale) => void] {
+  const serverLocale = useContext(ServerLocaleContext)
   const locale = useSyncExternalStore(
     subscribe,
     readClientLocale,
-    () => 'ka' as const,
+    () => serverLocale,
   )
   const setLocale = (next: Locale) => {
     writeCookie(COOKIE, next, 31536000)

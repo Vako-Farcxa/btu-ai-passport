@@ -82,24 +82,28 @@ def test_a_failed_sync_without_a_reason_says_unknown() -> None:
     assert health.alerts[0].reason == "unknown"
 
 
-def test_no_sync_for_over_an_hour_is_amber() -> None:
-    quiet = _health(success=_run(60))
+def test_no_sync_for_over_eight_hours_is_amber() -> None:
+    # GitHub's scheduler delays runs (about 4 hours apart, up to 7), so 8 hours is not an alarm.
+    quiet = _health(success=_run(8 * 60))
     assert quiet.alerts == []
-    health = _health(last=_run(61), success=_run(61))
+    health = _health(last=_run(8 * 60 + 1), success=_run(8 * 60 + 1))
     assert health.status == "warning"
     assert _codes(health) == ["sync_stale"]
-    assert "61 minutes" in health.alerts[0].message
+    assert "8 hours" in health.alerts[0].message
+    assert "every few hours" in health.alerts[0].message
+    assert "15 minutes" not in health.alerts[0].message
 
 
-def test_no_sync_for_hours_turns_red() -> None:
-    health = _health(last=_run(200), success=_run(200))
+def test_no_sync_for_a_day_turns_red() -> None:
+    assert _health(last=_run(24 * 60), success=_run(24 * 60)).status == "warning"
+    health = _health(last=_run(24 * 60 + 1), success=_run(24 * 60 + 1))
     assert health.status == "critical"
     assert health.alerts[0].code == "sync_stale"
-    assert "3 hours" in health.alerts[0].message
+    assert "24 hours" in health.alerts[0].message
 
 
 def test_a_failing_sync_that_was_fine_a_while_ago_shows_both() -> None:
-    health = _health(last=_run(1, "failed", "sync_failed"), success=_run(90))
+    health = _health(last=_run(1, "failed", "sync_failed"), success=_run(9 * 60))
     assert _codes(health) == ["sync_failed", "sync_stale"]
     assert health.status == "critical"
 

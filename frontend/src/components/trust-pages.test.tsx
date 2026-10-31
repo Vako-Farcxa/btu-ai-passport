@@ -96,12 +96,50 @@ describe('info pages', () => {
       trust.ka.pages.privacy.title,
     )
   })
+})
 
-  it('points removal requests to the team when no contact email is set', () => {
+describe('privacy page', () => {
+  const EMAIL = 'vpartskhaladze@gmail.com'
+
+  it.each(['en', 'ka'] as const)(
+    'has the same sections in %s and links the contact email with mailto',
+    (locale) => {
+      state.locale = locale
+      render(<InfoPage page="privacy" />)
+      const copy = trust[locale].pages.privacy
+      expect(copy.sections).toHaveLength(trust.en.pages.privacy.sections.length)
+      const link = screen.getByRole('link', { name: EMAIL })
+      expect(link.getAttribute('href')).toBe(`mailto:${EMAIL}`)
+      // A mail link opens the mail app: no new tab.
+      expect(link.getAttribute('target')).toBeNull()
+    },
+  )
+
+  it('says what is shown, where it is stored, and that the hashes hold no personal data', () => {
     render(<InfoPage page="privacy" />)
-    expect(screen.getByText(trust.en.removalWithoutEmail)).toBeTruthy()
-    expect(screen.queryByText(/\{removal\}|\{email\}/)).toBeNull()
+    const article = screen.getByTestId('info-privacy')
+    const text = article.textContent ?? ''
+    expect(text).toContain('holder name')
+    expect(text).toContain('test sheet')
+    expect(text).toContain('fictional')
+    expect(text).toContain('Google')
+    expect(text).toContain('only your email address and your name')
+    expect(text).toContain('Supabase')
+    expect(text).toContain('Polygon Amoy')
+    expect(text).toMatch(/contains no name, email, skill/)
+    expect(text).toMatch(/no analytics, no advertising and no tracking/)
   })
+
+  it.each(['en', 'ka'] as const)(
+    'carries no "demo" or "not official" disclaimer in %s',
+    (locale) => {
+      const copy = trust[locale].pages.privacy
+      const text = JSON.stringify(copy)
+      expect(text).not.toMatch(/not an official|official BTU|hackathon/i)
+      expect(text).not.toMatch(/ოფიციალური|ჰაკათონ/)
+      expect(copy.intro).not.toMatch(/demo|დემო/i)
+    },
+  )
 })
 
 describe('status pages', () => {

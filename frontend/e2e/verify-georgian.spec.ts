@@ -91,6 +91,7 @@ test('the verify page is fully Georgian before any check', async ({ page }) => {
 for (const code of Object.keys(BODIES)) {
   test(`the ${code} result page has no English text`, async ({ page }) => {
     await page.goto('/verify')
+    await hydrated(page.getByLabel('შემოწმების კოდი'))
     await page.getByLabel('შემოწმების კოდი').fill(code)
     await page.getByRole('button', { name: 'შემოწმება' }).click()
     await expect(page.getByTestId('verify-result')).toBeVisible()
@@ -102,6 +103,7 @@ test('the valid result shows Georgian labels and a locale formatted date', async
   page,
 }) => {
   await page.goto('/verify')
+  await hydrated(page.getByLabel('შემოწმების კოდი'))
   await page.getByLabel('შემოწმების კოდი').fill('VALID')
   await page.getByRole('button', { name: 'შემოწმება' }).click()
   const result = page.getByTestId('verify-result')
@@ -116,6 +118,7 @@ test('the outdated result is Georgian including the newer version note', async (
   page,
 }) => {
   await page.goto('/verify')
+  await hydrated(page.getByLabel('შემოწმების კოდი'))
   await page.getByLabel('შემოწმების კოდი').fill('OUTDATED')
   await page.getByRole('button', { name: 'შემოწმება' }).click()
   await expect(page.getByTestId('verify-result')).toContainText(

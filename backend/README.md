@@ -103,7 +103,7 @@ the contract (`onchain.py`, read-only, no key) and compares again.
   - `chain`: asks the Amoy RPC for the latest block.
 
   The answer is `200` while the database works (overall `ok`, or `degraded` when only the Sheet or the chain is down) and `503` when it does not (overall `down`). Each check has a timeout (`HEALTH_TIMEOUT_SECONDS`, default 4) and the three run side by side. The result is cached for 60 seconds (15 when something is down), so pinging it every few minutes cannot burn the Google Sheets quota or a free RPC's limit. The body holds only fixed words, never a URL, key or error message. Neither route is rate limited.
-- `GET /admin/health` (admin only) feeds the red or amber banner on the admin dashboard: the last sync failed (with its reason code), no sync has completed for over 60 minutes (red after 3 hours), an anchor is `failed_permanent` or has waited over 60 minutes, or the consistency check (`sync_inconsistencies()`) found problems. Read only.
+- `GET /admin/health` (admin only) feeds the red or amber banner on the admin dashboard: the last sync failed (with its reason code), no sync has completed for over 8 hours (red after 24 hours; GitHub's free scheduler runs the sync about every 4 hours, not every 15 minutes), an anchor is `failed_permanent` or has waited over 60 minutes, or the consistency check (`sync_inconsistencies()`) found problems. Read only.
 
 ## Backups
 
@@ -190,7 +190,7 @@ Where the time went and what changed:
 
 ## Quality Checks & Tests
 
-Run all checks as defined in `AGENTS.md`:
+Run all checks:
 
 ```bash
 uv run ruff format . && uv run ruff check . && uv run mypy . && uv run pytest
