@@ -19,13 +19,19 @@ It is also a test-engineering showcase: the interesting part is how it is checke
 
 | Verify result, English | Verify result, Georgian |
 | --- | --- |
-| ![Verify result with the on-chain check](docs/screenshots/verify-result.webp) | ![Verify result in Georgian](docs/screenshots/verify-georgian.webp) |
+| ![Valid latest version with the on-chain check](docs/screenshots/verify-result.webp) | ![Valid latest version in Georgian](docs/screenshots/verify-georgian.webp) |
+
+| Outdated version |
+| --- |
+| ![Outdated version with the on-chain check](docs/screenshots/verify-outdated.webp) |
+
+The last shot shows an older version of a passport. It is flagged as Outdated and points to the newer version, while its fingerprint still matches the one recorded on chain.
 
 Mobile (390 px wide):
 
 <img src="docs/screenshots/mobile.webp" alt="Verify result on a phone" width="390">
 
-The screenshots were taken on the live site. The verify result shows an older version of a sample passport: it is marked Outdated, and its fingerprint is checked against the Polygon Amoy contract (Verified on-chain). All names and data are fictional sample data, not real students.
+The screenshots were taken on the live site. All names and data are fictional sample data, not real students.
 
 ## Features
 
