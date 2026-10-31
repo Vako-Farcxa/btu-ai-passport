@@ -1,5 +1,7 @@
 # BTU AI Skills Digital Passport
 
+[![CI](https://github.com/Vako-Farcxa/btu-ai-passport/actions/workflows/ci.yml/badge.svg)](https://github.com/Vako-Farcxa/btu-ai-passport/actions/workflows/ci.yml)
+
 **Live: [btu-ai-passport.vercel.app](https://btu-ai-passport.vercel.app)**
 
 Verifiable AI skills passports for BTU students. A team keeps awards in a Google Sheet, students sign in with their btu.edu.ge account to see their passport and download English or Georgian PDFs, and anyone can check a passport with its verification code. Every version is anchored on a public blockchain, so a changed passport can be told apart from the original.
@@ -62,6 +64,7 @@ Only hashes go on the blockchain, never names, emails or skills.
 - `specs/`: spec-kit specification, plan and tasks
 - `docs/screenshots/`: images used in this README
 - `.github/workflows/sync.yml`: runs the sheet sync every 15 minutes
+- `.github/workflows/ci.yml`: tests and checks on every push and pull request (`.github/scripts/` has the migration check, `.github/dependabot.yml` the update schedule)
 
 ## Run locally
 
@@ -139,7 +142,27 @@ The sync reads BTU's official test sheet layout (title rows above the header, wi
 
 Setup: share the sheet with the service account as Editor, set `SHEET_ID` and `GOOGLE_SERVICE_ACCOUNT_JSON` in `backend/.env`, and set `ALLOWED_EMAIL_DOMAINS=btu.edu.ge,example.org` to accept the test emails. Run the files in `supabase/migrations/` in order.
 
-## Checks
+## Testing
+
+About 930 automated tests run on every push and pull request (GitHub Actions, `.github/workflows/ci.yml`, no secrets needed):
+
+| Suite | Count | What it covers | Run it locally |
+| --- | --- | --- | --- |
+| Backend (pytest) | 605 | API, sync, verification, on-chain check, PDFs, rate limits, security headers, and the real migrations plus sync function on a real Postgres (pgserver) | `cd backend && uv run pytest` |
+| Frontend unit (Vitest) | 287 | validation, formatting, headers policy, helpers, components | `cd frontend && npm test` |
+| End-to-end (Playwright, Chromium) | 39 | verify page and on-chain badge, English and Georgian, passport page, share links, keyboard use, reduced motion, security headers, rate-limit message | `cd frontend && npm run e2e` |
+
+The CI jobs, with the check names GitHub shows:
+
+- **Backend:** `ruff format --check`, `ruff check`, `mypy` (strict) and `pytest`.
+- **Frontend:** `tsc`, ESLint, Prettier, Vitest and a production `next build` that must have an https API address.
+- **E2E (Playwright):** the specs against the production build, with every API call mocked in the browser.
+- **Migrations:** every file in `supabase/migrations` applied in order to an empty Postgres 17, and the newest one applied twice.
+- **Secret scan:** gitleaks over the full history, fails on any leaked key.
+
+Dependabot opens weekly pull requests for Python, npm and GitHub Actions updates (minor and patch updates are grouped).
+
+Before opening a pull request, run the same checks locally:
 
 - Backend: `uv run ruff format . && uv run ruff check . && uv run mypy . && uv run pytest`
 - Frontend: `npm run check` and `npm run e2e`

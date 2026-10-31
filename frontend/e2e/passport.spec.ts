@@ -48,12 +48,12 @@ const caller = {
 
 test.use({ locale: 'en-US' })
 
-test.beforeEach(async ({ context }) => {
+test.beforeEach(async ({ context, baseURL }) => {
   await context.addCookies([
     {
       name: 'passport_mock_bearer',
       value: 'test-token',
-      url: 'http://localhost:3000',
+      url: baseURL!,
     },
   ])
 })

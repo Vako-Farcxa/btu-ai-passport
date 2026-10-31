@@ -37,9 +37,9 @@ const BODIES: Record<string, object> = {
   BROKEN: { outcome: 'error' },
 }
 
-test.beforeEach(async ({ context, page }) => {
+test.beforeEach(async ({ context, page, baseURL }) => {
   await context.addCookies([
-    { name: 'passport_locale', value: 'ka', url: 'http://localhost:3000' },
+    { name: 'passport_locale', value: 'ka', url: baseURL! },
   ])
   await page.route('http://localhost:8000/verify', async (route) => {
     const { code } = route.request().postDataJSON() as { code: string }

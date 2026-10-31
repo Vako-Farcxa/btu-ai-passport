@@ -104,9 +104,10 @@ test('the tooltip text stays available to screen readers while closed', async ({
 test('the tooltip and disclosure are Georgian in Georgian', async ({
   page,
   context,
+  baseURL,
 }) => {
   await context.addCookies([
-    { name: 'passport_locale', value: 'ka', url: 'http://localhost:3000' },
+    { name: 'passport_locale', value: 'ka', url: baseURL! },
   ])
   await openResult(page, { code: 'შემოწმების კოდი', check: 'შემოწმება' })
   const level = page.getByRole('button', {
