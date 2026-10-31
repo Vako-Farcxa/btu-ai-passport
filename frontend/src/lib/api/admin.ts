@@ -88,6 +88,34 @@ export interface AdminVersionPendingList {
   versions: AdminVersionPending[]
 }
 
+export interface AdminHealthAlert {
+  code:
+    | 'sync_failed'
+    | 'sync_stale'
+    | 'sync_never_succeeded'
+    | 'anchors_failed_permanent'
+    | 'anchors_stuck'
+    | 'inconsistencies'
+    | 'consistency_check_failed'
+  severity: 'warning' | 'critical'
+  message: string
+  reason: string | null
+  count: number | null
+}
+
+export interface AdminHealth {
+  status: 'ok' | 'warning' | 'critical'
+  checked_at: string
+  alerts: AdminHealthAlert[]
+  last_sync_status: 'completed' | 'failed' | null
+  last_sync_error: string | null
+  last_sync_at: string | null
+  last_success_at: string | null
+  anchors_failed_permanent: number
+  anchors_stuck: number
+  inconsistencies: number | null
+}
+
 export type SkillLevel = 'AI Skill' | 'AI Applied Skill' | 'AI Advanced Skill'
 
 export const SKILL_LEVELS: SkillLevel[] = [
@@ -278,6 +306,16 @@ export async function fetchAdminSyncRuns(
     headers: await getHeaders(),
   })
   if (!res.ok) throw new Error(`Failed to load sync runs: ${res.statusText}`)
+  return res.json()
+}
+
+/** What needs attention right now: failed or stale syncs, stuck anchors, data problems. */
+export async function fetchAdminHealth(): Promise<AdminHealth> {
+  const res = await apiFetch(`${apiBaseUrl()}/admin/health`, {
+    headers: await getHeaders(),
+    cache: 'no-store',
+  })
+  if (!res.ok) throw new Error(`Failed to load system health: ${res.status}`)
   return res.json()
 }
 

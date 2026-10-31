@@ -7,6 +7,7 @@ Sheet-managed students (admin_managed=False) are read-only from the admin
 panel's perspective — their skills can only be changed via the Google Sheet.
 """
 
+import logging
 import re
 import unicodedata
 from collections.abc import Iterable, Iterator
@@ -18,6 +19,7 @@ from fastapi import APIRouter, Depends, Header, Query, Request
 from fastapi.responses import Response
 from postgrest import CountMethod
 
+from passport_api.admin_health import load_admin_health
 from passport_api.anchoring import reconcile_anchors
 from passport_api.api.sync import get_sync_store
 from passport_api.auth import require_admin
@@ -34,6 +36,7 @@ from passport_api.schemas import (
     AdminCatalogSkillCreate,
     AdminCatalogSkillList,
     AdminCatalogSkillUpdate,
+    AdminHealth,
     AdminMe,
     AdminSkillEntry,
     AdminStudent,
@@ -81,6 +84,8 @@ from passport_api.validation import (
     name_error,
 )
 
+_log = logging.getLogger(__name__)
+
 
 def _admin_guard(authorization: Annotated[str | None, Header()] = None) -> str:
     return require_admin(authorization)
@@ -108,6 +113,16 @@ router = APIRouter(prefix="/admin", tags=["admin"], dependencies=ADMIN_DEPENDENC
 def admin_me(email: Annotated[str, Depends(_admin_guard)]) -> AdminMe:
     """Lets the admin UI ask "am I an admin?" before it shows anything."""
     return AdminMe(email=email)
+
+
+@router.get("/health", response_model=AdminHealth)
+def admin_health() -> AdminHealth:
+    """Everything that needs attention right now, for the dashboard banner. Read only."""
+    try:
+        return load_admin_health()
+    except Exception as exc:
+        _log.exception("admin_health_failed")
+        raise APIError(503, "health_unavailable") from exc
 
 
 # ---------------------------------------------------------------------------

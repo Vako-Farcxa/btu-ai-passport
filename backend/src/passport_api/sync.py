@@ -5,7 +5,7 @@ import json
 import logging
 import secrets
 import unicodedata
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, Protocol, cast
@@ -383,8 +383,12 @@ class FakeSheet:
         self.writes.append(list(outcomes))
 
 
-def open_spreadsheet() -> Any:
-    """The configured Google spreadsheet, opened with the service account."""
+def open_spreadsheet(timeout: float | None = None, scopes: Sequence[str] | None = None) -> Any:
+    """The configured Google spreadsheet, opened with the service account.
+
+    `timeout` (seconds) limits each Sheets request the client makes. Without it gspread's own
+    default applies. `scopes` narrows what the service account may do (the backup asks for
+    read-only access)."""
     if not settings.sheet_id or not settings.google_service_account_json:
         raise SheetUnavailableError("sheet_not_configured")
     try:
@@ -399,7 +403,9 @@ def open_spreadsheet() -> Any:
         # Hosting dashboards often keep escaped newlines in pasted JSON.
         info["private_key"] = key.replace("\\n", "\n")
     try:
-        client = gspread.service_account_from_dict(info, scopes=_SHEETS_SCOPES)
+        client = gspread.service_account_from_dict(info, scopes=list(scopes or _SHEETS_SCOPES))
+        if timeout is not None:
+            client.set_timeout(timeout)
         return client.open_by_key(settings.sheet_id)
     except Exception as exc:
         _log.warning("sheet_read_failed: %s", type(exc).__name__, exc_info=True)

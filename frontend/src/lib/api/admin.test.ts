@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   adminErrorMessage,
   describeSyncResult,
+  fetchAdminHealth,
   awardSyncNotice,
   parseAwardStudents,
   restoreAdminStudent,
@@ -163,5 +164,35 @@ describe('revocation calls', () => {
     ]) {
       expect(adminErrorMessage(code)).not.toBe(code)
     }
+  })
+})
+
+describe('fetchAdminHealth', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('asks the admin health route with the admin token and no cache', async () => {
+    const body = { status: 'ok', alerts: [] }
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue({ ok: true, status: 200, json: async () => body })
+    vi.stubGlobal('fetch', fetchMock)
+    await expect(fetchAdminHealth()).resolves.toEqual(body)
+    const [url, init] = fetchMock.mock.calls[0] as [
+      string,
+      { headers: Record<string, string>; cache: string },
+    ]
+    expect(url).toBe('http://localhost:8000/admin/health')
+    expect(init.headers.Authorization).toBe('Bearer tok')
+    expect(init.cache).toBe('no-store')
+  })
+
+  it('throws when the API cannot say', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue({ ok: false, status: 503, headers: new Headers() }),
+    )
+    await expect(fetchAdminHealth()).rejects.toThrow(/503/)
   })
 })
