@@ -224,6 +224,24 @@ class AdminVersionPendingList(BaseModel):
     versions: list[AdminVersionPending]
 
 
+class ConsistencyProblem(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    kind: str
+    passport_id: str
+    version_number: int | None = None
+    detail: str
+
+
+class ConsistencyReport(BaseModel):
+    """Result of the read-only check for half-written students and versions."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    students_checked: int
+    problems: list[ConsistencyProblem]
+
+
 # ---------------------------------------------------------------------------
 # Skills catalog and awards
 # ---------------------------------------------------------------------------

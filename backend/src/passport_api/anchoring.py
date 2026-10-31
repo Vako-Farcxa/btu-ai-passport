@@ -41,6 +41,8 @@ from passport_api.schemas import AnchorReconcileResult
 _log = logging.getLogger(__name__)
 
 ERROR_MAX_LENGTH = 160
+# anchor_last_error for a version whose stored content does not hash to its content_hash.
+SNAPSHOT_MISMATCH = "snapshot_mismatch"
 
 
 @dataclass(frozen=True)
@@ -81,6 +83,9 @@ class AnchorRecord(Protocol):
     anchor_last_error: str | None
     anchor_next_attempt_at: str | None
     anchor_tx_hashes: list[str]
+    # Why the stored content does not hash to content_hash, or None. Such a version is never
+    # sent: the chain would hold a hash that the stored passport cannot reproduce.
+    snapshot_error: str | None
 
 
 class AnchorStore(Protocol):
@@ -245,6 +250,9 @@ def _process(record: AnchorRecord, chain: AnchorChain, run: _Run) -> str:
     if stored != ZERO:
         # The slot holds other content, so this version's hash can never be stored there.
         return _fail(record, "slot_conflict")
+
+    if record.snapshot_error is not None:
+        return _fail(record, SNAPSHOT_MISMATCH)
 
     last = hashes[-1] if hashes else None
     last_state = states[last] if last is not None else None

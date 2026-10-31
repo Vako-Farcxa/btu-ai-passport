@@ -158,6 +158,8 @@ describe('revocation calls', () => {
       'version_already_revoked',
       'version_not_revoked',
       'version_not_found',
+      'sync_stale',
+      'snapshot_mismatch',
     ]) {
       expect(adminErrorMessage(code)).not.toBe(code)
     }

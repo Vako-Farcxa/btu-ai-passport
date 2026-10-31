@@ -365,6 +365,10 @@ const ERROR_MESSAGES: Record<string, string> = {
   student_conflict:
     'This email already exists in the database in a way the sync could not merge. Ask a developer to check it.',
   sync_error: 'The sync could not process this student. Try again later.',
+  sync_stale:
+    'This student changed while the sync was running, so nothing was saved for them. The next sync retries.',
+  snapshot_mismatch:
+    'The saved passport did not match its hash. It will not be anchored. Ask a developer to check it.',
   student_archived:
     'This student is archived. Restore them in the Student Directory before awarding.',
   student_not_deleted: 'This student is not archived.',

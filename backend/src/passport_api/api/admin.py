@@ -22,6 +22,7 @@ from passport_api.anchoring import reconcile_anchors
 from passport_api.api.sync import get_sync_store
 from passport_api.auth import require_admin
 from passport_api.chain import chain_from_settings
+from passport_api.consistency import find_inconsistencies, load_students
 from passport_api.db import get_supabase
 from passport_api.errors import APIError
 from passport_api.pdf import PassportPdf, get_storage, publish_pdfs
@@ -43,6 +44,8 @@ from passport_api.schemas import (
     AdminVersionPending,
     AdminVersionPendingList,
     AwardRowResult,
+    ConsistencyProblem,
+    ConsistencyReport,
     Skill,
     SyncResult,
 )
@@ -743,6 +746,24 @@ def list_pending_versions() -> AdminVersionPendingList:
             )
         )
     return AdminVersionPendingList(versions=versions)
+
+
+@router.get("/consistency", response_model=ConsistencyReport)
+def consistency_report() -> ConsistencyReport:
+    """Students and versions left half-written by the old non-atomic sync. Read only."""
+    students = load_students()
+    return ConsistencyReport(
+        students_checked=len(students),
+        problems=[
+            ConsistencyProblem(
+                kind=problem.kind,
+                passport_id=problem.passport_id,
+                version_number=problem.version_number,
+                detail=problem.detail,
+            )
+            for problem in find_inconsistencies(students)
+        ],
+    )
 
 
 @router.post("/versions/{version_id}/anchor", status_code=200)
