@@ -25,3 +25,10 @@ Thumbs.db
 backend/var/
 .preview/
 backend/.coverage
+
+# AI assistant and spec tooling (kept locally, not part of the project)
+.cursor/
+.specify/
+.agents/
+AGENTS.md
+specs/

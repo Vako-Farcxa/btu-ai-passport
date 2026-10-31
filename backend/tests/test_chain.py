@@ -17,7 +17,7 @@ from passport_api.verify import VerifyFound, VerifyPending, verify_code
 
 REPO = Path(__file__).resolve().parents[2]
 ASSETS = REPO / "backend" / "assets" / "PassportAnchor.json"
-CONTRACT = REPO / "specs" / "001-ai-skills-passport" / "contracts" / "PassportAnchor.sol"
+CONTRACT = REPO / "docs" / "contract" / "PassportAnchor.sol"
 SCRIPT = REPO / "backend" / "scripts" / "deploy_anchor.py"
 
 CONTENT = "0x" + "11" * 32

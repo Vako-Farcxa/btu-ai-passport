@@ -190,7 +190,7 @@ Where the time went and what changed:
 
 ## Quality Checks & Tests
 
-Run all checks as defined in `AGENTS.md`:
+Run all checks:
 
 ```bash
 uv run ruff format . && uv run ruff check . && uv run mypy . && uv run pytest

@@ -85,7 +85,7 @@ How a passport gets from the Sheet to a verifiable record:
 - `frontend/`: Next.js app (sign-in, passport, public verify page, admin panel)
 - `backend/`: FastAPI service (sheet sync, PDFs, verification, Amoy anchoring)
 - `supabase/`: database migrations
-- `specs/`: spec-kit specification, plan and tasks
+- `docs/contract/`: contract ABI and Solidity source
 - `docs/screenshots/`: images used in this README
 - `docs/RESTORE.md`: how to restore a backup
 - `.github/workflows/sync.yml`: runs the sheet sync every 15 minutes
@@ -118,7 +118,7 @@ Every passport version is anchored on the **Polygon Amoy test network** in the `
 
 - Contract address: [`0xf436Ba2A2cd1dc78f1543A1E7e8a9f20B2C40c32`](https://amoy.polygonscan.com/address/0xf436Ba2A2cd1dc78f1543A1E7e8a9f20B2C40c32)
 - ABI: [`docs/contract/PassportAnchor.abi.json`](docs/contract/PassportAnchor.abi.json)
-- Source: [`specs/001-ai-skills-passport/contracts/PassportAnchor.sol`](specs/001-ai-skills-passport/contracts/PassportAnchor.sol). Once the source is published on Polygonscan ("Verify and Publish", Solidity 0.8.26, optimizer settings of the deployment), its Read Contract tab works directly. Until then use the script below, or load the ABI in Remix ("At Address").
+- Source: [`docs/contract/PassportAnchor.sol`](docs/contract/PassportAnchor.sol). Once the source is published on Polygonscan ("Verify and Publish", Solidity 0.8.26, optimizer settings of the deployment), its Read Contract tab works directly. Until then use the script below, or load the ABI in Remix ("At Address").
 
 The contract stores one mapping, `anchors(verificationIdHash) -> contentHash`. A slot can be written once and never changed.
 

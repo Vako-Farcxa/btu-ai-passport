@@ -15,7 +15,7 @@ from web3 import Web3
 from web3.middleware import ExtraDataToPOAMiddleware
 
 REPO = Path(__file__).resolve().parents[2]
-CONTRACT = REPO / "specs" / "001-ai-skills-passport" / "contracts" / "PassportAnchor.sol"
+CONTRACT = REPO / "docs" / "contract" / "PassportAnchor.sol"
 DESTINATION = REPO / "backend" / "assets" / "PassportAnchor.json"
 
 
