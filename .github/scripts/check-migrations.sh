@@ -60,8 +60,12 @@ select string_agg(name, ', ') from (
   ) as t(name)
   where to_regclass('public.' || t.name) is null
   union all
-  select 'function sync_student_unit'
-  where not exists (select from pg_proc where proname = 'sync_student_unit')
+  select 'function ' || f.name
+  from (values
+    ('sync_student_unit'), ('sync_student_units'), ('admin_dashboard_stats'),
+    ('admin_health_snapshot')
+  ) as f(name)
+  where not exists (select from pg_proc where proname = f.name)
 ) m
 SQL
 )
@@ -69,4 +73,4 @@ if [ -n "$missing" ]; then
   echo "Missing after migrating: $missing" >&2
   exit 1
 fi
-echo "OK: ${#files[@]} migrations applied in order, the newest twice, main tables and sync function present"
+echo "OK: ${#files[@]} migrations applied in order, the newest twice, main tables and the sync and admin functions present"

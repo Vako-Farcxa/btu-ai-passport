@@ -64,6 +64,19 @@ class SupabaseStore:
             issued_on="1970-01-01" if issued_at is None else str(issued_at)[:10],
         )
 
+    def is_archived(self, email: str) -> bool:
+        """Whether the student was archived, without loading any of their versions."""
+        response = (
+            get_supabase()
+            .table("students")
+            .select("deleted_at")
+            .eq("email", email.strip().lower())
+            .limit(1)
+            .execute()
+        )
+        rows = cast(list[dict[str, object]], response.data)
+        return bool(rows) and rows[0].get("deleted_at") is not None
+
     def versions_for_email(self, email: str) -> tuple[StoredVersion, ...]:
         response = (
             get_supabase()

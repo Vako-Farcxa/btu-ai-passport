@@ -7,6 +7,7 @@ import jwt
 from jwt import PyJWK
 from jwt.exceptions import PyJWTError
 
+from passport_api.cache import TtlCache
 from passport_api.db import get_supabase
 from passport_api.errors import APIError
 from passport_api.settings import email_domain_allowed, settings
@@ -20,6 +21,12 @@ _JWKS_TTL_SECONDS = 600.0
 _JWKS_MIN_REFRESH_SECONDS = 30.0
 # If Supabase is unreachable we keep trusting the last good keys for this long.
 _JWKS_MAX_STALE_SECONDS = 3600.0
+
+# Admins found in admin_users, remembered briefly so a page that makes several admin requests
+# at once checks the table once. Only a "yes" is kept, and an admin write clears it. Removing
+# someone from admin_users therefore takes effect within _ADMIN_TTL_SECONDS at the latest.
+_ADMIN_TTL_SECONDS = 30.0
+_admin_cache: TtlCache[bool] = TtlCache(ttl=_ADMIN_TTL_SECONDS)
 
 _jwks_lock = threading.Lock()
 _jwks_keys: list[dict[str, object]] | None = None
@@ -81,12 +88,15 @@ def require_admin(authorization: str | None) -> str:
     if token == "demo-admin" and settings.demo_mode:  # noqa: S105
         return "admin@btu.edu.ge"
     email = email_from_authorization(authorization)
+    if _admin_cache.get(email):
+        return email
     response = (
         get_supabase().table("admin_users").select("id").eq("email", email).limit(1).execute()
     )
     rows = response.data
     if not isinstance(rows, list) or not rows:
         raise APIError(403, "admin_not_found")
+    _admin_cache.put(email, True)
     return email
 
 

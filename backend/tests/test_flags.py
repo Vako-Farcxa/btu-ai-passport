@@ -289,3 +289,44 @@ def test_admin_flag_routes_refuse_a_missing_or_student_token(
     monkeypatch.setattr(auth, "fetch_jwks", lambda: {"keys": [_JWK]})
     assert client.get("/admin/flags").status_code == 401
     assert client.patch("/admin/flags/x", json={"status": "resolved"}).status_code == 401
+
+
+# -- the speed work: archived check and counts -------------------------------
+
+
+def test_an_archived_student_gets_no_flags_and_the_flags_query_cannot_leak_them(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The archived check and the flags query run side by side. The answer must still be the
+    refusal alone."""
+    flag()
+    monkeypatch.setattr("passport_api.api.me.get_store", lambda: _ArchivedStore())
+    response = client.get("/me/flags", headers=as_student())
+    assert response.status_code == 403
+    assert response.json() == {"code": "passport_revoked"}
+
+
+class _ArchivedStore:
+    def is_archived(self, email: str) -> bool:
+        return True
+
+
+def test_both_checks_run_before_the_flags_are_returned() -> None:
+    flag()
+    body = client.get("/me/flags", headers=as_student()).json()
+    assert [item["version"] for item in body["flags"]] == [2]
+
+
+def test_the_open_count_is_a_head_count_not_a_download() -> None:
+    from unittest.mock import MagicMock, patch
+
+    from passport_api.flags import SupabaseFlagStore
+
+    db = MagicMock()
+    query = db.table.return_value.select.return_value.eq.return_value.limit.return_value
+    query.execute.return_value.count = 7
+    with patch("passport_api.flags.get_supabase", return_value=db):
+        assert SupabaseFlagStore().open_count() == 7
+        query.execute.return_value.count = None
+        assert SupabaseFlagStore().open_count() == 0
+    db.table.return_value.select.assert_called_with("id", count="exact")

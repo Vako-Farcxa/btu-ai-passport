@@ -17,6 +17,7 @@ Rules, each one an alert with a severity (warning = amber, critical = red):
 """
 
 from collections.abc import Mapping, Sequence
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 
@@ -194,41 +195,90 @@ def _rows(data: object) -> list[dict[str, Any]]:
 
 
 def load_admin_health(now: datetime | None = None) -> AdminHealth:
-    """Read the rows and evaluate them. A failing database read raises; the caller reports it."""
+    """Read the rows and evaluate them. A failing database read raises; the caller reports it.
+
+    One round trip when migration 0012 is applied (admin_health_snapshot). Without it the same
+    four reads run side by side."""
     db = get_supabase()
-    runs = (
-        db.table("sync_runs")
-        .select("status, started_at, finished_at, error")
-        .in_("status", ["completed", "failed"])
-        .order("started_at", desc=True)
-        .limit(1)
-        .execute()
-    )
-    success = (
-        db.table("sync_runs")
-        .select("status, started_at, finished_at, error")
-        .eq("status", "completed")
-        .order("started_at", desc=True)
-        .limit(1)
-        .execute()
-    )
-    versions = (
-        db.table("passport_versions")
-        .select("anchor_status, issued_at, anchor_submitted_at, anchor_last_error")
-        .neq("anchor_status", "confirmed")
-        .execute()
-    )
-    try:
-        inconsistencies: int | None = len(_rows(db.rpc("sync_inconsistencies").execute().data))
-    except Exception:
-        # For example migration 0011 is not applied. The banner says the check could not run.
-        inconsistencies = None
-    last_runs = _rows(runs.data)
-    last_success = _rows(success.data)
+    snapshot = _snapshot(db)
+    if snapshot is None:
+        snapshot = _read_separately(db)
     return evaluate(
         now=now or datetime.now(UTC),
-        last_finished_run=last_runs[0] if last_runs else None,
-        last_success_run=last_success[0] if last_success else None,
-        open_versions=_rows(versions.data),
-        inconsistencies=inconsistencies,
+        last_finished_run=snapshot["last_finished_run"],
+        last_success_run=snapshot["last_success_run"],
+        open_versions=snapshot["open_versions"],
+        inconsistencies=snapshot["inconsistencies"],
     )
+
+
+def _snapshot(db: Any) -> dict[str, Any] | None:
+    try:
+        data = db.rpc("admin_health_snapshot").execute().data
+    except Exception:
+        # Migration 0012 is not applied (or the call failed): use the separate reads.
+        return None
+    if not isinstance(data, dict):
+        return None
+    versions = data.get("open_versions")
+    count = data.get("inconsistencies")
+    return {
+        "last_finished_run": data.get("last_finished_run"),
+        "last_success_run": data.get("last_success_run"),
+        "open_versions": _rows(versions),
+        "inconsistencies": None if count is None else int(count),
+    }
+
+
+def _read_separately(db: Any) -> dict[str, Any]:
+    def last_runs() -> list[dict[str, Any]]:
+        return _rows(
+            db.table("sync_runs")
+            .select("status, started_at, finished_at, error")
+            .in_("status", ["completed", "failed"])
+            .order("started_at", desc=True)
+            .limit(1)
+            .execute()
+            .data
+        )
+
+    def last_success() -> list[dict[str, Any]]:
+        return _rows(
+            db.table("sync_runs")
+            .select("status, started_at, finished_at, error")
+            .eq("status", "completed")
+            .order("started_at", desc=True)
+            .limit(1)
+            .execute()
+            .data
+        )
+
+    def open_versions() -> list[dict[str, Any]]:
+        return _rows(
+            db.table("passport_versions")
+            .select("anchor_status, issued_at, anchor_submitted_at, anchor_last_error")
+            .neq("anchor_status", "confirmed")
+            .execute()
+            .data
+        )
+
+    def inconsistencies() -> int | None:
+        try:
+            return len(_rows(db.rpc("sync_inconsistencies").execute().data))
+        except Exception:
+            # For example migration 0011 is not applied. The banner says the check could not run.
+            return None
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        runs_job = pool.submit(last_runs)
+        success_job = pool.submit(last_success)
+        versions_job = pool.submit(open_versions)
+        problems_job = pool.submit(inconsistencies)
+        runs, success = runs_job.result(), success_job.result()
+        versions, problems = versions_job.result(), problems_job.result()
+    return {
+        "last_finished_run": runs[0] if runs else None,
+        "last_success_run": success[0] if success else None,
+        "open_versions": versions,
+        "inconsistencies": problems,
+    }

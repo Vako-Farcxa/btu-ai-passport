@@ -309,6 +309,27 @@ export async function fetchAdminSyncRuns(
   return res.json()
 }
 
+/** Every number on the admin dashboard, from one request. */
+export interface AdminStats {
+  total_students: number
+  admin_managed_students: number
+  pending_anchors: number
+  /** Anchors that gave up and need an admin. */
+  failed_anchors: number
+  open_flags: number
+  recent_runs: AdminSyncRun[]
+}
+
+export async function fetchAdminStats(): Promise<AdminStats> {
+  const res = await apiFetch(`${apiBaseUrl()}/admin/stats`, {
+    headers: await getHeaders(),
+    cache: 'no-store',
+  })
+  if (!res.ok)
+    throw new Error(`Failed to load dashboard metrics: ${res.status}`)
+  return res.json()
+}
+
 /** What needs attention right now: failed or stale syncs, stuck anchors, data problems. */
 export async function fetchAdminHealth(): Promise<AdminHealth> {
   const res = await apiFetch(`${apiBaseUrl()}/admin/health`, {

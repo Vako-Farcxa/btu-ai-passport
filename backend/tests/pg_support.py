@@ -117,6 +117,13 @@ class _Query:
             )
         return self
 
+    def order(self, *_args: Any, **_kwargs: Any) -> "_Query":
+        return self
+
+    def range(self, start: int, end: int) -> "_Query":
+        self._data = list(self._data)[start : end + 1]
+        return self
+
     def upsert(self, rows: list[dict[str, Any]], on_conflict: str) -> "_Query":
         columns = sorted({key for row in rows for key in row})
         updates = ", ".join(f"{c} = excluded.{c}" for c in columns if c != on_conflict)

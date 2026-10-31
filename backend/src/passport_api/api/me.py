@@ -29,7 +29,9 @@ def require_active_student(versions: tuple[StoredVersion, ...]) -> None:
 
 
 def ensure_not_archived(email: str) -> None:
-    require_active_student(get_store().versions_for_email(email))
+    """Refuse an archived student. Looks at the student row only, not at every version."""
+    if get_store().is_archived(email):
+        raise APIError(403, "passport_revoked")
 
 
 def passport_response(versions: tuple[StoredVersion, ...]) -> PassportResponse:

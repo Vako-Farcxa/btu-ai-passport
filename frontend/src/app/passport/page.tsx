@@ -39,7 +39,8 @@ export default function PassportPage() {
   const versions = session.kind === 'ready' ? orderedVersions(session.body) : []
   const current = versions.find((version) => version.is_current) ?? versions[0]
   const holder = current?.holder_name
-  const myFlags = useMyFlags(passport !== null)
+  // Started with the passport request, not after it, so the page needs one round trip.
+  const myFlags = useMyFlags(session.kind !== 'signed_out')
 
   async function onDownload(version: number) {
     if (downloading !== null) return
@@ -84,9 +85,17 @@ export default function PassportPage() {
         </p>
       ) : null}
       {session.kind === 'loading' ? (
-        <p className="page-status" role="status">
-          {copy.loading}
-        </p>
+        <div data-testid="passport-skeleton" aria-busy="true">
+          <p className="page-status" role="status">
+            {copy.loading}
+          </p>
+          <div className="skeleton-block" aria-hidden="true">
+            <span className="skeleton skeleton-line" style={{ width: '55%' }} />
+            <span className="skeleton skeleton-line" style={{ width: '30%' }} />
+            <span className="skeleton skeleton-card" />
+            <span className="skeleton skeleton-card" />
+          </div>
+        </div>
       ) : null}
       {session.kind === 'signed_out' ? (
         <p className="page-alert" role="alert">

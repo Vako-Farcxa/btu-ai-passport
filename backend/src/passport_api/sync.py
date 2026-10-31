@@ -6,6 +6,7 @@ import logging
 import secrets
 import unicodedata
 from collections.abc import Callable, Sequence
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, Protocol, cast
@@ -413,51 +414,88 @@ def open_spreadsheet(timeout: float | None = None, scopes: Sequence[str] | None 
 
 
 class GspreadSheet:
+    """The official Google Sheet. One run opens the spreadsheet once, reads the first tab and
+    the optional Skills tab in a single request, and writes only the cells that changed back
+    in one batch update."""
+
     def __init__(self) -> None:
+        self._spreadsheet: Any = None
         self._worksheet: Any = None
         self._header: list[str] = []
         self._first_data_row = 0
+        self._grid: list[list[object]] = []
+        self._catalog_values: list[list[object]] | None = None
+        self._records: list[dict[str, object]] = []
+        self._loaded = False
 
-    def read_rows(self) -> list[dict[str, object]]:
+    def _load(self) -> None:
+        if self._loaded:
+            return
         spreadsheet = open_spreadsheet()
         try:
-            worksheet = spreadsheet.get_worksheet(0)
-            values = worksheet.get_all_values()
+            worksheets = spreadsheet.worksheets()
+            if not worksheets:
+                raise SheetUnavailableError("sheet_unavailable")
+            first = worksheets[0]
+            has_catalog = any(sheet.title == SKILLS_TAB for sheet in worksheets)
+            names = [gspread.utils.absolute_range_name(first.title)]
+            if has_catalog:
+                names.append(gspread.utils.absolute_range_name(SKILLS_TAB))
+            fetched = spreadsheet.values_batch_get(names)
+            ranges = fetched.get("valueRanges", [])
+            grid = cast(list[list[object]], ranges[0].get("values", []) if ranges else [])
+            catalog = (
+                cast(list[list[object]], ranges[1].get("values", []))
+                if has_catalog and len(ranges) > 1
+                else []
+            )
+        except SheetUnavailableError:
+            raise
         except Exception as exc:
             _log.warning("sheet_read_failed: %s", type(exc).__name__, exc_info=True)
             raise SheetUnavailableError("sheet_unavailable") from exc
-        grid = cast(list[list[object]], values)
         header_index = find_header_row(grid)
-        header, records = records_from_values(grid)
-        self._worksheet = worksheet
-        self._header = header
+        self._spreadsheet = spreadsheet
+        self._worksheet = first
+        self._grid = grid
+        self._catalog_values = catalog
+        self._header, self._records = records_from_values(grid)
         self._first_data_row = 0 if header_index is None else header_index + 2
-        return records
+        self._loaded = True
+
+    def read_rows(self) -> list[dict[str, object]]:
+        self._load()
+        return self._records
 
     def read_catalog(self) -> list[CatalogSkill]:
         """Skills from the optional Skills tab. Empty when the tab does not exist."""
-        spreadsheet = open_spreadsheet()
-        try:
-            worksheet = spreadsheet.worksheet(SKILLS_TAB)
-        except gspread.WorksheetNotFound:
-            return []
-        except Exception as exc:
-            _log.warning("catalog_read_failed: %s", type(exc).__name__, exc_info=True)
-            raise SheetUnavailableError("sheet_unavailable") from exc
-        return catalog_from_values(cast(list[list[object]], worksheet.get_all_values()))
+        self._load()
+        return catalog_from_values(self._catalog_values or [])
 
     def write_back(self, outcomes: list[RowOutcome]) -> None:
         if self._worksheet is None or not outcomes:
             return
-        updates = write_back_ranges(self._header, self._first_data_row, outcomes)
+        updates = write_back_ranges(self._header, self._first_data_row, outcomes, self._grid)
         if updates:
             self._worksheet.batch_update(updates, value_input_option="RAW")
 
 
+def _stored_cell(row: list[object], position: int) -> str:
+    return _cell(row[position]) if position < len(row) else ""
+
+
 def write_back_ranges(
-    header: list[str], first_data_row: int, outcomes: list[RowOutcome]
+    header: list[str],
+    first_data_row: int,
+    outcomes: list[RowOutcome],
+    current: list[list[object]] | None = None,
 ) -> list[dict[str, object]]:
-    """A1 updates for the sync output columns that exist in this header."""
+    """A1 updates for the sync output columns that exist in this header.
+
+    With `current` (the grid as it was read) a cell that already holds the new value is left
+    alone, and the "synced at" time is only rewritten for a row where something else changed.
+    A sheet that is already in sync then costs no write at all, instead of rewriting five cells
+    on every row every 15 minutes."""
     lowered = [name.strip().lower() for name in header]
     columns: dict[str, int] = {}
     for field, names in _WRITE_COLUMNS.items():
@@ -475,10 +513,20 @@ def write_back_ranges(
             "error": outcome.error,
             "passport_id": outcome.passport_id,
         }
-        for field, position in columns.items():
-            if field == "passport_id" and not outcome.passport_id:
-                continue
-            cell = gspread.utils.rowcol_to_a1(row_number, position + 1)
+        fields = [
+            field for field in columns if not (field == "passport_id" and not outcome.passport_id)
+        ]
+        if current is not None:
+            stored = current[row_number - 1] if 0 < row_number <= len(current) else []
+            changed = [
+                field
+                for field in fields
+                if field != "synced_at"
+                and _stored_cell(stored, columns[field]) != _cell(values[field])
+            ]
+            fields = changed + (["synced_at"] if changed and "synced_at" in columns else [])
+        for field in fields:
+            cell = gspread.utils.rowcol_to_a1(row_number, columns[field] + 1)
             updates.append({"range": cell, "values": [[values[field]]]})
     return updates
 
@@ -624,6 +672,9 @@ class MemorySyncStore:
         for key in unit.source_keys:
             self._sources.setdefault(key, unit.email)
 
+    def known_source_keys(self) -> set[str]:
+        return set(self._sources)
+
     def upsert_skills(self, skills: list[CatalogSkill]) -> None:
         for skill in skills:
             self.skills[skill.id] = skill
@@ -691,9 +742,38 @@ class MemorySyncStore:
         raise RuntimeError("no_running_sync")
 
 
+# PostgREST returns at most 1000 rows per request (the Supabase default), so a read of a whole
+# table is made page by page. Without this a table past 1000 rows would be silently cut short.
+_PAGE = 1000
+# Units sent to the database per round trip (see migration 0012).
+_UNIT_BATCH = 25
+# PostgREST codes for "that function does not exist" (migration 0012 is not applied yet).
+_MISSING_FUNCTION = ("PGRST202", "42883")
+
+
+def _select_all(build: Callable[[], Any]) -> list[dict[str, object]]:
+    """Every row of a query, page by page. `build()` returns a fresh, ordered query."""
+    rows: list[dict[str, object]] = []
+    start = 0
+    while True:
+        page = _table_rows(build().range(start, start + _PAGE - 1).execute().data)
+        rows.extend(page)
+        if len(page) < _PAGE:
+            return rows
+        start += _PAGE
+
+
 class SupabaseSyncStore:
+    # The sync may read and write through this store from several threads: the shared client
+    # keeps a connection pool, and every call is a separate request.
+    parallel_io = True
+
     def __init__(self) -> None:
         self._running_id: str | None = None
+        # Student ids by email, learned from reads the sync does anyway, so saving a PDF path
+        # or an anchor does not need a lookup query first.
+        self._student_ids: dict[str, str] = {}
+        self._batch_units = True
 
     def has_running(self) -> bool:
         response = (
@@ -745,17 +825,19 @@ class SupabaseSyncStore:
         self._update_running("completed", rows_read, versions_created, None)
 
     def current_students(self) -> dict[str, StudentState]:
-        response = (
-            get_supabase()
-            .table("students")
-            .select(
-                "email, full_name, passport_id, deleted_at, "
-                "passport_versions(version_number, skill_fingerprint, holder_name)"
+        rows = _select_all(
+            lambda: (
+                get_supabase()
+                .table("students")
+                .select(
+                    "email, full_name, passport_id, deleted_at, "
+                    "passport_versions(version_number, skill_fingerprint, holder_name)"
+                )
+                .order("id")
             )
-            .execute()
         )
         states: dict[str, StudentState] = {}
-        for row in _table_rows(response.data):
+        for row in rows:
             archived = row.get("deleted_at") is not None
             versions = _nested_rows(row.get("passport_versions"))
             if not versions:
@@ -792,6 +874,64 @@ class SupabaseSyncStore:
         )
         return _unit_result(response.data)
 
+    def commit_student_units(self, units: list[StudentUnit]) -> list[UnitResult | Exception]:
+        """Many units per round trip (sync_student_units, migration 0012). Each unit is still
+        its own all-or-nothing step inside the function, and one failing unit does not stop the
+        others. Without the migration every unit is committed with its own call."""
+        outcomes: list[UnitResult | Exception] = []
+        for start in range(0, len(units), _UNIT_BATCH):
+            chunk = units[start : start + _UNIT_BATCH]
+            if self._batch_units:
+                try:
+                    outcomes.extend(self._commit_batch(chunk))
+                    continue
+                except APIError as exc:
+                    if exc.code not in _MISSING_FUNCTION:
+                        outcomes.extend([exc] * len(chunk))
+                        continue
+                    _log.warning("sync_student_units_missing: apply migration 0012")
+                    self._batch_units = False
+                except Exception as exc:
+                    outcomes.extend([exc] * len(chunk))
+                    continue
+            for unit in chunk:
+                try:
+                    outcomes.append(self.commit_student_unit(unit))
+                except Exception as exc:
+                    outcomes.append(exc)
+        return outcomes
+
+    def _commit_batch(self, units: list[StudentUnit]) -> list[UnitResult | Exception]:
+        response = (
+            get_supabase()
+            .rpc("sync_student_units", {"p_units": [_unit_payload(unit) for unit in units]})
+            .execute()
+        )
+        items = response.data
+        if not isinstance(items, list) or len(items) != len(units):
+            raise RuntimeError("sync_units_no_result")
+        results: list[UnitResult | Exception] = []
+        for item in items:
+            row = cast(dict[str, object], item) if isinstance(item, dict) else {}
+            if row.get("ok") is True:
+                try:
+                    results.append(_unit_result(row.get("result")))
+                except Exception as exc:
+                    results.append(exc)
+            else:
+                results.append(
+                    APIError(
+                        {"code": str(row.get("code") or ""), "message": str(row.get("message"))}
+                    )
+                )
+        return results
+
+    def known_source_keys(self) -> set[str]:
+        rows = _select_all(
+            lambda: get_supabase().table("source_records").select("record_key").order("record_key")
+        )
+        return {str(row["record_key"]) for row in rows}
+
     def upsert_skills(self, skills: list[CatalogSkill]) -> None:
         # name_ka is sent only for skills that carry one (the Skills tab). Older databases
         # without that column keep working for sheets that have no Skills tab.
@@ -805,16 +945,32 @@ class SupabaseSyncStore:
             ).execute()
 
     def taken_passport_ids(self) -> set[str]:
-        response = get_supabase().table("students").select("passport_id").execute()
-        return {str(row["passport_id"]) for row in _table_rows(response.data)}
+        rows = _select_all(
+            lambda: get_supabase().table("students").select("passport_id").order("passport_id")
+        )
+        return {str(row["passport_id"]) for row in rows}
 
     def taken_verification_codes(self) -> set[str]:
-        response = get_supabase().table("passport_versions").select("verification_code").execute()
-        return {str(row["verification_code"]) for row in _table_rows(response.data)}
+        rows = _select_all(
+            lambda: (
+                get_supabase()
+                .table("passport_versions")
+                .select("verification_code")
+                .order("verification_code")
+            )
+        )
+        return {str(row["verification_code"]) for row in rows}
 
     def taken_content_hashes(self) -> set[str]:
-        response = get_supabase().table("passport_versions").select("content_hash").execute()
-        return {str(row["content_hash"]) for row in _table_rows(response.data)}
+        rows = _select_all(
+            lambda: (
+                get_supabase()
+                .table("passport_versions")
+                .select("content_hash")
+                .order("content_hash")
+            )
+        )
+        return {str(row["content_hash"]) for row in rows}
 
     def pending_pdfs(self) -> list[PendingPdf]:
         response = (
@@ -823,7 +979,7 @@ class SupabaseSyncStore:
             .select(
                 "version_number, holder_name, verification_code, issued_at, "
                 "skill_entries(skill, badge, awarded_on, description, position), "
-                "students(email, passport_id)"
+                "students(id, email, passport_id)"
             )
             .or_("pdf_en_path.is.null,pdf_ka_path.is.null")
             .execute()
@@ -833,6 +989,7 @@ class SupabaseSyncStore:
             student = _student_embed(row.get("students"))
             if student is None:
                 continue
+            self._remember_student(student)
             issued_at = row.get("issued_at")
             pending.append(
                 PendingPdf(
@@ -846,6 +1003,10 @@ class SupabaseSyncStore:
                 )
             )
         return pending
+
+    def _remember_student(self, student: dict[str, object]) -> None:
+        if student.get("id") is not None and student.get("email") is not None:
+            self._student_ids[str(student["email"])] = str(student["id"])
 
     def save_pdf_paths(self, email: str, version_number: int, en_path: str, ka_path: str) -> None:
         student_id = self._student_id(email)
@@ -872,6 +1033,9 @@ class SupabaseSyncStore:
             record = _anchor_record(row)
             if record is not None:
                 records.append(record)
+                student = _student_embed(row.get("students"))
+                if student is not None:
+                    self._remember_student(student)
         return records
 
     def version_by_id(self, version_id: str) -> VersionRecord | None:
@@ -932,13 +1096,17 @@ class SupabaseSyncStore:
         )
 
     def _student_id(self, email: str) -> str:
+        known = self._student_ids.get(email)
+        if known is not None:
+            return known
         response = (
             get_supabase().table("students").select("id").eq("email", email).limit(1).execute()
         )
         rows = _table_rows(response.data)
         if not rows:
             raise RuntimeError("student_missing")
-        return str(rows[0]["id"])
+        self._student_ids[email] = str(rows[0]["id"])
+        return self._student_ids[email]
 
     def _update_running(
         self,
@@ -1013,6 +1181,26 @@ def _read_tab_catalog(sheet: Sheet) -> list[CatalogSkill]:
         return []
 
 
+@dataclass(frozen=True)
+class _Planned:
+    """One student's unit, built and ready to commit."""
+
+    email: str
+    group: _EmailGroup
+    unit: StudentUnit
+    version_number: int
+    passport_id: str
+
+
+def _inline(call: Callable[[], Any]) -> "Future[Any]":
+    future: Future[Any] = Future()
+    try:
+        future.set_result(call())
+    except BaseException as exc:
+        future.set_exception(exc)
+    return future
+
+
 def _issue_versions(
     store: SyncStore,
     raw_rows: list[dict[str, object]],
@@ -1027,10 +1215,20 @@ def _issue_versions(
         for index in indexes:
             results.append(RowOutcome(index, STATUS_FAILED, "", synced_at, error, passport_id))
 
-    states = store.current_students()
-    passport_ids = store.taken_passport_ids()
-    codes = store.taken_verification_codes()
-    content_hashes = store.taken_content_hashes()
+    # The five reads are independent, so a store that allows it runs them side by side.
+    known_reader = getattr(store, "known_source_keys", None)
+    parallel = bool(getattr(store, "parallel_io", False))
+    with ThreadPoolExecutor(max_workers=5) if parallel else _NoPool() as pool:
+        states_job = pool.submit(store.current_students)
+        ids_job = pool.submit(store.taken_passport_ids)
+        codes_job = pool.submit(store.taken_verification_codes)
+        hashes_job = pool.submit(store.taken_content_hashes)
+        known_job = pool.submit(known_reader if callable(known_reader) else set)
+        states: dict[str, StudentState] = states_job.result()
+        passport_ids: set[str] = ids_job.result()
+        codes: set[str] = codes_job.result()
+        content_hashes: set[str] = hashes_job.result()
+        known_keys: set[str] = known_job.result()
     created = 0
     groups, failures = _group_rows(raw_rows)
     for index, error in failures.items():
@@ -1041,8 +1239,9 @@ def _issue_versions(
     store.upsert_skills(list(catalog.values()))
     synced: set[str] = set()
 
-    def process(email: str, group: _EmailGroup) -> None:
-        nonlocal created
+    def plan(email: str, group: _EmailGroup) -> _Planned | None:
+        """Build the unit for one student. None when the row is already in sync with the
+        database (same skills, same name, source rows already remembered): nothing to write."""
         skills = tuple(
             canonical_skills(
                 [
@@ -1062,14 +1261,14 @@ def _issue_versions(
         if state is not None and state.archived:
             # An archived student is revoked. Restore them in the admin panel first.
             fail(group.indexes, STUDENT_ARCHIVED, state.passport_id)
-            return
+            return None
         if state is None:
             if not group.full_name:
                 fail(group.indexes, "missing_full_name")
-                return
+                return None
             if group.passport_id and group.passport_id in passport_ids:
                 fail(group.indexes, "passport_id_taken")
-                return
+                return None
             if group.passport_id:
                 passport_id = group.passport_id
                 passport_ids.add(passport_id)
@@ -1090,6 +1289,19 @@ def _issue_versions(
             changed = state.latest_fingerprint != fingerprint
             holder = (group.full_name or state.holder_name) if changed else state.holder_name
         version_number = expected_latest + 1 if changed else expected_latest
+        source_keys = tuple(
+            _record_key(email, fact.skill, fact.badge, fact.raw_awarded_on) for fact in group.rows
+        )
+        if not changed and not rename and known_keys.issuperset(source_keys):
+            # The common case on every scheduled run: nothing changed for this student.
+            synced.add(email)
+            for index in group.indexes:
+                results.append(
+                    RowOutcome(
+                        index, STATUS_SYNCED, f"V{version_number}", synced_at, "", passport_id
+                    )
+                )
+            return None
         unit = StudentUnit(
             email=email,
             passport_id=passport_id,
@@ -1110,35 +1322,81 @@ def _issue_versions(
                 if changed
                 else None
             ),
-            source_keys=tuple(
-                _record_key(email, fact.skill, fact.badge, fact.raw_awarded_on)
-                for fact in group.rows
-            ),
+            source_keys=source_keys,
         )
-        # The whole unit commits at once. Anchoring and the Sheet write-back come after.
-        result = store.commit_student_unit(unit)
-        _check_snapshot(unit, result)
-        if result.created_version:
-            created += 1
-        synced.add(email)
-        for index in group.indexes:
-            results.append(
-                RowOutcome(index, STATUS_SYNCED, f"V{version_number}", synced_at, "", passport_id)
-            )
+        return _Planned(email, group, unit, version_number, passport_id)
 
+    planned: list[_Planned] = []
     for email, group in groups.items():
-        created_before = created
         try:
-            process(email, group)
+            item = plan(email, group)
         except Exception as exc:
             # One student must not stop the run. Mark their rows and carry on.
             _log.exception("student_sync_failed")
-            created = created_before
             fail(group.indexes, _failure_code(exc))
+            continue
+        if item is not None:
+            planned.append(item)
+
+    # The whole unit commits at once. Anchoring and the Sheet write-back come after.
+    for item, outcome in zip(planned, _commit_units(store, [p.unit for p in planned]), strict=True):
+        try:
+            if isinstance(outcome, Exception):
+                raise outcome
+            _check_snapshot(item.unit, outcome)
+        except Exception as exc:
+            _log.error("student_sync_failed", exc_info=exc)
+            fail(item.group.indexes, _failure_code(exc))
+            continue
+        if outcome.created_version:
+            created += 1
+        synced.add(item.email)
+        for index in item.group.indexes:
+            results.append(
+                RowOutcome(
+                    index,
+                    STATUS_SYNCED,
+                    f"V{item.version_number}",
+                    synced_at,
+                    "",
+                    item.passport_id,
+                )
+            )
     emails = synced
     _fill_pending_pdfs(store, emails)
     _anchor_pending(store, emails, chain)
     return created
+
+
+class _NoPool:
+    """Stands in for a thread pool: runs each job at once, on the calling thread."""
+
+    def __enter__(self) -> "_NoPool":
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        return None
+
+    def submit(self, call: Callable[[], Any]) -> "Future[Any]":
+        return _inline(call)
+
+
+def _commit_units(store: SyncStore, units: list[StudentUnit]) -> list[UnitResult | Exception]:
+    """Commit every unit. A unit that fails comes back as its exception, so one student never
+    blocks the others. Stores that can commit many units per round trip say so with
+    `commit_student_units`; any other store gets one commit call per unit."""
+    if not units:
+        return []
+    batch = getattr(store, "commit_student_units", None)
+    if callable(batch):
+        return cast(list[UnitResult | Exception], batch(units))
+    outcomes: list[UnitResult | Exception] = []
+    for unit in units:
+        try:
+            outcomes.append(store.commit_student_unit(unit))
+        except Exception as exc:
+            outcomes.append(exc)
+    return outcomes
 
 
 def _without_versions(student: StudentRecord) -> StudentState:
@@ -1328,11 +1586,16 @@ def _skills_from_stored(value: object) -> tuple[Skill, ...]:
     )
 
 
+# PDFs rendered and uploaded at the same time. Rendering is a few hundred milliseconds and an
+# upload is mostly waiting, so a few at once keeps a run with many new versions short.
+_PDF_WORKERS = 4
+
+
 def _fill_pending_pdfs(store: SyncStore, emails: set[str]) -> None:
     storage = get_storage()
-    for pending in store.pending_pdfs():
-        if pending.email not in emails:
-            continue
+    todo = [pending for pending in store.pending_pdfs() if pending.email in emails]
+
+    def publish(pending: PendingPdf) -> None:
         try:
             en_path, ka_path = publish_pdfs(
                 PassportPdf(
@@ -1350,6 +1613,13 @@ def _fill_pending_pdfs(store: SyncStore, emails: set[str]) -> None:
             # The PDF stays pending and is retried on the next run.
             _log.warning("pdf_publish_failed", exc_info=True)
 
+    if len(todo) > 1 and getattr(store, "parallel_io", False):
+        with ThreadPoolExecutor(max_workers=_PDF_WORKERS) as pool:
+            list(pool.map(publish, todo))
+        return
+    for pending in todo:
+        publish(pending)
+
 
 _ANCHOR_SELECT = (
     "id, version_number, holder_name, verification_code, verification_id_hash, "
@@ -1357,7 +1627,7 @@ _ANCHOR_SELECT = (
     "anchor_nonce, anchor_gas_price, anchor_submitted_at, anchor_attempts, anchor_last_error, "
     "anchor_next_attempt_at, anchor_tx_hashes, "
     "skill_entries(skill, badge, awarded_on, description, position), "
-    "students(email, passport_id)"
+    "students(id, email, passport_id)"
 )
 
 
@@ -1428,10 +1698,14 @@ def _anchor_pending(store: SyncStore, emails: set[str], chain: AnchorChain | Non
     # dropped or stuck transaction recovers on the next scheduled sync. A broken chain never
     # fails the sync: the ledger is already saved and the reconciler runs again later.
     del emails
-    client = chain if chain is not None else chain_from_settings()
-    if client is None:
-        return
     try:
+        client = chain if chain is not None else chain_from_settings()
+        if client is None:
+            return
+        if not store.pending_anchors():
+            # Nothing to anchor: skip the run lock and the chain checks, which cost several
+            # round trips on every scheduled sync.
+            return
         reconcile_anchors(store, client)
     except Exception:
         _log.exception("anchor_reconcile_failed")

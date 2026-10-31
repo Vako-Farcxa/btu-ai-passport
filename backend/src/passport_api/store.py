@@ -112,6 +112,11 @@ class MemoryStore:
     def version_count(self) -> int:
         return len(self._versions)
 
+    def is_archived(self, email: str) -> bool:
+        return any(
+            version.student_archived_at is not None for version in self.versions_for_email(email)
+        )
+
     def versions_for_email(self, email: str) -> tuple[StoredVersion, ...]:
         needle = email.strip().lower()
         return tuple(version for version in self._versions if version.email.lower() == needle)

@@ -34,6 +34,7 @@ ErrorCode = Literal[
     "version_already_revoked",
     "version_not_revoked",
     "health_unavailable",
+    "stats_unavailable",
 ]
 
 
@@ -196,6 +197,20 @@ class AdminSyncRun(BaseModel):
     rows_read: int | None
     versions_created: int | None
     error: str | None
+
+
+class AdminStats(BaseModel):
+    """Result of GET /admin/stats: every number on the admin dashboard."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    total_students: int
+    admin_managed_students: int
+    pending_anchors: int
+    # Anchors that gave up and need an admin (failed_permanent).
+    failed_anchors: int
+    open_flags: int
+    recent_runs: list[AdminSyncRun]
 
 
 class AdminSyncRunList(BaseModel):

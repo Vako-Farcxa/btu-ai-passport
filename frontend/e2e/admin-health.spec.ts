@@ -15,6 +15,18 @@ async function mockDashboard(page: Page, health: object | { status: number }) {
   await page.route(`${API}/admin/me`, (route) =>
     route.fulfill({ json: { email: 'admin@btu.edu.ge' } }),
   )
+  await page.route(`${API}/admin/stats`, (route) =>
+    route.fulfill({
+      json: {
+        total_students: 0,
+        admin_managed_students: 0,
+        pending_anchors: 0,
+        failed_anchors: 0,
+        open_flags: 0,
+        recent_runs: [],
+      },
+    }),
+  )
   await page.route(`${API}/admin/students**`, (route) =>
     route.fulfill({ json: { students: [], total: 0 } }),
   )

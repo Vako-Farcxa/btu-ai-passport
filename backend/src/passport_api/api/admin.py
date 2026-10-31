@@ -11,18 +11,21 @@ import logging
 import re
 import unicodedata
 from collections.abc import Iterable, Iterator
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from datetime import UTC, datetime
-from typing import Annotated, Any, Literal, cast
+from typing import Annotated, Any, cast
 
 from fastapi import APIRouter, Depends, Header, Query, Request
 from fastapi.responses import Response
 from postgrest import CountMethod
 
 from passport_api.admin_health import load_admin_health
+from passport_api.admin_stats import load_admin_stats, sync_run_from_row
 from passport_api.anchoring import reconcile_anchors
 from passport_api.api.sync import get_sync_store
 from passport_api.auth import require_admin
+from passport_api.cache import TtlCache, clear_all_caches
 from passport_api.chain import chain_from_settings
 from passport_api.consistency import find_inconsistencies, load_students
 from passport_api.db import get_supabase
@@ -39,10 +42,10 @@ from passport_api.schemas import (
     AdminHealth,
     AdminMe,
     AdminSkillEntry,
+    AdminStats,
     AdminStudent,
     AdminStudentDetail,
     AdminStudentList,
-    AdminSyncRun,
     AdminSyncRunList,
     AdminVersion,
     AdminVersionPending,
@@ -94,13 +97,22 @@ def _admin_guard(authorization: Annotated[str | None, Header()] = None) -> str:
 _WRITE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 
 
-def admin_write_limit(request: Request, email: Annotated[str, Depends(_admin_guard)]) -> None:
+def admin_write_limit(
+    request: Request, email: Annotated[str, Depends(_admin_guard)]
+) -> Iterator[None]:
     """Every admin write (not reads) counts against a per-admin limit, 30 a minute by default.
 
-    It runs after the guard, so only real admins are counted, by email and not by IP.
+    It runs after the guard, so only real admins are counted, by email and not by IP. Once the
+    write has been handled, the cached dashboard numbers are dropped so the next read sees it.
     """
-    if request.method in _WRITE_METHODS:
-        enforce("admin_write", email, settings.rate_limit_admin_writes_per_minute)
+    if request.method not in _WRITE_METHODS:
+        yield
+        return
+    enforce("admin_write", email, settings.rate_limit_admin_writes_per_minute)
+    try:
+        yield
+    finally:
+        clear_all_caches()
 
 
 # Shared with the admin flags router so every /admin write has the same guard and limit.
@@ -115,11 +127,28 @@ def admin_me(email: Annotated[str, Depends(_admin_guard)]) -> AdminMe:
     return AdminMe(email=email)
 
 
+# The dashboard reloads these on every visit and after every sync. A few seconds of cache keeps
+# repeated visits from re-reading the same rows, and clear_all_caches() (every admin write)
+# means a change the admin just made always shows up.
+_STATS_CACHE: TtlCache[AdminStats] = TtlCache(ttl=10.0)
+_HEALTH_CACHE: TtlCache[AdminHealth] = TtlCache(ttl=10.0)
+
+
+@router.get("/stats", response_model=AdminStats)
+def admin_stats() -> AdminStats:
+    """Every number on the dashboard in one request. Read only."""
+    try:
+        return _STATS_CACHE.get_or_load("stats", load_admin_stats)
+    except Exception as exc:
+        _log.exception("admin_stats_failed")
+        raise APIError(503, "stats_unavailable") from exc
+
+
 @router.get("/health", response_model=AdminHealth)
 def admin_health() -> AdminHealth:
     """Everything that needs attention right now, for the dashboard banner. Read only."""
     try:
-        return load_admin_health()
+        return _HEALTH_CACHE.get_or_load("health", load_admin_health)
     except Exception as exc:
         _log.exception("admin_health_failed")
         raise APIError(503, "health_unavailable") from exc
@@ -256,15 +285,22 @@ def list_students(
     search_filter = contains_filter(["email", "full_name"], search) if search else None
     if search_filter:
         query = query.or_(search_filter)
-    count_resp = (
-        get_supabase()
-        .table("students")
-        .select("id", count=CountMethod.exact)
-        .is_("deleted_at", "null" if not include_deleted else None)
-        .execute()
-    )
-    total = count_resp.count or 0
-    rows_resp = query.order("created_at", desc=True).range(offset, offset + limit - 1).execute()
+
+    def count_all() -> int:
+        count_resp = (
+            get_supabase()
+            .table("students")
+            .select("id", count=CountMethod.exact)
+            .is_("deleted_at", "null" if not include_deleted else None)
+            .execute()
+        )
+        return count_resp.count or 0
+
+    # The total and the page do not depend on each other: ask for both at once.
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        total_job = pool.submit(count_all)
+        rows_resp = query.order("created_at", desc=True).range(offset, offset + limit - 1).execute()
+        total = total_job.result()
     students = [_student_row_to_summary(r) for r in _table_rows(rows_resp.data)]
     return AdminStudentList(students=students, total=total)
 
@@ -398,29 +434,7 @@ def list_sync_runs(
         .limit(limit)
         .execute()
     )
-    runs: list[AdminSyncRun] = []
-    for r in _table_rows(resp.data):
-        started_raw = r.get("started_at") or _now()
-        finished_raw = r.get("finished_at")
-        runs.append(
-            AdminSyncRun(
-                id=cast(str, r["id"]),
-                status=cast(Literal["running", "completed", "skipped", "failed"], r["status"]),
-                started_at=datetime.fromisoformat(str(started_raw).replace("Z", "+00:00")),
-                finished_at=(
-                    None
-                    if finished_raw is None
-                    else datetime.fromisoformat(str(finished_raw).replace("Z", "+00:00"))
-                ),
-                rows_read=(None if r.get("rows_read") is None else int(cast(int, r["rows_read"]))),
-                versions_created=(
-                    None
-                    if r.get("versions_created") is None
-                    else int(cast(int, r["versions_created"]))
-                ),
-                error=None if r.get("error") is None else str(r["error"]),
-            )
-        )
+    runs = [sync_run_from_row(r) for r in _table_rows(resp.data)]
     return AdminSyncRunList(runs=runs)
 
 
