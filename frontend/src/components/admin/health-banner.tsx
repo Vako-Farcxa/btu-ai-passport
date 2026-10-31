@@ -13,7 +13,7 @@ type State =
 
 /**
  * Red or amber banner at the top of the admin dashboard when something needs a person: the
- * last sync failed, no sync for over an hour, an anchor gave up or has been waiting too long,
+ * last sync failed, no sync for hours, an anchor gave up or has been waiting too long,
  * or the database consistency check found problems. Nothing is shown while all is well.
  * `refreshKey` reloads it, for example after a manual sync.
  */
