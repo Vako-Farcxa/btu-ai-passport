@@ -92,18 +92,31 @@ def _normalize(value: str) -> str | None:
     return str(address)
 
 
-def client_ip(request: Request, hops: int | None = None) -> str:
-    """The caller's address, taking only the hop our own proxies vouch for.
+# Headers Cloudflare sets itself from the connection it accepted. Cloudflare overwrites any
+# value a visitor sends, and every Render service sits behind Cloudflare, so these cannot be
+# forged by a visitor. Render's own docs and support point at them for the visitor address.
+CLIENT_IP_HEADERS = ("cf-connecting-ip", "true-client-ip")
 
-    Behind Render every proxy appends the address it saw to X-Forwarded-For, so the left
-    side is whatever the client chose to send and cannot be trusted. With `hops` trusted
-    proxies the real client is the `hops`-th entry counted from the RIGHT. With 0 hops
-    (local runs and tests) the header is ignored and the socket peer is used.
+
+def client_ip(request: Request, hops: int | None = None) -> str:
+    """The caller's address, taking only what our own proxies vouch for.
+
+    With 0 trusted `hops` (local runs and tests) every forwarding header is ignored and the
+    socket peer is used. Behind Render (hops > 0) the visitor address comes from the header
+    Cloudflare sets (`CF-Connecting-IP`, then `True-Client-IP`). Counting entries in
+    X-Forwarded-For is only the fallback, because Render's chain length is not something we
+    control: every proxy appends the address it saw, so the left side is whatever the visitor
+    chose, and counting `hops` entries from the RIGHT lands on a rotating Cloudflare edge
+    address as soon as the chain is longer than we guessed.
     """
     count = settings.trusted_proxy_hops if hops is None else hops
     peer = request.client.host if request.client is not None else "unknown"
     if count <= 0:
         return _normalize(peer) or peer
+    for name in CLIENT_IP_HEADERS:
+        value = request.headers.get(name, "").strip()
+        if value and (address := _normalize(value)) is not None:
+            return address
     parts = [
         part.strip()
         for line in request.headers.getlist("x-forwarded-for")

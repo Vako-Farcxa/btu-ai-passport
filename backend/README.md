@@ -59,12 +59,13 @@ Over the limit the API answers `429 {"code": "rate_limited"}` with a `Retry-Afte
 message with the wait. Change a limit with the env vars in `.env.example`, `0` turns one off,
 `RATE_LIMIT_ENABLED=false` turns all off.
 
-**Client IP behind Render.** Every proxy appends the address it saw to `X-Forwarded-For`, so
-the left side is whatever the visitor sent. `TRUSTED_PROXY_HOPS` says how many proxies are
-ours, and the visitor is the entry that many places from the right. On Render that is 3
-(`render.yaml` sets it). Locally it is 0 and the header is ignored. If the number is too small,
-visitors share one bucket and real users would hit the limit. Too big and a visitor who forges
-the header can dodge it. Check it after a deploy with the steps in the pull request. IPv6
+**Client IP behind Render.** Render puts Cloudflare and its own proxies in front of the app.
+When `TRUSTED_PROXY_HOPS` is above 0 the visitor is read from `CF-Connecting-IP` (then
+`True-Client-IP`), which Cloudflare sets itself and overwrites if a visitor sends one. Counting
+entries in `X-Forwarded-For` from the right is only the fallback: the chain is longer than
+expected on Render, so that count landed on a Cloudflare edge address that changes per
+connection, and the 30 a minute limit was never reached. Locally it is 0 and every forwarding
+header is ignored. On Render keep it at 3 (`render.yaml`). IPv6
 visitors are counted per /64.
 
 Every response also carries `X-Content-Type-Options`, `Strict-Transport-Security`,

@@ -33,9 +33,10 @@ class Settings(BaseSettings):
     rate_limit_verify_per_minute: int = 30  # per client IP
     rate_limit_flags_per_minute: int = 5  # per signed-in student
     rate_limit_admin_writes_per_minute: int = 30  # per admin
-    # How many proxies in front of this app add themselves to X-Forwarded-For. The client
-    # address is the entry that many places from the right. 0 ignores the header (local
-    # runs). On Render the right value is 3: Cloudflare, Render's edge and its load balancer.
+    # Non-zero means "we are behind Render's proxies": the visitor address is then taken from
+    # the header Cloudflare sets (CF-Connecting-IP, then True-Client-IP). Only if neither is
+    # present is it counted that many entries from the right of X-Forwarded-For. 0 ignores
+    # every forwarding header (local runs). On Render leave it at 3.
     trusted_proxy_hops: int = 0
 
 
