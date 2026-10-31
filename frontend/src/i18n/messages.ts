@@ -1,6 +1,12 @@
 export type Locale = 'en' | 'ka'
 export type Outcome =
-  'valid' | 'outdated' | 'revoked' | 'pending' | 'not_found' | 'error'
+  | 'valid'
+  | 'outdated'
+  | 'revoked'
+  | 'pending'
+  | 'tampered'
+  | 'not_found'
+  | 'error'
 export type BadgeCode = 'BDG-AI-001' | 'BDG-AI-002' | 'BDG-AI-003'
 type BadgeLevel = { title: string; text: string }
 
@@ -83,6 +89,19 @@ type Copy = {
   myFlagsEmpty: string
   newReply: string
   pendingNotice: string
+  tamperedNotice: string
+  onchainVerified: string
+  onchainVerifiedAtBlock: string
+  onchainVerifiedNote: string
+  onchainUnavailable: string
+  onchainUnavailableNote: string
+  onchainBlockLink: string
+  selfVerifyTitle: string
+  selfVerifyIntro: string
+  selfVerifyContract: string
+  selfVerifyKey: string
+  selfVerifyExpect: string
+  selfVerifyOpen: string
   revokedNotice: string
   revokedNoticeNoDate: string
   passportRevokedTitle: string
@@ -111,6 +130,7 @@ export const messages: Record<Locale, Copy> = {
       outdated: 'Outdated version',
       revoked: 'Revoked',
       pending: 'Pending on-chain confirmation',
+      tampered: 'Does not match the blockchain',
       not_found: 'Not found',
       error: 'Error',
     },
@@ -202,6 +222,23 @@ export const messages: Record<Locale, Copy> = {
     newReply: 'New reply',
     pendingNotice:
       'This code exists, but its record on the blockchain is not confirmed yet. This usually takes a few minutes. Check again later. Nothing is shown until it is confirmed.',
+    tamperedNotice:
+      'The stored record for this code does not match what was written to the blockchain, so it may have been changed. No name or skills are shown and this passport must not be relied on. Contact the BTU AI Skills team.',
+    onchainVerified: 'Verified on-chain',
+    onchainVerifiedAtBlock: 'Verified on-chain, block {block}',
+    onchainVerifiedNote:
+      'The fingerprint of this passport matches the one recorded on the Polygon Amoy blockchain.',
+    onchainUnavailable: 'On-chain check unavailable, try later',
+    onchainUnavailableNote:
+      'The blockchain could not be reached just now, so this result is from the BTU database only and is not confirmed on-chain. Check again in a minute.',
+    onchainBlockLink: 'Block',
+    selfVerifyTitle: 'Verify it yourself',
+    selfVerifyIntro:
+      'You do not have to trust this page. Open the contract on Polygonscan, find the function anchors, paste the key below and run Query. It must return the fingerprint below.',
+    selfVerifyContract: 'Contract',
+    selfVerifyKey: 'Key (verification code hash)',
+    selfVerifyExpect: 'Expected fingerprint',
+    selfVerifyOpen: 'Open the contract on Polygonscan',
     revokedNotice:
       'This passport version was revoked on {date}. It is no longer valid and must not be relied on.',
     revokedNoticeNoDate:
@@ -232,6 +269,7 @@ export const messages: Record<Locale, Copy> = {
       outdated: 'მოძველებული ვერსია',
       revoked: 'გაუქმებულია',
       pending: 'ელოდება ბლოკჩეინზე დადასტურებას',
+      tampered: 'არ ემთხვევა ბლოკჩეინს',
       not_found: 'ვერ მოიძებნა',
       error: 'შეცდომა',
     },
@@ -324,6 +362,24 @@ export const messages: Record<Locale, Copy> = {
     newReply: 'ახალი პასუხი',
     pendingNotice:
       'ეს კოდი არსებობს, მაგრამ მისი ჩანაწერი ბლოკჩეინზე ჯერ არ დადასტურებულა. ეს ჩვეულებრივ რამდენიმე წუთს გრძელდება. სცადეთ მოგვიანებით. დადასტურებამდე არაფერი ნაჩვენებია.',
+    tamperedNotice:
+      'ამ კოდის შენახული ჩანაწერი არ ემთხვევა ბლოკჩეინზე ჩაწერილს, ამიტომ ის შესაძლოა შეცვლილია. სახელი და უნარები არ ჩანს და ამ პასპორტს ვერ დაეყრდნობით. დაუკავშირდით BTU-ის AI უნარების გუნდს.',
+    onchainVerified: 'დადასტურებულია ბლოკჩეინზე',
+    onchainVerifiedAtBlock: 'დადასტურებულია ბლოკჩეინზე, ბლოკი {block}',
+    onchainVerifiedNote:
+      'ამ პასპორტის ანაბეჭდი ემთხვევა Polygon Amoy ბლოკჩეინზე ჩაწერილ ანაბეჭდს.',
+    onchainUnavailable:
+      'ბლოკჩეინთან შემოწმება მიუწვდომელია, სცადეთ მოგვიანებით',
+    onchainUnavailableNote:
+      'ბლოკჩეინთან დაკავშირება ახლა ვერ მოხერხდა, ამიტომ ეს შედეგი მხოლოდ BTU-ის მონაცემთა ბაზიდანაა და ბლოკჩეინზე დადასტურებული არ არის. შეამოწმეთ ერთ წუთში.',
+    onchainBlockLink: 'ბლოკი',
+    selfVerifyTitle: 'თავად შეამოწმეთ',
+    selfVerifyIntro:
+      'ამ გვერდის ნდობა აუცილებელი არ არის. გახსენით კონტრაქტი Polygonscan-ზე, იპოვეთ ფუნქცია anchors, ჩასვით ქვემოთ მოცემული გასაღები და დააჭირეთ Query-ს. პასუხი უნდა ემთხვეოდეს ქვემოთ მოცემულ ანაბეჭდს.',
+    selfVerifyContract: 'კონტრაქტი',
+    selfVerifyKey: 'გასაღები (ვერიფიკაციის კოდის ჰეში)',
+    selfVerifyExpect: 'მოსალოდნელი ანაბეჭდი',
+    selfVerifyOpen: 'გახსენით კონტრაქტი Polygonscan-ზე',
     revokedNotice:
       'ეს პასპორტის ვერსია გაუქმდა {date}. ის აღარ არის ნამდვილი და მასზე დაყრდნობა არ შეიძლება.',
     revokedNoticeNoDate:

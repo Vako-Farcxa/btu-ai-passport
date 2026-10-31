@@ -14,6 +14,11 @@ class Settings(BaseSettings):
     amoy_rpc_url: str = ""
     anchor_contract_address: str = ""
     btu_issuer_private_key: str = ""
+    # The public verify page also reads the anchored hash back from the contract. It needs
+    # only AMOY_RPC_URL (and the contract address, which defaults to the published one).
+    # Turn it off with ONCHAIN_VERIFY=false. The timeout is per RPC request, in seconds.
+    onchain_verify: bool = True
+    onchain_timeout_seconds: float = 3.0
     # Comma-separated email domains accepted for sign-in and sheet rows.
     allowed_email_domains: str = "btu.edu.ge"
     # Local demos only. Accepts the "demo-admin" bearer token on /admin. Never set it on a

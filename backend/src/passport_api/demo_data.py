@@ -1,10 +1,13 @@
+from dataclasses import replace
+
+from passport_api.fingerprint import content_hash
 from passport_api.schemas import Skill
 from passport_api.store import MemoryStore, StoredVersion
 
 TX_CURRENT = "0x" + "11" * 32
 TX_OLDER = "0x" + "22" * 32
 
-DEMO_VERSIONS: tuple[StoredVersion, ...] = (
+_DEMO_BASE: tuple[StoredVersion, ...] = (
     StoredVersion(
         passport_id="BTU-A1B2C3D4E5",
         email="demo.student@btu.edu.ge",
@@ -41,6 +44,20 @@ DEMO_VERSIONS: tuple[StoredVersion, ...] = (
         issued_at="2025-03-01T00:00:00Z",
         skills=(Skill(skill="Prompting", badge="", awarded_on=None),),
     ),
+)
+
+
+DEMO_VERSIONS: tuple[StoredVersion, ...] = tuple(
+    replace(
+        version,
+        content_hash=content_hash(
+            holder_name=version.holder_name,
+            passport_id=version.passport_id,
+            skills=version.skills,
+            version=version.version,
+        ),
+    )
+    for version in _DEMO_BASE
 )
 
 

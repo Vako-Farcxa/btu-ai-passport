@@ -84,7 +84,7 @@ def can_send(chain: AnchorChain) -> str | None:
 
 
 def encode_anchor_call(content_hash: str, verification_id_hash: str) -> bytes:
-    contract = Web3().eth.contract(abi=_abi())
+    contract = Web3().eth.contract(abi=contract_abi())
     encoded = contract.encode_abi(
         "anchor",
         args=[bytes32(content_hash), bytes32(verification_id_hash)],
@@ -116,7 +116,7 @@ class Web3AnchorChain:
         self._account = Account.from_key(private_key)
         self._contract = self._w3.eth.contract(
             address=Web3.to_checksum_address(contract_address),
-            abi=_abi(),
+            abi=contract_abi(),
         )
 
     def chain_id(self) -> int:
@@ -199,7 +199,7 @@ class Web3AnchorChain:
         return str(logs[0]["transactionHash"].to_0x_hex())
 
 
-def _abi() -> list[dict[str, Any]]:
+def contract_abi() -> list[dict[str, Any]]:
     payload = json.loads(_ARTIFACT.read_text())
     abi = payload["abi"]
     if not isinstance(abi, list):

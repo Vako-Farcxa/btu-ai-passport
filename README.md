@@ -83,6 +83,56 @@ npm run dev
 
 Open http://localhost:3000. Try verifying with the demo code `K9M2-N3P4-Q5R6-S7T8` against the demo backend.
 
+## Verify a passport yourself
+
+Every passport version is anchored on the **Polygon Amoy test network** in the `PassportAnchor` contract:
+
+- Contract address: [`0xf436Ba2A2cd1dc78f1543A1E7e8a9f20B2C40c32`](https://amoy.polygonscan.com/address/0xf436Ba2A2cd1dc78f1543A1E7e8a9f20B2C40c32)
+- ABI: [`docs/contract/PassportAnchor.abi.json`](docs/contract/PassportAnchor.abi.json)
+- Source: [`specs/001-ai-skills-passport/contracts/PassportAnchor.sol`](specs/001-ai-skills-passport/contracts/PassportAnchor.sol). Once the source is published on Polygonscan ("Verify and Publish", Solidity 0.8.26, optimizer settings of the deployment), its Read Contract tab works directly. Until then use the script below, or load the ABI in Remix ("At Address").
+
+The contract stores one mapping, `anchors(verificationIdHash) -> contentHash`. A slot can be written once and never changed.
+
+**What the verify page does.** For a confirmed code it recomputes the content hash from the stored name, passport ID, version and skills, compares it with the hash stored in the database, then reads the contract and compares again. Results:
+
+| Result | Meaning |
+|---|---|
+| Valid / Outdated version, badge "Verified on-chain, block N" | Database and contract agree. |
+| "Does not match the blockchain" (no name, no skills) | The stored passport changed, or the contract holds a different hash or none. |
+| Valid, badge "On-chain check unavailable, try later" | The RPC could not be reached in 3 seconds. The database result is shown, but it is never called verified. |
+
+**Check it without trusting this site**
+
+1. On the verify result, open "Verify it yourself". It lists the contract address, the key and the expected fingerprint.
+2. Open the contract on [Polygonscan](https://amoy.polygonscan.com/address/0xf436Ba2A2cd1dc78f1543A1E7e8a9f20B2C40c32#readContract) and go to Read Contract (or load `docs/contract/PassportAnchor.abi.json` in Remix at the same address).
+3. Call `anchors` with the key. It returns the content hash. It must equal the expected fingerprint. All zeros means nothing is anchored for that code.
+
+The key is `keccak256` of the verification code in upper case (UTF-8). The content hash is `keccak256` of this compact JSON, with keys sorted and text normalised (Unicode NFC, trimmed):
+
+```json
+{"holder_name":"...","passport_id":"BTU-...","skills":[{"awarded_on":"2025-06-01","badge":"...","skill":"..."}],"version":2}
+```
+
+Skills are sorted by skill, badge and date (a missing date last), and exact duplicates are collapsed. `awarded_on` is `null` when there is no valid date.
+
+**Script.** To recompute the hash from a passport's facts and compare it with the contract, with no BTU server involved:
+
+```bash
+cd backend
+uv run python scripts/verify_onchain.py --code ABCD-EFGH-IJKL-MNOP --passport passport.json
+```
+
+`passport.json` holds `holder_name`, `passport_id`, `version` and `skills` (`skill`, `badge`, `awarded_on`). It needs a Polygon Amoy RPC URL (a public one is the default, override with `--rpc`) and no key. Exit code 0 is verified, 1 is a mismatch or not anchored, 2 means the chain could not be read.
+
+**Backend settings for the on-chain check** (all optional beyond the existing `AMOY_RPC_URL`):
+
+- `AMOY_RPC_URL`: the RPC node to read from. Without it the badge always says the check is unavailable.
+- `ANCHOR_CONTRACT_ADDRESS`: defaults to the published address above.
+- `ONCHAIN_VERIFY` (default `true`): set `false` to turn the on-chain read off.
+- `ONCHAIN_TIMEOUT_SECONDS` (default `3`): timeout of each RPC request.
+
+Reads are cached in memory: a filled slot for 24 hours (it cannot change), an empty one for 1 minute, and after a failed read the RPC is left alone for 30 seconds. A free public RPC is therefore asked about each version about once a day.
+
 ## Google Sheet
 
 The sync reads BTU's official test sheet layout (title rows above the header, with `BTU Email (Test)`, `Passport ID (Existing)`, `Skill Name`, `Date Earned` and so on) as well as the old `email, full_name, skill, badge, awarded_on` layout. Existing Passport IDs are kept. After each run it writes `Passport Sync Status` (`SYNCED`/`FAILED`), `Synced Passport Version` (`V1`, `V2`...), `Synced At (UTC)` and `Sync Error / Notes` back to each row. Full rules: `specs/001-ai-skills-passport/contracts/sheet.md`.

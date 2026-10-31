@@ -4,6 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from passport_api.demo_data import DEMO_VERSIONS, apply_demo_seed
+from passport_api.fingerprint import verification_id_hash
 from passport_api.main import app
 from passport_api.store import MemoryStore, normalize_anchor_status
 from passport_api.verify import verify_code
@@ -34,6 +35,18 @@ def test_latest_confirmed_code_is_valid() -> None:
             },
         ],
         "tx_url": f"https://amoy.polygonscan.com/tx/0x{TX_CURRENT}",
+        "onchain": {
+            # No RPC URL is configured in tests, so the chain could not be read.
+            "status": "unavailable",
+            "block_number": None,
+            "contract_address": "0xf436Ba2A2cd1dc78f1543A1E7e8a9f20B2C40c32",
+            "contract_url": (
+                "https://amoy.polygonscan.com/address/"
+                "0xf436Ba2A2cd1dc78f1543A1E7e8a9f20B2C40c32#readContract"
+            ),
+            "verification_id_hash": verification_id_hash(VALID),
+            "content_hash": DEMO_VERSIONS[1].content_hash,
+        },
     }
 
 

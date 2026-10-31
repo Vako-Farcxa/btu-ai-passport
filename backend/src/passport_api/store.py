@@ -41,6 +41,10 @@ class StoredVersion:
     version_revoked_at: str | None = None
     # When the student was archived, or None. Archiving revokes every version they hold.
     student_archived_at: str | None = None
+    # The hash stored for this version, which the contract should hold for the code, and when
+    # the anchor was confirmed. Verify recomputes the hash from the stored fields and compares.
+    content_hash: str | None = None
+    anchored_at: str | None = None
 
     @property
     def revoked_at(self) -> str | None:

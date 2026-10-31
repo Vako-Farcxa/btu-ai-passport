@@ -105,3 +105,12 @@ export function pendingNotice(
   if (result.outcome !== 'pending') return null
   return messages[locale].pendingNotice
 }
+
+/** The "does not match the blockchain" note, or null for every other outcome. */
+export function tamperedNotice(
+  result: VerifyResult,
+  locale: Locale,
+): string | null {
+  if (result.outcome !== 'tampered') return null
+  return messages[locale].tamperedNotice
+}

@@ -16,6 +16,7 @@ class SupabaseStore:
             .select(
                 "student_id, version_number, holder_name, verification_code, "
                 "anchor_status, tx_hash, issued_at, pdf_en_path, pdf_ka_path, revoked_at, "
+                "content_hash, anchored_at, "
                 "skill_entries(skill, badge, awarded_on, description, position), "
                 "students(email, full_name, passport_id, deleted_at)"
             )
@@ -71,6 +72,7 @@ class SupabaseStore:
                 "email, full_name, passport_id, deleted_at, "
                 "passport_versions(version_number, holder_name, verification_code, "
                 "anchor_status, tx_hash, issued_at, pdf_en_path, pdf_ka_path, revoked_at, "
+                "content_hash, anchored_at, "
                 "skill_entries(skill, badge, awarded_on, description, position))"
             )
             .eq("email", email.strip().lower())
@@ -122,6 +124,8 @@ def _version_from_row(row: dict[str, object]) -> StoredVersion:
     pdf_ka_path = row.get("pdf_ka_path")
     revoked_at = row.get("revoked_at")
     archived_at = student.get("deleted_at")
+    stored_hash = row.get("content_hash")
+    anchored_at = row.get("anchored_at")
     return StoredVersion(
         passport_id=str(student["passport_id"]),
         email=str(student["email"]),
@@ -137,4 +141,6 @@ def _version_from_row(row: dict[str, object]) -> StoredVersion:
         pdf_ka_path=None if pdf_ka_path is None else str(pdf_ka_path),
         version_revoked_at=None if revoked_at is None else str(revoked_at),
         student_archived_at=None if archived_at is None else str(archived_at),
+        content_hash=None if stored_hash is None else str(stored_hash),
+        anchored_at=None if anchored_at is None else str(anchored_at),
     )
