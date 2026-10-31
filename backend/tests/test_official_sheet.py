@@ -220,42 +220,30 @@ def test_allowed_domains_setting(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_failed_anchor_is_retried_without_row_change() -> None:
-    from passport_api.sync import MemorySyncStore, _anchor_pending
+    from fake_chain import FakeChain
+
+    from passport_api.sync import MemorySyncStore, VersionRecord, _anchor_pending
 
     store = MemorySyncStore()
-    calls: list[str] = []
-
-    class Version:
-        email = "a@example.org"
-        version_number = 1
-        content_hash = "0x" + "11" * 32
-        verification_id_hash = "0x" + "22" * 32
-        anchor_status = "failed"
-        tx_hash = None
-        anchored_at = None
-
-    pending = Version()
-    store.pending_anchors = lambda: [pending]  # type: ignore[method-assign,list-item]
-    store.save_anchor = lambda *a, **k: calls.append(k["status"])  # type: ignore[method-assign]
-
-    class Chain:
-        def chain_id(self) -> int:
-            return 80002
-
-        def issuer_address(self) -> str:
-            return "0xabc"
-
-        def sender_address(self) -> str:
-            return "0xabc"
-
-        def stored_content(self, _h: bytes) -> bytes:
-            return bytes(32)
-
-        def send_anchor(self, _d: bytes) -> str:
-            return "0xtx"
-
-        def receipt_succeeded(self, _t: str) -> bool | None:
-            return True
-
-    _anchor_pending(store, set(), Chain())
-    assert calls == ["confirmed"]
+    store.versions.append(
+        VersionRecord(
+            passport_id="BTU-AI-0001",
+            email="a@example.org",
+            version_number=1,
+            holder_name="A B",
+            verification_code="ABCD-EFGH-JKMN-PQRS",
+            verification_id_hash="0x" + "22" * 32,
+            skill_fingerprint="0x" + "33" * 32,
+            content_hash="0x" + "11" * 32,
+            anchor_status="failed",  # the status older backends wrote for a failed send
+            pdf_en_path=None,
+            pdf_ka_path=None,
+            tx_hash=None,
+            issued_at="2026-10-23T00:00:00+00:00",
+            skills=(),
+        )
+    )
+    chain = FakeChain()
+    _anchor_pending(store, set(), chain)
+    assert store.versions[0].anchor_status == "confirmed"
+    assert len(chain.sent) == 1

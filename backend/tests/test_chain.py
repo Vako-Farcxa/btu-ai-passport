@@ -1,19 +1,19 @@
 import importlib.util
 import json
-from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType
-from typing import Literal
 
 import pytest
 from eth_account import Account
+from fake_chain import FakeChain
 from web3 import Web3
 
-from passport_api.chain import publish_anchor, tx_url
+from passport_api.anchoring import reconcile_anchors
+from passport_api.chain import encode_anchor_call, tx_url
 from passport_api.settings import Settings, settings
-from passport_api.store import MemoryStore, StoredVersion
+from passport_api.store import MemoryStore, StoredVersion, normalize_anchor_status
 from passport_api.sync import FakeSheet, MemorySyncStore, VersionRecord, run_sync
-from passport_api.verify import VerifyError, VerifyFound, verify_code
+from passport_api.verify import VerifyFound, VerifyPending, verify_code
 
 REPO = Path(__file__).resolve().parents[2]
 ASSETS = REPO / "backend" / "assets" / "PassportAnchor.json"
@@ -27,87 +27,41 @@ EMAIL = "nino.beridze@btu.edu.ge"
 SKILL = "Machine Learning"
 BADGE = "Stamp-Secret"
 NOW = "2026-10-23T00:00:00+00:00"
-ISSUER = "0x1111111111111111111111111111111111111111"
 
 
-@dataclass
-class AnchorVersion:
-    content_hash: str
-    verification_id_hash: str
-    holder_name: str
-    email: str
-    skill: str
-    badge: str
-    anchor_status: str = "pending"
-    tx_hash: str | None = None
-    anchored_at: str | None = None
+def _publish_version(chain: FakeChain) -> VersionRecord:
+    """One unconfirmed version run through the reconciler, like a sync does."""
+    store = MemorySyncStore()
+    store.versions.append(_record())
+    reconcile_anchors(store, chain)
+    return store.versions[0]
 
 
-class RecordingChain:
-    def __init__(self) -> None:
-        self.sent: list[bytes] = []
-        self.slots: dict[bytes, bytes] = {}
-        self.receipts: dict[str, bool | None] = {}
-        self.fail_send = False
-        self.leave_pending = False
-        self.fail_receipt = False
-        self.chain_id_value = 80002
-        self.issuer = ISSUER
-        self.sender = ISSUER
-        self._next = 1
-
-    def chain_id(self) -> int:
-        return self.chain_id_value
-
-    def issuer_address(self) -> str:
-        return self.issuer
-
-    def sender_address(self) -> str:
-        return self.sender
-
-    def stored_content(self, verification_id_hash: bytes) -> bytes:
-        return self.slots.get(verification_id_hash, bytes(32))
-
-    def send_anchor(self, data: bytes) -> str:
-        if self.fail_send:
-            raise ConnectionError("send_failed")
-        self.sent.append(data)
-        tx_hash = "0x" + f"{self._next:064x}"
-        self._next += 1
-        if self.leave_pending:
-            self.receipts[tx_hash] = None
-        elif self.fail_receipt:
-            self.receipts[tx_hash] = False
-        return tx_hash
-
-    def receipt_succeeded(self, tx_hash: str) -> bool | None:
-        if tx_hash in self.receipts:
-            return self.receipts[tx_hash]
-        return True
-
-
-def _version() -> AnchorVersion:
-    return AnchorVersion(
-        content_hash=CONTENT,
-        verification_id_hash=VERIFICATION,
-        holder_name=HOLDER,
+def _record() -> VersionRecord:
+    return VersionRecord(
+        passport_id="BTU-AI-0001",
         email=EMAIL,
-        skill=SKILL,
-        badge=BADGE,
+        version_number=1,
+        holder_name=HOLDER,
+        verification_code="ABCD-EFGH-JKMN-PQRS",
+        verification_id_hash=VERIFICATION,
+        skill_fingerprint="0x" + "55" * 32,
+        content_hash=CONTENT,
+        anchor_status="pending",
+        pdf_en_path=None,
+        pdf_ka_path=None,
+        tx_hash=None,
+        issued_at=NOW,
+        skills=(),
     )
 
 
-def _publish(version: AnchorVersion, chain: RecordingChain) -> None:
-    publish_anchor(version, chain, now=NOW)
-
-
 def test_anchor_payload_is_two_bytes32_and_omits_personal_data() -> None:
-    chain = RecordingChain()
-    version = _version()
-    _publish(version, chain)
+    chain = FakeChain()
+    version = _publish_version(chain)
     assert version.anchor_status == "confirmed"
     assert len(chain.sent) == 1
-    payload = chain.sent[0]
+    payload = encode_anchor_call(CONTENT, VERIFICATION)
     selector = Web3.keccak(text="anchor(bytes32,bytes32)")[:4]
     assert payload[:4] == selector
     assert payload[4:36] == bytes.fromhex(CONTENT[2:])
@@ -121,110 +75,44 @@ def test_anchor_payload_is_two_bytes32_and_omits_personal_data() -> None:
         ("verificationIdHash", "bytes32"),
     ]
     assert all(item["type"] == "bytes32" for item in anchor["inputs"])
-    for secret in (HOLDER, EMAIL, SKILL, BADGE, version.holder_name):
+    for secret in (HOLDER, EMAIL, SKILL, BADGE):
         assert secret.encode() not in payload
 
 
-def test_filled_slot_does_not_send_a_second_anchor() -> None:
-    chain = RecordingChain()
-    chain.slots[bytes.fromhex(VERIFICATION[2:])] = bytes.fromhex("33" * 32)
-    version = _version()
-    _publish(version, chain)
-    assert chain.sent == []
-    assert version.anchor_status == "pending"
-    assert version.tx_hash is None
-    assert version.anchored_at is None
-
-
 def test_successful_receipt_confirms_and_builds_the_amoy_url() -> None:
-    chain = RecordingChain()
-    version = _version()
-    _publish(version, chain)
+    chain = FakeChain()
+    version = _publish_version(chain)
     assert version.anchor_status == "confirmed"
     assert version.tx_hash == "0x" + f"{1:064x}"
-    assert version.anchored_at == NOW
-    assert version.tx_hash is not None
+    assert version.anchored_at is not None
     assert tx_url(version.tx_hash) == f"https://amoy.polygonscan.com/tx/{version.tx_hash}"
 
 
-def test_failed_send_marks_failed_and_a_later_success_confirms() -> None:
-    chain = RecordingChain()
-    version = _version()
-    chain.fail_send = True
-    _publish(version, chain)
-    assert version.anchor_status == "failed"
-    assert version.tx_hash is None
-    assert version.anchored_at is None
-    assert chain.sent == []
-    chain.fail_send = False
-    _publish(version, chain)
-    assert version.anchor_status == "confirmed"
-    assert version.tx_hash == "0x" + f"{1:064x}"
-    assert version.anchored_at == NOW
-    assert len(chain.sent) == 1
-
-
-def test_pending_receipt_is_polled_without_a_second_send() -> None:
-    chain = RecordingChain()
-    version = _version()
-    chain.leave_pending = True
-    _publish(version, chain)
-    assert version.anchor_status == "pending"
-    assert version.tx_hash == "0x" + f"{1:064x}"
-    assert version.anchored_at is None
-    assert version.tx_hash is not None
-    chain.leave_pending = False
-    chain.receipts[version.tx_hash] = True
-    _publish(version, chain)
-    assert len(chain.sent) == 1
-    assert version.anchor_status == "confirmed"
-    assert version.anchored_at == NOW
-
-
-def test_reverted_receipt_stays_failed_until_a_slot_is_empty_retry_succeeds() -> None:
-    chain = RecordingChain()
-    version = _version()
-    chain.fail_receipt = True
-    _publish(version, chain)
-    assert version.anchor_status == "failed"
-    assert version.tx_hash == "0x" + f"{1:064x}"
-    assert version.anchored_at is None
-    chain.fail_receipt = False
-    chain.slots[bytes.fromhex(VERIFICATION[2:])] = bytes.fromhex("44" * 32)
-    _publish(version, chain)
-    assert len(chain.sent) == 1
-    assert version.anchor_status == "failed"
-    chain.slots.clear()
-    _publish(version, chain)
-    assert len(chain.sent) == 2
-    assert version.anchor_status == "confirmed"
-    assert version.anchored_at == NOW
-
-
 def test_wrong_chain_or_sender_does_not_send() -> None:
-    wrong_chain = RecordingChain()
+    wrong_chain = FakeChain()
     wrong_chain.chain_id_value = 1
-    version = _version()
-    _publish(version, wrong_chain)
+    version = _publish_version(wrong_chain)
     assert wrong_chain.sent == []
-    assert version.anchor_status == "failed"
+    assert version.anchor_status == "pending"
+    assert version.anchor_attempts == 0
 
-    wrong_sender = RecordingChain()
+    wrong_sender = FakeChain()
     wrong_sender.sender = "0x9999999999999999999999999999999999999999"
-    other = _version()
-    _publish(other, wrong_sender)
+    other = _publish_version(wrong_sender)
     assert wrong_sender.sent == []
-    assert other.anchor_status == "failed"
+    assert other.anchor_status == "pending"
     assert other.tx_hash is None
 
 
 def test_confirmed_anchor_is_left_unchanged() -> None:
-    chain = RecordingChain()
-    version = _version()
+    chain = FakeChain()
+    store = MemorySyncStore()
+    version = _record()
     version.anchor_status = "confirmed"
     version.tx_hash = "0x" + "ab" * 32
     version.anchored_at = "2026-01-01T00:00:00+00:00"
-    _publish(version, chain)
+    store.versions.append(version)
+    reconcile_anchors(store, chain)
     assert chain.sent == []
     assert version.anchor_status == "confirmed"
     assert version.tx_hash == "0x" + "ab" * 32
@@ -246,7 +134,7 @@ def test_sync_confirms_one_anchor_and_verify_flips_to_valid_then_outdated(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _local_pdfs(tmp_path, monkeypatch)
-    chain = RecordingChain()
+    chain = FakeChain()
     store = MemorySyncStore()
     created = run_sync(
         store,
@@ -259,8 +147,8 @@ def test_sync_confirms_one_anchor_and_verify_flips_to_valid_then_outdated(
     assert first.tx_hash is not None
     assert first.anchored_at is not None
     assert len(chain.sent) == 1
-    assert b"ada@btu.edu.ge" not in chain.sent[0]
-    assert b"Ada Lovelace" not in chain.sent[0]
+    assert b"ada@btu.edu.ge" not in chain.payloads[0]
+    assert b"Ada Lovelace" not in chain.payloads[0]
     looked_up = verify_code(_memory(store.versions), first.verification_code)
     assert isinstance(looked_up, VerifyFound)
     assert looked_up.outcome == "valid"
@@ -304,19 +192,22 @@ def test_sync_retries_a_failed_send_without_a_second_version(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _local_pdfs(tmp_path, monkeypatch)
-    chain = RecordingChain()
-    chain.fail_send = True
+    chain = FakeChain()
+    chain.send_error = ConnectionError("rpc down")
     store = MemorySyncStore()
     rows = [_row("ada@btu.edu.ge", "Ada Lovelace", "Python", "Core", "2025-01-15")]
     failed = run_sync(store, FakeSheet(rows), chain=chain)
     assert failed.status == "completed"
     assert failed.versions_created == 1
-    assert store.versions[0].anchor_status == "failed"
+    assert store.versions[0].anchor_status == "retrying"
     assert store.versions[0].tx_hash is None
-    refused = verify_code(_memory(store.versions), store.versions[0].verification_code)
-    assert isinstance(refused, VerifyError)
-    assert refused.outcome == "error"
-    chain.fail_send = False
+    # The public sees "pending", never an error, while the reconciler keeps trying.
+    waiting = verify_code(_memory(store.versions), store.versions[0].verification_code)
+    assert isinstance(waiting, VerifyPending)
+    assert waiting.outcome == "pending"
+    chain.send_error = None
+    # The backoff has passed.
+    store.versions[0].anchor_next_attempt_at = None
     retried = run_sync(store, FakeSheet(rows), chain=chain)
     assert retried.versions_created == 0
     assert len(store.versions) == 1
@@ -390,7 +281,7 @@ def _memory(versions: list[VersionRecord]) -> MemoryStore:
                 version=version.version_number,
                 holder_name=version.holder_name,
                 verification_code=version.verification_code,
-                anchor_status=_anchor_status(version.anchor_status),
+                anchor_status=normalize_anchor_status(version.anchor_status),
                 tx_hash=version.tx_hash,
                 issued_at=version.issued_at,
                 skills=version.skills,
@@ -398,16 +289,6 @@ def _memory(versions: list[VersionRecord]) -> MemoryStore:
             for version in versions
         ]
     )
-
-
-def _anchor_status(value: str) -> Literal["pending", "confirmed", "failed"]:
-    if value == "pending":
-        return "pending"
-    if value == "confirmed":
-        return "confirmed"
-    if value == "failed":
-        return "failed"
-    raise AssertionError(value)
 
 
 def _deploy_module() -> ModuleType:

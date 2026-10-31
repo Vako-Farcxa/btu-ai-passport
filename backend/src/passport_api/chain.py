@@ -1,11 +1,12 @@
 import json
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Protocol, cast
+from typing import Any, Literal, Protocol, cast
 
 from eth_account import Account
 from eth_typing import HexStr
 from web3 import Web3
-from web3.exceptions import TimeExhausted, TransactionNotFound
+from web3.exceptions import TransactionNotFound
 from web3.middleware import ExtraDataToPOAMiddleware
 
 from passport_api.settings import settings
@@ -13,7 +14,26 @@ from passport_api.settings import settings
 AMOY_CHAIN_ID = 80002
 _EXPLORER = "https://amoy.polygonscan.com/tx/"
 _ARTIFACT = Path(__file__).resolve().parents[2] / "assets" / "PassportAnchor.json"
-_ZERO = bytes(32)
+ZERO = bytes(32)
+
+
+TxState = Literal["success", "reverted", "pending", "missing"]
+
+# A replacement must pay clearly more than the transaction it replaces, or nodes refuse it
+# ("replacement transaction underpriced"). Nodes ask for at least 10 percent.
+GAS_BUMP_PERCENT = 25
+# Refuse to pay more than this per gas unit, whatever the network quotes (500 gwei).
+MAX_GAS_PRICE_WEI = 500 * 10**9
+# How far back to search the contract's logs for an existing anchor transaction.
+_LOG_LOOKBACK_BLOCKS = 100_000
+_GAS_LIMIT_MARGIN_PERCENT = 120
+
+
+@dataclass(frozen=True)
+class SentTx:
+    tx_hash: str
+    nonce: int
+    gas_price: int
 
 
 class AnchorChain(Protocol):
@@ -25,56 +45,49 @@ class AnchorChain(Protocol):
 
     def stored_content(self, verification_id_hash: bytes) -> bytes: ...
 
-    def send_anchor(self, data: bytes) -> str: ...
+    def pending_nonce(self) -> int:
+        """Next nonce counting transactions still waiting in the mempool."""
+        ...
 
-    def receipt_succeeded(self, tx_hash: str) -> bool | None: ...
+    def latest_nonce(self) -> int:
+        """Next nonce counting only mined transactions."""
+        ...
 
+    def send_anchor(self, data: bytes, *, nonce: int, min_gas_price: int | None = None) -> SentTx:
+        """Sign and broadcast an anchor call with an explicit nonce. Never waits for a block.
+        Sending again with the same nonce and a higher gas price replaces the earlier one."""
+        ...
 
-class Anchorable(Protocol):
-    content_hash: str
-    verification_id_hash: str
-    anchor_status: str
-    tx_hash: str | None
-    anchored_at: str | None
+    def tx_state(self, tx_hash: str) -> TxState: ...
+
+    def find_anchor_tx(self, content_hash: bytes, verification_id_hash: bytes) -> str | None:
+        """Hash of the mined transaction that anchored this pair, when the logs show it."""
+        ...
 
 
 def tx_url(tx_hash: str) -> str:
     return f"{_EXPLORER}{tx_hash}"
 
 
-def publish_anchor(version: Anchorable, chain: AnchorChain, *, now: str) -> None:
-    if version.anchor_status == "confirmed":
-        return
-    if not _can_send(chain):
-        version.anchor_status = "failed"
-        return
-    if version.tx_hash:
-        if _apply_receipt(version, chain, version.tx_hash, now):
-            return
-        version.anchor_status = "failed"
-        version.anchored_at = None
-    verification = _bytes32(version.verification_id_hash)
-    if chain.stored_content(verification) != _ZERO:
-        return
-    try:
-        tx_hash = chain.send_anchor(
-            encode_anchor_call(version.content_hash, version.verification_id_hash)
-        )
-    except Exception:
-        version.anchor_status = "failed"
-        version.anchored_at = None
-        return
-    version.tx_hash = tx_hash
-    if not _apply_receipt(version, chain, tx_hash, now):
-        version.anchor_status = "failed"
-        version.anchored_at = None
+def bumped_gas_price(previous: int) -> int:
+    """Smallest price a replacement should pay: the previous one plus GAS_BUMP_PERCENT."""
+    return previous + max(1, -(-previous * GAS_BUMP_PERCENT // 100))
+
+
+def can_send(chain: AnchorChain) -> str | None:
+    """None when this chain and wallet may anchor, otherwise a short reason."""
+    if chain.chain_id() != AMOY_CHAIN_ID:
+        return "wrong_chain"
+    if chain.sender_address().lower() != chain.issuer_address().lower():
+        return "wrong_sender"
+    return None
 
 
 def encode_anchor_call(content_hash: str, verification_id_hash: str) -> bytes:
     contract = Web3().eth.contract(abi=_abi())
     encoded = contract.encode_abi(
         "anchor",
-        args=[_bytes32(content_hash), _bytes32(verification_id_hash)],
+        args=[bytes32(content_hash), bytes32(verification_id_hash)],
     )
     if not isinstance(encoded, str) or not encoded.startswith("0x"):
         raise RuntimeError("anchor_calldata")
@@ -121,49 +134,69 @@ class Web3AnchorChain:
         stored = self._contract.functions.anchors(verification_id_hash).call()
         return bytes(stored)
 
-    def send_anchor(self, data: bytes) -> str:
+    def pending_nonce(self) -> int:
+        return int(self._w3.eth.get_transaction_count(self._account.address, "pending"))
+
+    def latest_nonce(self) -> int:
+        return int(self._w3.eth.get_transaction_count(self._account.address, "latest"))
+
+    def send_anchor(self, data: bytes, *, nonce: int, min_gas_price: int | None = None) -> SentTx:
+        gas_price = int(self._w3.eth.gas_price)
+        if min_gas_price is not None:
+            gas_price = max(gas_price, min_gas_price)
+        if gas_price > MAX_GAS_PRICE_WEI:
+            raise RuntimeError("gas_price_too_high")
         txn: dict[str, Any] = {
             "from": self._account.address,
             "to": self._contract.address,
             "data": "0x" + data.hex(),
-            "nonce": self._w3.eth.get_transaction_count(self._account.address),
+            "nonce": nonce,
             "chainId": AMOY_CHAIN_ID,
         }
-        txn["gas"] = self._w3.eth.estimate_gas(cast(Any, txn))
-        txn["gasPrice"] = self._w3.eth.gas_price
+        estimate = int(self._w3.eth.estimate_gas(cast(Any, txn)))
+        txn["gas"] = estimate * _GAS_LIMIT_MARGIN_PERCENT // 100
+        txn["gasPrice"] = gas_price
         signed = self._account.sign_transaction(cast(Any, txn))
         sent = self._w3.eth.send_raw_transaction(signed.raw_transaction)
-        return str(sent.to_0x_hex())
+        return SentTx(tx_hash=str(sent.to_0x_hex()), nonce=nonce, gas_price=gas_price)
 
-    def receipt_succeeded(self, tx_hash: str) -> bool | None:
+    def tx_state(self, tx_hash: str) -> TxState:
         try:
-            # Wait briefly so new codes are confirmed within the same sync.
-            receipt = self._w3.eth.wait_for_transaction_receipt(
-                HexStr(tx_hash), timeout=45, poll_latency=2
+            receipt = self._w3.eth.get_transaction_receipt(HexStr(tx_hash))
+        except TransactionNotFound:
+            receipt = None
+        if receipt is not None:
+            return "success" if bool(receipt["status"]) else "reverted"
+        try:
+            self._w3.eth.get_transaction(HexStr(tx_hash))
+        except TransactionNotFound:
+            return "missing"
+        return "pending"
+
+    def find_anchor_tx(self, content_hash: bytes, verification_id_hash: bytes) -> str | None:
+        try:
+            latest = int(self._w3.eth.block_number)
+            logs = self._w3.eth.get_logs(
+                cast(
+                    Any,
+                    {
+                        "address": self._contract.address,
+                        "fromBlock": max(0, latest - _LOG_LOOKBACK_BLOCKS),
+                        "toBlock": latest,
+                        "topics": [
+                            Web3.keccak(text="Anchored(bytes32,bytes32)").to_0x_hex(),
+                            "0x" + content_hash.hex(),
+                            "0x" + verification_id_hash.hex(),
+                        ],
+                    },
+                )
             )
-        except (TransactionNotFound, TimeExhausted):
+        except Exception:
+            # Public RPCs often cap the log range. This lookup is best effort.
             return None
-        return bool(receipt["status"])
-
-
-def _can_send(chain: AnchorChain) -> bool:
-    return (
-        chain.chain_id() == AMOY_CHAIN_ID
-        and chain.sender_address().lower() == chain.issuer_address().lower()
-    )
-
-
-def _apply_receipt(version: Anchorable, chain: AnchorChain, tx_hash: str, now: str) -> bool:
-    receipt = chain.receipt_succeeded(tx_hash)
-    if receipt is None:
-        version.anchor_status = "pending"
-        version.anchored_at = None
-        return True
-    if receipt:
-        version.anchor_status = "confirmed"
-        version.anchored_at = now
-        return True
-    return False
+        if not logs:
+            return None
+        return str(logs[0]["transactionHash"].to_0x_hex())
 
 
 def _abi() -> list[dict[str, Any]]:
@@ -174,7 +207,7 @@ def _abi() -> list[dict[str, Any]]:
     return [cast(dict[str, Any], item) for item in abi if isinstance(item, dict)]
 
 
-def _bytes32(value: str) -> bytes:
+def bytes32(value: str) -> bytes:
     raw = bytes.fromhex(value.removeprefix("0x"))
     if len(raw) != 32:
         raise RuntimeError("bytes32")

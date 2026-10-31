@@ -19,6 +19,7 @@ export default function AdminDashboardPage() {
   const [pendingAnchorsCount, setPendingAnchorsCount] = useState<number | null>(
     null,
   )
+  const [stuckAnchorsCount, setStuckAnchorsCount] = useState(0)
   const [openFlags, setOpenFlags] = useState<number | null>(null)
   const [syncRuns, setSyncRuns] = useState<AdminSyncRun[]>([])
   const [loading, setLoading] = useState(true)
@@ -42,6 +43,11 @@ export default function AdminDashboardPage() {
         studentsData.students.filter((s) => s.admin_managed).length,
       )
       setPendingAnchorsCount(pendingData.versions.length)
+      setStuckAnchorsCount(
+        pendingData.versions.filter(
+          (v) => v.anchor_status === 'failed_permanent',
+        ).length,
+      )
       setSyncRuns(runsData.runs)
       setError(null)
     } catch (err: unknown) {
@@ -68,6 +74,11 @@ export default function AdminDashboardPage() {
             studentsData.students.filter((s) => s.admin_managed).length,
           )
           setPendingAnchorsCount(pendingData.versions.length)
+          setStuckAnchorsCount(
+            pendingData.versions.filter(
+              (v) => v.anchor_status === 'failed_permanent',
+            ).length,
+          )
           setSyncRuns(runsData.runs)
           setError(null)
         }
@@ -198,6 +209,15 @@ export default function AdminDashboardPage() {
             </span>
             <span className="text-xs text-slate-500">unconfirmed</span>
           </div>
+          {stuckAnchorsCount > 0 && (
+            <p
+              data-testid="stuck-anchors"
+              className="mt-2 text-xs font-medium text-rose-600"
+            >
+              {stuckAnchorsCount} need{stuckAnchorsCount === 1 ? 's' : ''}{' '}
+              attention
+            </p>
+          )}
           <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
             <span>Network: Polygon Amoy</span>
             <Link

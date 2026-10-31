@@ -7,13 +7,22 @@ import {
   retryAdminAnchor,
   type AdminVersionPending,
 } from '@/lib/api/admin'
+import {
+  anchorBadgeClasses,
+  anchorStatusLabel,
+  canRetryAnchor,
+  explainAnchorError,
+  retryMessage,
+} from '@/lib/anchor-status'
 
 export default function AdminAnchorsPage() {
   const [pending, setPending] = useState<AdminVersionPending[]>([])
   const [loading, setLoading] = useState(true)
   const [retryingId, setRetryingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [message, setMessage] = useState<string | null>(null)
+  const [notice, setNotice] = useState<ReturnType<typeof retryMessage> | null>(
+    null,
+  )
 
   const loadPending = async () => {
     setLoading(true)
@@ -62,17 +71,21 @@ export default function AdminAnchorsPage() {
   const handleRetry = async (versionId: string) => {
     try {
       setRetryingId(versionId)
-      setMessage(null)
+      setNotice(null)
       setError(null)
       const res = await retryAdminAnchor(versionId)
-      setMessage(`Anchor transaction status: ${res.status}`)
+      setNotice(retryMessage(res))
       await loadPending()
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Anchor retry failed')
+      setError(err instanceof Error ? err.message : 'Retrying anchoring failed')
     } finally {
       setRetryingId(null)
     }
   }
+
+  const attention = pending.filter(
+    (item) => item.anchor_status === 'failed_permanent',
+  ).length
 
   return (
     <div className="space-y-6">
@@ -94,12 +107,23 @@ export default function AdminAnchorsPage() {
         </button>
       </div>
 
-      {message && (
-        <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center justify-between">
-          <span>{message}</span>
+      {notice && (
+        <div
+          role="status"
+          data-testid="anchor-notice"
+          className={`p-4 rounded-xl border text-xs flex items-center justify-between ${
+            notice.kind === 'success'
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+              : notice.kind === 'warning'
+                ? 'bg-amber-50 border-amber-200 text-amber-800'
+                : 'bg-rose-50 border-rose-200 text-rose-800'
+          }`}
+        >
+          <span>{notice.text}</span>
           <button
-            onClick={() => setMessage(null)}
-            className="text-emerald-600 font-bold ml-4"
+            onClick={() => setNotice(null)}
+            aria-label="Dismiss"
+            className="font-bold ml-4"
           >
             ✕
           </button>
@@ -150,7 +174,9 @@ export default function AdminAnchorsPage() {
             {pending.length} versions
           </p>
           <p className="text-xs text-slate-400 mt-1">
-            Awaiting confirmation or retry
+            {attention > 0
+              ? `${attention} need${attention === 1 ? 's' : ''} attention`
+              : 'Checked automatically every 15 minutes'}
           </p>
         </div>
       </div>
@@ -163,7 +189,9 @@ export default function AdminAnchorsPage() {
           </h2>
           <p className="text-xs text-slate-500 mt-0.5">
             Versions whose blockchain transaction has not yet been confirmed on
-            Polygon Amoy.
+            Polygon Amoy. Stuck or dropped transactions are replaced and failed
+            sends are retried automatically. Versions marked Needs attention
+            stopped after the attempt limit and wait for you.
           </p>
         </div>
 
@@ -176,6 +204,7 @@ export default function AdminAnchorsPage() {
                 <th className="px-6 py-3 font-semibold">Version</th>
                 <th className="px-6 py-3 font-semibold">Issued Date</th>
                 <th className="px-6 py-3 font-semibold">Status</th>
+                <th className="px-6 py-3 font-semibold">Details</th>
                 <th className="px-6 py-3 font-semibold text-right">Action</th>
               </tr>
             </thead>
@@ -183,7 +212,7 @@ export default function AdminAnchorsPage() {
               {loading ? (
                 <tr>
                   <td
-                    colSpan={6}
+                    colSpan={7}
                     className="px-6 py-12 text-center text-slate-400 text-xs"
                   >
                     Checking queue...
@@ -192,7 +221,7 @@ export default function AdminAnchorsPage() {
               ) : pending.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={6}
+                    colSpan={7}
                     className="px-6 py-12 text-center text-slate-400 text-xs"
                   >
                     All issued passport versions are fully confirmed on the
@@ -224,25 +253,51 @@ export default function AdminAnchorsPage() {
                     </td>
                     <td className="px-6 py-4 text-xs">
                       <span
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${
-                          item.anchor_status === 'pending'
-                            ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                            : 'bg-rose-50 text-rose-700 border border-rose-200'
-                        }`}
+                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${anchorBadgeClasses(
+                          item.anchor_status,
+                        )}`}
                       >
-                        {item.anchor_status}
+                        {anchorStatusLabel(item.anchor_status)}
                       </span>
                     </td>
+                    <td className="px-6 py-4 text-xs text-slate-600 max-w-xs">
+                      <div>
+                        {item.anchor_attempts}{' '}
+                        {item.anchor_attempts === 1 ? 'attempt' : 'attempts'}
+                      </div>
+                      {item.anchor_last_error && (
+                        <div
+                          data-testid="anchor-error"
+                          className="mt-0.5 text-slate-500"
+                        >
+                          {explainAnchorError(item.anchor_last_error)}
+                        </div>
+                      )}
+                      {item.anchor_next_attempt_at && (
+                        <div className="mt-0.5 text-slate-400">
+                          Next try after{' '}
+                          {new Date(
+                            item.anchor_next_attempt_at,
+                          ).toLocaleTimeString()}
+                        </div>
+                      )}
+                    </td>
                     <td className="px-6 py-4 text-right">
-                      <button
-                        onClick={() => handleRetry(item.version_id)}
-                        disabled={retryingId === item.version_id}
-                        className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors shadow-xs"
-                      >
-                        {retryingId === item.version_id
-                          ? 'Retrying...'
-                          : 'Retry Anchor'}
-                      </button>
+                      {canRetryAnchor(item.anchor_status) ? (
+                        <button
+                          onClick={() => handleRetry(item.version_id)}
+                          disabled={retryingId === item.version_id}
+                          className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors shadow-xs"
+                        >
+                          {retryingId === item.version_id
+                            ? 'Retrying...'
+                            : 'Retry anchoring'}
+                        </button>
+                      ) : (
+                        <span className="text-xs text-slate-400">
+                          Waiting for the network
+                        </span>
+                      )}
                     </td>
                   </tr>
                 ))

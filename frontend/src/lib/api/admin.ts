@@ -1,3 +1,4 @@
+import type { AnchorStatus } from '@/lib/anchor-status'
 import { apiBaseUrl } from '@/lib/api/base-url'
 import { readAccessToken } from '@/lib/supabase/client'
 
@@ -15,7 +16,9 @@ export interface AdminVersion {
   version_number: number
   holder_name: string
   verification_code: string
-  anchor_status: 'pending' | 'confirmed' | 'failed'
+  anchor_status: AnchorStatus
+  anchor_attempts: number
+  anchor_last_error: string | null
   tx_hash: string | null
   issued_at: string
   pdf_en_path: string | null
@@ -32,7 +35,7 @@ export interface AdminStudent {
   admin_managed: boolean
   deleted_at: string | null
   version_count: number
-  latest_anchor_status: 'pending' | 'confirmed' | 'failed' | null
+  latest_anchor_status: AnchorStatus | null
   created_at: string
 }
 
@@ -71,9 +74,13 @@ export interface AdminVersionPending {
   passport_id: string
   holder_name: string
   version_number: number
-  anchor_status: 'pending' | 'failed'
+  anchor_status: Exclude<AnchorStatus, 'confirmed'>
   issued_at: string
   tx_hash: string | null
+  anchor_attempts: number
+  anchor_last_error: string | null
+  anchor_submitted_at: string | null
+  anchor_next_attempt_at: string | null
 }
 
 export interface AdminVersionPendingList {
@@ -315,7 +322,7 @@ export async function fetchAdminPendingVersions(): Promise<AdminVersionPendingLi
 
 export async function retryAdminAnchor(
   versionId: string,
-): Promise<{ status: string }> {
+): Promise<{ status: string; error?: string }> {
   const res = await fetch(
     `${apiBaseUrl()}/admin/versions/${encodeURIComponent(versionId)}/anchor`,
     {
@@ -325,7 +332,9 @@ export async function retryAdminAnchor(
   )
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
-    throw new Error(err.code || `Failed to retry anchor`)
+    throw new Error(
+      err.code ? adminErrorMessage(err.code) : `Failed to retry anchoring`,
+    )
   }
   return res.json()
 }
@@ -365,6 +374,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   version_already_revoked: 'This version is already revoked.',
   version_not_revoked: 'This version is not revoked.',
   missing_skill: 'A skill is required.',
+  anchor_busy: 'Another anchoring run is in progress. Try again in a minute.',
+  anchor_already_confirmed: 'This version is already confirmed on-chain.',
 }
 
 export function adminErrorMessage(code: string): string {

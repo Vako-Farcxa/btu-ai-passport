@@ -6,10 +6,18 @@ import React, { Suspense, useEffect, useState } from 'react'
 import {
   fetchAdminStudent,
   restoreAdminStudent,
+  retryAdminAnchor,
   revokeAdminVersion,
   unrevokeAdminVersion,
   type AdminStudentDetail,
 } from '@/lib/api/admin'
+import {
+  anchorBadgeClasses,
+  anchorStatusLabel,
+  canRetryAnchor,
+  explainAnchorError,
+  retryMessage,
+} from '@/lib/anchor-status'
 import { explorerTxUrlFor } from '@/lib/explorer'
 import { shareLinkFor } from '@/lib/share'
 
@@ -22,6 +30,9 @@ function StudentDetailContent() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [anchorNotice, setAnchorNotice] = useState<ReturnType<
+    typeof retryMessage
+  > | null>(null)
   const [busy, setBusy] = useState(false)
   const [reloads, setReloads] = useState(0)
 
@@ -34,6 +45,21 @@ function StudentDetailContent() {
       setReloads((count) => count + 1)
     } catch (err: unknown) {
       setActionError(err instanceof Error ? err.message : 'Action failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function retryAnchoring(versionId: string) {
+    if (busy) return
+    setBusy(true)
+    setActionError(null)
+    setAnchorNotice(null)
+    try {
+      setAnchorNotice(retryMessage(await retryAdminAnchor(versionId)))
+      setReloads((count) => count + 1)
+    } catch (err: unknown) {
+      setActionError(err instanceof Error ? err.message : 'Retry failed')
     } finally {
       setBusy(false)
     }
@@ -201,6 +227,22 @@ function StudentDetailContent() {
           </button>
         </div>
       )}
+      {anchorNotice && (
+        <div
+          role="status"
+          data-testid="anchor-notice"
+          className={`p-4 rounded-xl border text-xs ${
+            anchorNotice.kind === 'success'
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+              : anchorNotice.kind === 'warning'
+                ? 'bg-amber-50 border-amber-200 text-amber-800'
+                : 'bg-rose-50 border-rose-200 text-rose-800'
+          }`}
+        >
+          {anchorNotice.text}
+        </div>
+      )}
+
       {actionError && (
         <div
           role="alert"
@@ -258,15 +300,11 @@ function StudentDetailContent() {
                     </span>
                   )}
                   <span
-                    className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium capitalize ${
-                      ver.anchor_status === 'confirmed'
-                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                        : ver.anchor_status === 'pending'
-                          ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                          : 'bg-rose-50 text-rose-700 border border-rose-200'
-                    }`}
+                    className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${anchorBadgeClasses(
+                      ver.anchor_status,
+                    )}`}
                   >
-                    Anchor: {ver.anchor_status}
+                    Anchor: {anchorStatusLabel(ver.anchor_status)}
                   </span>
                   {ver.revoked_at && (
                     <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
@@ -323,6 +361,35 @@ function StudentDetailContent() {
                   )}
                 </div>
               </div>
+
+              {ver.anchor_status !== 'confirmed' && (
+                <div
+                  data-testid="anchor-detail"
+                  className="px-5 py-3 border-b border-slate-100 bg-amber-50/40 text-xs text-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                >
+                  <div>
+                    <strong>
+                      {ver.anchor_status === 'failed_permanent'
+                        ? 'Anchoring needs attention.'
+                        : 'Waiting for the blockchain.'}
+                    </strong>{' '}
+                    Attempts so far: {ver.anchor_attempts}.
+                    {ver.anchor_last_error
+                      ? ` ${explainAnchorError(ver.anchor_last_error)}`
+                      : ''}
+                  </div>
+                  {canRetryAnchor(ver.anchor_status) && (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => void retryAnchoring(ver.id)}
+                      className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors shadow-xs self-start"
+                    >
+                      Retry anchoring
+                    </button>
+                  )}
+                </div>
+              )}
 
               {/* Skills Table in Version */}
               <div className="overflow-x-auto">

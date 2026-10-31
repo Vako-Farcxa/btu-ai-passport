@@ -7,13 +7,19 @@ import { TestnetNote } from '@/components/testnet-note'
 import { SkillList } from '@/components/skill-list'
 import { messages, type Locale } from '@/i18n/messages'
 import type { VerifyResult } from '@/lib/api/types'
-import { labelsFor, newerVersionNotice, revokedNotice } from '@/lib/api/verify'
+import {
+  labelsFor,
+  newerVersionNotice,
+  pendingNotice,
+  revokedNotice,
+} from '@/lib/api/verify'
 import { explorerTxUrl } from '@/lib/explorer'
 
 const glyphs = {
   valid: '✓',
   outdated: '↺',
   revoked: '✕',
+  pending: '…',
   not_found: '?',
   error: '!',
 } as const
@@ -31,6 +37,7 @@ export function VerifyResultCard({
   useResultMotion(ref)
   const notice = newerVersionNotice(result, locale)
   const revoked = revokedNotice(result, locale)
+  const pending = pendingNotice(result, locale)
   const found = result.outcome === 'valid' || result.outcome === 'outdated'
   const txUrl = 'tx_url' in result ? explorerTxUrl(result.tx_url) : null
 
@@ -60,6 +67,11 @@ export function VerifyResultCard({
       {notice ? (
         <p className="newer-notice" data-testid="newer-notice">
           {notice}
+        </p>
+      ) : null}
+      {pending ? (
+        <p className="pending-notice" data-testid="pending-notice">
+          {pending}
         </p>
       ) : null}
       {revoked ? (

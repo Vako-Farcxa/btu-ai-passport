@@ -18,9 +18,10 @@ from fastapi import APIRouter, Depends, Header, Query
 from fastapi.responses import Response
 from postgrest import CountMethod
 
+from passport_api.anchoring import reconcile_anchors
 from passport_api.api.sync import get_sync_store
 from passport_api.auth import require_admin
-from passport_api.chain import chain_from_settings, publish_anchor
+from passport_api.chain import chain_from_settings
 from passport_api.db import get_supabase
 from passport_api.errors import APIError
 from passport_api.pdf import PassportPdf, get_storage, publish_pdfs
@@ -52,6 +53,7 @@ from passport_api.sheet_admin import (
     AdminSheet,
     AwardInput,
 )
+from passport_api.store import normalize_anchor_status
 from passport_api.sync import (
     STUDENT_ARCHIVED,
     CatalogSkill,
@@ -130,7 +132,11 @@ def _version_from_row(row: dict[str, object]) -> AdminVersion:
         version_number=int(cast(int, row["version_number"])),
         holder_name=str(row["holder_name"]),
         verification_code=str(row["verification_code"]),
-        anchor_status=cast(Literal["pending", "confirmed", "failed"], row["anchor_status"]),
+        anchor_status=normalize_anchor_status(str(row["anchor_status"])),
+        anchor_attempts=int(cast(int, row.get("anchor_attempts") or 0)),
+        anchor_last_error=(
+            None if row.get("anchor_last_error") is None else str(row["anchor_last_error"])
+        ),
         tx_hash=None if row.get("tx_hash") is None else str(row["tx_hash"]),
         issued_at=datetime.fromisoformat(str(issued_raw).replace("Z", "+00:00")),
         pdf_en_path=None if row.get("pdf_en_path") is None else str(row["pdf_en_path"]),
@@ -167,7 +173,9 @@ def _student_row_to_summary(row: dict[str, object]) -> AdminStudent:
             else datetime.fromisoformat(str(deleted_raw).replace("Z", "+00:00"))
         ),
         version_count=version_count,
-        latest_anchor_status=cast(Literal["pending", "confirmed", "failed"] | None, latest_anchor),
+        latest_anchor_status=None
+        if latest_anchor is None
+        else normalize_anchor_status(latest_anchor),
         created_at=datetime.fromisoformat(str(created_raw).replace("Z", "+00:00")),
     )
 
@@ -237,6 +245,7 @@ def get_student(
         .select(
             "id, version_number, holder_name, verification_code, anchor_status, "
             "tx_hash, issued_at, pdf_en_path, pdf_ka_path, revoked_at, "
+            "anchor_attempts, anchor_last_error, "
             "skill_entries(id, skill, badge, awarded_on, description, position)"
         )
         .eq("student_id", str(student["id"]))
@@ -697,9 +706,10 @@ def list_pending_versions() -> AdminVersionPendingList:
         .table("passport_versions")
         .select(
             "id, version_number, holder_name, anchor_status, tx_hash, issued_at, "
+            "anchor_attempts, anchor_last_error, anchor_submitted_at, anchor_next_attempt_at, "
             "students(passport_id)"
         )
-        .in_("anchor_status", ["pending", "failed"])
+        .neq("anchor_status", "confirmed")
         .order("issued_at", desc=True)
         .execute()
     )
@@ -712,15 +722,24 @@ def list_pending_versions() -> AdminVersionPendingList:
             str(cast(dict[str, object], student_embed)["passport_id"]) if student_embed else ""
         )
         issued_raw = r.get("issued_at") or _now()
+        status = normalize_anchor_status(str(r["anchor_status"]))
+        if status == "confirmed":
+            continue
         versions.append(
             AdminVersionPending(
                 version_id=cast(str, r["id"]),
                 passport_id=passport_id,
                 holder_name=str(r["holder_name"]),
                 version_number=int(cast(int, r["version_number"])),
-                anchor_status=cast(Literal["pending", "failed"], r["anchor_status"]),
+                anchor_status=status,
                 issued_at=datetime.fromisoformat(str(issued_raw).replace("Z", "+00:00")),
                 tx_hash=None if r.get("tx_hash") is None else str(r["tx_hash"]),
+                anchor_attempts=int(cast(int, r.get("anchor_attempts") or 0)),
+                anchor_last_error=(
+                    None if r.get("anchor_last_error") is None else str(r["anchor_last_error"])
+                ),
+                anchor_submitted_at=_optional_datetime(r.get("anchor_submitted_at")),
+                anchor_next_attempt_at=_optional_datetime(r.get("anchor_next_attempt_at")),
             )
         )
     return AdminVersionPendingList(versions=versions)
@@ -730,89 +749,35 @@ def list_pending_versions() -> AdminVersionPendingList:
 def retry_anchor(
     version_id: str,
 ) -> dict[str, str]:
-    resp = (
-        get_supabase()
-        .table("passport_versions")
-        .select(
-            "id, version_number, holder_name, verification_code, verification_id_hash, "
-            "skill_fingerprint, content_hash, anchor_status, tx_hash, anchored_at, issued_at, "
-            "skill_entries(skill, badge, awarded_on, description, position), "
-            "students(email, passport_id)"
-        )
-        .eq("id", version_id)
-        .limit(1)
-        .execute()
-    )
-    rows = _table_rows(resp.data)
-    if not rows:
+    """Retry anchoring one version now.
+
+    This resets the attempt counter and the backoff, then runs the same reconciler the cron
+    uses. It first checks the receipts of every transaction already sent and the contract
+    slot, so pressing it can never anchor the same hash twice.
+    """
+    from passport_api.sync import SupabaseSyncStore  # noqa: PLC0415
+
+    store = SupabaseSyncStore()
+    record = store.version_by_id(version_id)
+    if record is None:
         raise APIError(404, "version_not_found")
-    row = rows[0]
-    if str(row["anchor_status"]) == "confirmed":
+    if record.anchor_status == "confirmed":
         raise APIError(409, "anchor_already_confirmed")
-
-    student_embed = row.get("students")
-    if isinstance(student_embed, list):
-        student_embed = student_embed[0] if student_embed else None
-    if not isinstance(student_embed, dict):
-        raise RuntimeError("student_missing")
-    student = cast(dict[str, object], student_embed)
-
-    skill_rows = sorted(
-        _table_rows(row.get("skill_entries")),
-        key=lambda r: int(cast(int, r.get("position", 0))),
-    )
-    skills = tuple(
-        Skill(
-            skill=str(r["skill"]),
-            badge=str(r["badge"]),
-            awarded_on=None if r.get("awarded_on") is None else str(r["awarded_on"]),
-            description=str(r.get("description") or ""),
-        )
-        for r in skill_rows
-    )
-
-    from passport_api.sync import VersionRecord  # noqa: PLC0415
-
-    issued_raw = row.get("issued_at") or _now()
-    tx_hash = row.get("tx_hash")
-    anchored_at = row.get("anchored_at")
-    vr = VersionRecord(
-        passport_id=str(student["passport_id"]),
-        email=str(student["email"]),
-        version_number=int(cast(int, row["version_number"])),
-        holder_name=str(row["holder_name"]),
-        verification_code=str(row["verification_code"]),
-        verification_id_hash=str(row["verification_id_hash"]),
-        skill_fingerprint=str(row["skill_fingerprint"]),
-        content_hash=str(row["content_hash"]),
-        anchor_status=str(row["anchor_status"]),
-        pdf_en_path=None,
-        pdf_ka_path=None,
-        tx_hash=None if tx_hash is None else str(tx_hash),
-        issued_at=str(issued_raw),
-        skills=skills,
-        anchored_at=None if anchored_at is None else str(anchored_at),
-    )
 
     chain = chain_from_settings()
     if chain is None:
         return {"status": "no_chain_configured"}
 
-    try:
-        publish_anchor(vr, chain, now=_now())
-    except Exception:
-        vr.anchor_status = "failed"
-        vr.anchored_at = None
-
-    get_supabase().table("passport_versions").update(
-        {
-            "anchor_status": vr.anchor_status,
-            "tx_hash": vr.tx_hash,
-            "anchored_at": vr.anchored_at,
-        }
-    ).eq("id", version_id).execute()
-
-    return {"status": vr.anchor_status}
+    result = reconcile_anchors(store, chain, only=[record], force=True)
+    if result.status == "skipped":
+        raise APIError(409, "anchor_busy")
+    status = normalize_anchor_status(record.anchor_status)
+    response: dict[str, str] = {"status": status}
+    if record.anchor_last_error and status != "confirmed":
+        response["error"] = record.anchor_last_error
+    elif result.error:
+        response["error"] = result.error
+    return response
 
 
 @router.post("/versions/{version_id}/pdf", status_code=200)

@@ -278,7 +278,7 @@ def test_retry_confirmed_anchor_returns_409(monkeypatch: pytest.MonkeyPatch) -> 
         "skill_entries": [],
         "students": [{"email": "student@btu.edu.ge", "passport_id": "BTU-TEST000001"}],
     }
-    with patch("passport_api.api.admin.get_supabase") as mock_db:
+    with patch("passport_api.sync.get_supabase") as mock_db:
         q = MagicMock()
         q.execute.return_value.data = [version_row]
         limit_mock = (
@@ -333,7 +333,7 @@ def test_regenerate_pdf_exists_no_force_returns_409(monkeypatch: pytest.MonkeyPa
 
 def test_anchor_version_not_found(monkeypatch: pytest.MonkeyPatch) -> None:
     _patch_require_admin(monkeypatch, "admin@btu.edu.ge")
-    with patch("passport_api.api.admin.get_supabase") as mock_db:
+    with patch("passport_api.sync.get_supabase") as mock_db:
         q = MagicMock()
         q.execute.return_value.data = []
         limit_mock = (

@@ -48,7 +48,7 @@ test('verification page shows one still outcome', async ({ page }) => {
       return
     }
     if (code === PENDING) {
-      await route.fulfill({ json: { outcome: 'error' } })
+      await route.fulfill({ json: { outcome: 'pending' } })
       return
     }
     await route.fulfill({ json: { outcome: 'not_found' } })
@@ -111,8 +111,14 @@ test('verification page shows one still outcome', async ({ page }) => {
 
   await page.getByLabel('Verification code').fill(PENDING)
   await page.getByRole('button', { name: 'Check' }).click()
-  await expect(page.getByTestId('verify-result')).toHaveText(/Error/)
+  await expect(page.getByTestId('verify-result')).toHaveText(
+    /Pending on-chain confirmation/,
+  )
+  await expect(page.getByTestId('verify-result')).not.toHaveText(/Error/)
   await expect(page.getByTestId('verify-result')).not.toContainText('Python')
+  await page.getByRole('button', { name: 'ქართული' }).click()
+  await expect(page.getByTestId('pending-notice')).toContainText('ბლოკჩეინზე')
+  await page.getByRole('button', { name: 'English' }).click()
   await expect(page.locator('.badge-stamp')).toHaveCount(0)
 })
 

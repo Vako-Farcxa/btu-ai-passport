@@ -682,6 +682,24 @@ button:disabled {
   color: #7a2430;
 }
 
+.outcome-pending .valid-icon {
+  background: #8a6232;
+}
+
+.outcome-pending .certificate-head strong {
+  color: #8a6232;
+}
+
+.pending-notice {
+  margin: 14px 0 0;
+  padding: 10px 14px;
+  border-left: 3px solid #8a6232;
+  background: rgba(138, 98, 50, 0.08);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink-900);
+}
+
 .revoked-notice {
   margin: 14px 0 0;
   padding: 10px 14px;

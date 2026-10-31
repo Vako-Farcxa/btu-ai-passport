@@ -50,6 +50,16 @@ def passport_response(versions: tuple[StoredVersion, ...]) -> PassportResponse:
     )
 
 
+def _student_anchor_status(status: str) -> Literal["pending", "confirmed", "failed"]:
+    """Students see three states. Retrying is still pending from their side, and only an
+    exhausted anchor (an admin has to step in) is shown as failed."""
+    if status == "confirmed":
+        return "confirmed"
+    if status == "failed_permanent":
+        return "failed"
+    return "pending"
+
+
 def _version(item: StoredVersion, current: int) -> PassportVersion:
     tx_url = None if item.tx_hash is None else f"https://amoy.polygonscan.com/tx/{item.tx_hash}"
     return PassportVersion(
@@ -59,7 +69,7 @@ def _version(item: StoredVersion, current: int) -> PassportVersion:
         holder_name=item.holder_name,
         verification_code=item.verification_code,
         skills=list(item.skills),
-        anchor=Anchor(status=item.anchor_status, tx_url=tx_url),
+        anchor=Anchor(status=_student_anchor_status(item.anchor_status), tx_url=tx_url),
         revoked_at=item.version_revoked_at,
     )
 
