@@ -13,15 +13,25 @@ It is also a test-engineering showcase: the interesting part is how it is checke
 > **Disclaimer:** this is a student hackathon project. It is a demo and **not an official BTU service**.
 > **Testnet:** passport versions are anchored on the **Polygon Amoy test network**. Test network data can be reset, so there is no guarantee a record stays available.
 
-| Home | Verify result |
+| Home | Admin sign-in gate |
 | --- | --- |
-| ![Home](docs/screenshots/home.png) | ![Verify result](docs/screenshots/verify-result.png) |
+| ![Home](docs/screenshots/home.webp) | ![Admin sign-in](docs/screenshots/admin-login.webp) |
 
-| Student passport | Admin sign-in gate |
+| Verify result, English | Verify result, Georgian |
 | --- | --- |
-| ![Student passport](docs/screenshots/passport.png) | ![Admin sign-in](docs/screenshots/admin-login.png) |
+| ![Valid latest version with the on-chain check](docs/screenshots/verify-result.webp) | ![Valid latest version in Georgian](docs/screenshots/verify-georgian.webp) |
 
-The screenshots use fictional sample data (a demo student, Nino Beridze), not real students.
+| Outdated version |
+| --- |
+| ![Outdated version with the on-chain check](docs/screenshots/verify-outdated.webp) |
+
+The last shot shows an older version of a passport. It is flagged as Outdated and points to the newer version, while its fingerprint still matches the one recorded on chain.
+
+Mobile (390 px wide):
+
+<img src="docs/screenshots/mobile.webp" alt="Verify result on a phone" width="390">
+
+The screenshots were taken on the live site. All names and data are fictional sample data, not real students.
 
 ## Features
 
