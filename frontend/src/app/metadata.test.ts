@@ -44,6 +44,7 @@ describe('page metadata', () => {
   it('lists the public pages in the sitemap', () => {
     const urls = sitemap().map((entry) => entry.url)
     expect(urls).toContain('https://btu-ai-passport.vercel.app/about')
+    expect(urls).toContain('https://btu-ai-passport.vercel.app/privacy')
     expect(urls.some((url) => url.includes('/admin'))).toBe(false)
   })
 })

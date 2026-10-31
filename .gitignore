@@ -32,3 +32,4 @@ backend/.coverage
 .agents/
 AGENTS.md
 specs/
+test-results-real/

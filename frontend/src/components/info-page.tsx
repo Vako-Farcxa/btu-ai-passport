@@ -5,7 +5,6 @@ import Link from 'next/link'
 import { OpenBook } from '@/components/book'
 import { useLocale } from '@/i18n/use-locale'
 import { trust, type InfoPageId } from '@/i18n/trust'
-import { CONTACT_EMAIL } from '@/lib/contact'
 
 const FOLIOS: Record<InfoPageId, string> = {
   about: '04',
@@ -17,9 +16,6 @@ export function InfoPage({ page }: { page: InfoPageId }) {
   const [locale, setLocale] = useLocale()
   const copy = trust[locale]
   const content = copy.pages[page]
-  const removal = CONTACT_EMAIL
-    ? copy.removalWithEmail.replace('{email}', CONTACT_EMAIL)
-    : copy.removalWithoutEmail
 
   return (
     <OpenBook locale={locale} onLocale={setLocale} folio={FOLIOS[page]}>
@@ -41,9 +37,7 @@ export function InfoPage({ page }: { page: InfoPageId }) {
               </ul>
             ) : (
               section.body.map((paragraph) => (
-                <p key={paragraph}>
-                  {paragraph === '{removal}' ? removal : paragraph}
-                </p>
+                <p key={paragraph}>{paragraph}</p>
               ))
             )}
             {section.link ? (
@@ -51,8 +45,9 @@ export function InfoPage({ page }: { page: InfoPageId }) {
                 <a
                   className="info-link"
                   href={section.link.href}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  {...(section.link.href.startsWith('mailto:')
+                    ? {}
+                    : { target: '_blank', rel: 'noopener noreferrer' })}
                 >
                   {section.link.label}
                 </a>
