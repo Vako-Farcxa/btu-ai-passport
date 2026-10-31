@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -14,6 +16,10 @@ from passport_api.errors import APIError
 from passport_api.schemas import ErrorBody
 from passport_api.security_headers import SecurityHeadersMiddleware
 from passport_api.settings import settings
+
+# One readable line per log entry (time, level, logger, message). It does nothing when the server
+# or a test has already set logging up.
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
 
 def create_app(*, enable_docs: bool) -> FastAPI:

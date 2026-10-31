@@ -465,8 +465,16 @@ ADA = {
 }
 
 
+def _letters(number: int) -> str:
+    """0 -> a, 12 -> bc. Names in the Sheet are letters only, so a test cannot number students."""
+    return "".join(chr(ord("a") + int(digit)) for digit in str(number))
+
+
 def _students(n: int) -> list[dict[str, str]]:
-    return [{**ADA, "email": f"s{i}@btu.edu.ge", "full_name": f"Student {i}"} for i in range(n)]
+    return [
+        {**ADA, "email": f"s{i}@btu.edu.ge", "full_name": f"Student {_letters(i)}"}
+        for i in range(n)
+    ]
 
 
 class _CountingStore(MemorySyncStore):
@@ -841,7 +849,7 @@ def test_one_failing_pdf_does_not_stop_the_others(
     monkeypatch.setattr(settings, "pdf_storage_dir", str(tmp_path))
 
     def publish(document: Any, _storage: Any) -> tuple[str, str]:
-        if document.holder_name == "Student 1":
+        if document.holder_name == f"Student {_letters(1)}":
             raise RuntimeError("storage down")
         return "en.pdf", "ka.pdf"
 
@@ -851,4 +859,4 @@ def test_one_failing_pdf_does_not_stop_the_others(
     result = run_sync(store, FakeSheet(_students(4)))
     assert result.status == "completed"
     with_pdf = sorted(v.holder_name for v in store.versions if v.pdf_en_path)
-    assert with_pdf == ["Student 0", "Student 2", "Student 3"]
+    assert with_pdf == [f"Student {_letters(n)}" for n in (0, 2, 3)]

@@ -63,6 +63,7 @@ from passport_api.search import contains_filter
 from passport_api.settings import settings
 from passport_api.sheet_admin import (
     ALREADY_AWARDED,
+    SHEET_WRITE_LOCK,
     AdminGspreadSheet,
     AdminSheet,
     AwardInput,
@@ -612,6 +613,15 @@ def create_skill(
     actor: Actor,
     sheet: AdminSheet = _admin_sheet_dependency,
 ) -> AdminCatalogSkill:
+    # The next skill ID is "highest in the tab and the database, plus one". Two saves at the
+    # same moment would pick the same one, so they take turns.
+    with SHEET_WRITE_LOCK:
+        return _create_skill(body, actor, sheet)
+
+
+def _create_skill(
+    body: AdminCatalogSkillCreate, actor: str, sheet: AdminSheet
+) -> AdminCatalogSkill:
     name = _nfc(body.name)
     key = _name_key(name)
     db_skills = _db_skills()
@@ -659,6 +669,13 @@ def update_skill(
     body: AdminCatalogSkillUpdate,
     actor: Actor,
     sheet: AdminSheet = _admin_sheet_dependency,
+) -> AdminCatalogSkill:
+    with SHEET_WRITE_LOCK:
+        return _update_skill(skill_id, body, actor, sheet)
+
+
+def _update_skill(
+    skill_id: str, body: AdminCatalogSkillUpdate, actor: str, sheet: AdminSheet
 ) -> AdminCatalogSkill:
     skill_id = skill_id.strip().upper()
     db_skills = _db_skills()
