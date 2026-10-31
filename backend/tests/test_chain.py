@@ -285,6 +285,8 @@ def _memory(versions: list[VersionRecord]) -> MemoryStore:
                 tx_hash=version.tx_hash,
                 issued_at=version.issued_at,
                 skills=version.skills,
+                content_hash=version.content_hash,
+                anchored_at=version.anchored_at,
             )
             for version in versions
         ]

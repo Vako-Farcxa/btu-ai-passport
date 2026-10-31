@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
-import { explorerTxUrl, explorerTxUrlFor } from '@/lib/explorer'
+import {
+  explorerBlockUrl,
+  explorerContractUrl,
+  explorerTxUrl,
+  explorerTxUrlFor,
+} from '@/lib/explorer'
 
 const HASH = '0x' + '22'.repeat(32)
 
@@ -71,5 +76,44 @@ describe('explorerTxUrlFor', () => {
   it('refuses a stored value that is not a hash', () => {
     expect(explorerTxUrlFor('../../evil')).toBeNull()
     expect(explorerTxUrlFor('0x1/../../x')).toBeNull()
+  })
+})
+
+describe('explorerContractUrl', () => {
+  const ADDRESS = '0x' + 'ab'.repeat(20)
+
+  it('accepts the contract page, with or without the read tab', () => {
+    const url = `https://amoy.polygonscan.com/address/${ADDRESS}`
+    expect(explorerContractUrl(url)).toBe(url)
+    expect(explorerContractUrl(`${url}#readContract`)).toBe(
+      `${url}#readContract`,
+    )
+  })
+
+  it('rejects other hosts, schemes, paths, queries and fragments', () => {
+    for (const value of [
+      `https://evil.example/address/${ADDRESS}`,
+      `http://amoy.polygonscan.com/address/${ADDRESS}`,
+      `https://amoy.polygonscan.com/tx/${HASH}`,
+      `https://amoy.polygonscan.com/address/${ADDRESS}?next=//evil.example`,
+      `https://amoy.polygonscan.com/address/${ADDRESS}#other`,
+      `https://amoy.polygonscan.com@evil.example/address/${ADDRESS}`,
+      'https://amoy.polygonscan.com/address/0x1234',
+      '',
+      null,
+    ]) {
+      expect(explorerContractUrl(value), String(value)).toBeNull()
+    }
+  })
+})
+
+describe('explorerBlockUrl', () => {
+  it('builds a block link from a positive whole number only', () => {
+    expect(explorerBlockUrl(51378532)).toBe(
+      'https://amoy.polygonscan.com/block/51378532',
+    )
+    for (const value of [0, -1, 1.5, Number.NaN, Number.MAX_VALUE]) {
+      expect(explorerBlockUrl(value), String(value)).toBeNull()
+    }
   })
 })

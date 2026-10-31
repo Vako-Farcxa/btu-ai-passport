@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-import { explorerTxUrl } from '@/lib/explorer'
+import { explorerContractUrl, explorerTxUrl } from '@/lib/explorer'
 
 const explorerLinkSchema = z
   .string()
@@ -15,12 +15,33 @@ export const skillSchema = z.object({
   description: z.string().default(''),
 })
 
+const contractLinkSchema = z
+  .string()
+  .refine((value) => explorerContractUrl(value) !== null, {
+    message: 'Not an https contract link on the Amoy explorer',
+  })
+
+const hashSchema = z.string().regex(/^0x[0-9a-fA-F]{64}$/)
+
+// What the backend's on-chain check found. "verified": the contract holds exactly this
+// passport's hash. "unavailable": the chain could not be read, nothing is claimed.
+export const onchainSchema = z.object({
+  status: z.enum(['verified', 'unavailable']),
+  block_number: z.number().int().positive().nullish(),
+  contract_address: z.string().regex(/^0x[0-9a-fA-F]{40}$/),
+  contract_url: contractLinkSchema,
+  verification_id_hash: hashSchema,
+  content_hash: hashSchema,
+})
+
 const foundFields = {
   holder_name: z.string(),
   version: z.number().int().positive(),
   is_latest: z.boolean(),
   skills: z.array(skillSchema),
   tx_url: explorerLinkSchema,
+  // Added by newer backends. An older one omits it and no on-chain badge is shown.
+  onchain: onchainSchema.nullish(),
 }
 
 export const verifyResultSchema = z.discriminatedUnion('outcome', [
@@ -34,6 +55,12 @@ export const verifyResultSchema = z.discriminatedUnion('outcome', [
   }),
   z.object({ outcome: z.literal('revoked'), revoked_at: z.string().nullish() }),
   z.object({ outcome: z.literal('pending') }),
+  // The stored passport does not match its hash. No name, no skills.
+  z.object({
+    outcome: z.literal('tampered'),
+    reason: z.string().nullish(),
+    contract_url: contractLinkSchema.nullish(),
+  }),
   z.object({ outcome: z.literal('not_found') }),
   z.object({ outcome: z.literal('error') }),
 ])
@@ -62,6 +89,7 @@ export const passportResponseSchema = z.object({
     .nullable(),
 })
 
+export type Onchain = z.infer<typeof onchainSchema>
 export type Skill = z.infer<typeof skillSchema>
 export type VerifyResult = z.infer<typeof verifyResultSchema>
 export type PassportResponse = z.infer<typeof passportResponseSchema>

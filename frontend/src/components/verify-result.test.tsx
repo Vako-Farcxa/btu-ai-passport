@@ -53,6 +53,7 @@ const RESULTS: Record<string, VerifyResult> = {
     revoked_at: '2026-10-30T10:00:00+00:00',
   }),
   pending: { outcome: 'pending' },
+  tampered: { outcome: 'tampered' },
   not_found: { outcome: 'not_found' },
   error: { outcome: 'error' },
 }
@@ -68,13 +69,24 @@ function userFacingText(root: HTMLElement): string {
   }
   let text = parts.join('\n')
   for (const value of Object.values(DATA)) text = text.split(value).join(' ')
+  // Addresses and hashes are data too.
+  text = text.replace(/0x[0-9a-fA-F]+/g, ' ')
   return text
 }
 
 // Latin words that may stay in Georgian: BTU and AI, and the Polygon Amoy network name.
 function englishWords(text: string): string[] {
   return (text.match(/[A-Za-z]{2,}/g) ?? []).filter(
-    (word) => !['BTU', 'AI', 'Polygon', 'Amoy'].includes(word),
+    (word) =>
+      ![
+        'BTU',
+        'AI',
+        'Polygon',
+        'Amoy',
+        'Polygonscan',
+        'anchors',
+        'Query',
+      ].includes(word),
   )
 }
 
@@ -221,6 +233,162 @@ describe('pending result', () => {
   })
 })
 
+const CONTRACT = '0xf436Ba2A2cd1dc78f1543A1E7e8a9f20B2C40c32'
+const CONTRACT_URL = `https://amoy.polygonscan.com/address/${CONTRACT}#readContract`
+
+function onchain(status: 'verified' | 'unavailable', block: number | null) {
+  return {
+    status,
+    block_number: block,
+    contract_address: CONTRACT,
+    contract_url: CONTRACT_URL,
+    verification_id_hash: '0x' + 'ab'.repeat(32),
+    content_hash: '0x' + 'cd'.repeat(32),
+  }
+}
+
+describe('on-chain badge', () => {
+  it('says verified with a block link and never claims it when unavailable', () => {
+    const verified = found('valid', { onchain: onchain('verified', 51378532) })
+    const { getByTestId } = render(
+      <VerifyResultCard locale="en" result={verified} />,
+    )
+    const badge = getByTestId('onchain-badge')
+    expect(badge).toHaveAttribute('data-status', 'verified')
+    expect(badge).toHaveTextContent('Verified on-chain, block 51378532')
+    expect(getByTestId('onchain-block-link')).toHaveAttribute(
+      'href',
+      'https://amoy.polygonscan.com/block/51378532',
+    )
+    cleanup()
+
+    const down = found('valid', { onchain: onchain('unavailable', null) })
+    const second = render(<VerifyResultCard locale="en" result={down} />)
+    const unavailable = second.getByTestId('onchain-badge')
+    expect(unavailable).toHaveAttribute('data-status', 'unavailable')
+    expect(unavailable).toHaveTextContent(
+      'On-chain check unavailable, try later',
+    )
+    expect(unavailable.textContent).not.toMatch(/verified on-chain/i)
+    expect(second.queryByTestId('onchain-block-link')).toBeNull()
+    // The database result is still shown.
+    expect(second.getByTestId('verify-result')).toHaveTextContent(DATA.holder)
+  })
+
+  it('never shows a block for an unavailable check, even if one is sent', () => {
+    const odd = found('valid', { onchain: onchain('unavailable', 5) })
+    const { queryByTestId } = render(
+      <VerifyResultCard locale="en" result={odd} />,
+    )
+    expect(queryByTestId('onchain-block-link')).toBeNull()
+  })
+
+  it('is on outdated results too, and absent from older backends', () => {
+    const outdated = found('outdated', {
+      latest_version: 3,
+      latest_issued_at: '2026-10-28',
+      onchain: onchain('verified', 9),
+    })
+    const first = render(<VerifyResultCard locale="en" result={outdated} />)
+    expect(first.getByTestId('onchain-badge')).toBeInTheDocument()
+    cleanup()
+    const second = render(<VerifyResultCard locale="en" result={VALID} />)
+    expect(second.queryByTestId('onchain-badge')).toBeNull()
+    expect(second.queryByTestId('self-verify')).toBeNull()
+  })
+
+  it('offers a verify-it-yourself link and the values to compare', () => {
+    const verified = found('valid', { onchain: onchain('verified', 9) })
+    const { getByTestId } = render(
+      <VerifyResultCard locale="en" result={verified} />,
+    )
+    const section = getByTestId('self-verify')
+    expect(section).toHaveTextContent(CONTRACT)
+    expect(section).toHaveTextContent('0x' + 'ab'.repeat(32))
+    expect(section).toHaveTextContent('0x' + 'cd'.repeat(32))
+    expect(getByTestId('self-verify-link')).toHaveAttribute(
+      'href',
+      CONTRACT_URL,
+    )
+  })
+
+  it.each(['verified', 'unavailable'] as const)(
+    'has no English text left in Georgian when %s',
+    (status) => {
+      const result = found('valid', {
+        onchain: onchain(status, status === 'verified' ? 9 : null),
+      })
+      const { container } = render(
+        <VerifyResultCard locale="ka" result={result} />,
+      )
+      expect(englishWords(userFacingText(container))).toEqual([])
+    },
+  )
+
+  it('rejects an off-site contract link from the API', () => {
+    for (const url of [
+      'https://evil.example/address/' + CONTRACT,
+      'javascript:alert(1)',
+      `http://amoy.polygonscan.com/address/${CONTRACT}`,
+      `https://amoy.polygonscan.com/address/${CONTRACT}?x=1`,
+    ]) {
+      expect(() =>
+        found('valid', {
+          onchain: { ...onchain('verified', 9), contract_url: url },
+        }),
+      ).toThrow()
+    }
+  })
+})
+
+describe('tampered result', () => {
+  const TAMPERED = verifyResultSchema.parse({
+    outcome: 'tampered',
+    reason: 'chain_mismatch',
+    contract_url: CONTRACT_URL,
+  })
+
+  it('says it does not match the blockchain, and never looks valid', () => {
+    const { getByTestId } = render(
+      <VerifyResultCard locale="en" result={TAMPERED} />,
+    )
+    const card = getByTestId('verify-result')
+    expect(card).toHaveAttribute('aria-label', 'Does not match the blockchain')
+    expect(card).toHaveClass('outcome-tampered')
+    expect(card).not.toHaveClass('outcome-valid')
+    expect(getByTestId('tampered-notice')).toHaveTextContent(
+      /may have been changed/,
+    )
+  })
+
+  it('shows no name, skills, badge or transaction link', () => {
+    const withName = verifyResultSchema.parse({
+      outcome: 'tampered',
+      holder_name: DATA.holder,
+      skills: [{ skill: DATA.skill, badge: '', awarded_on: null }],
+    })
+    const { container, queryByTestId } = render(
+      <VerifyResultCard locale="en" result={withName} />,
+    )
+    expect(container.querySelector('.holder')).toBeNull()
+    expect(container.querySelector('.transaction-link')).toBeNull()
+    expect(queryByTestId('onchain-badge')).toBeNull()
+    expect(container.textContent).not.toContain(DATA.holder)
+    expect(container.textContent).not.toContain(DATA.skill)
+  })
+
+  it('says it in Georgian with no English left', () => {
+    const { getByTestId, container } = render(
+      <VerifyResultCard locale="ka" result={TAMPERED} />,
+    )
+    expect(getByTestId('verify-result')).toHaveAttribute(
+      'aria-label',
+      messages.ka.outcomes.tampered,
+    )
+    expect(englishWords(userFacingText(container))).toEqual([])
+  })
+})
+
 describe('translations', () => {
   it('has the same keys in English and Georgian', () => {
     expect(Object.keys(messages.ka).sort()).toEqual(
@@ -229,7 +397,22 @@ describe('translations', () => {
   })
 
   it('has no English sentence in the Georgian catalogue', () => {
-    const allowed = new Set(['BTU', 'AI', 'ID', 'PDF', 'Google', 'Ctrl', 'C'])
+    // Polygonscan, its function name `anchors` and its Query button are names from a
+    // site that has no Georgian interface.
+    const allowed = new Set([
+      'BTU',
+      'AI',
+      'ID',
+      'PDF',
+      'Google',
+      'Ctrl',
+      'C',
+      'Polygon',
+      'Amoy',
+      'Polygonscan',
+      'anchors',
+      'Query',
+    ])
     const strings: string[] = []
     const walk = (value: unknown) => {
       if (typeof value === 'string') strings.push(value)

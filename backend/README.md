@@ -42,6 +42,26 @@ reconciler (`src/passport_api/anchoring.py`) keeps that reliable:
 - Needs migration `supabase/migrations/0010_anchor_reliability.sql`. No new environment
   variables.
 
+## On-chain verify
+
+`POST /verify` does not trust the database alone. For a confirmed code it (1) recomputes the
+content hash from the stored name, passport ID, version and skills (`fingerprint.py`) and
+compares it with `passport_versions.content_hash`, then (2) reads `anchors(keccak(code))` from
+the contract (`onchain.py`, read-only, no key) and compares again.
+
+- Match: `valid` or `outdated`, with `onchain.status = "verified"`, the block number of the
+  anchor transaction and the data for a Polygonscan self-check.
+- Stored fields changed, or the contract holds another hash (or nothing, after a 2 minute grace
+  for lagging nodes): outcome `tampered`, with no name and no skills, and an error log line.
+- RPC unreachable or no `AMOY_RPC_URL`: the database result with `onchain.status =
+  "unavailable"`. It is never reported as verified.
+- Revoked, pending and not found are decided before any chain call and are unchanged.
+- Each RPC request times out after `ONCHAIN_TIMEOUT_SECONDS` (3) with no retries. A filled slot
+  is cached 24 hours (it is immutable), an empty one 1 minute, and after a failure the RPC is
+  skipped for 30 seconds. `ONCHAIN_VERIFY=false` switches the read off.
+- `scripts/verify_onchain.py` repeats the check from a passport's facts with no BTU server.
+  Needs no migration.
+
 ## Atomic sync
 
 Each student's sync is one unit: the student row (or rename), the new passport version, its

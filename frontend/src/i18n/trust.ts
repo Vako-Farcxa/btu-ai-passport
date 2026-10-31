@@ -94,6 +94,7 @@ const en: TrustCopy = {
           heading: 'What blockchain anchoring proves',
           body: [
             'When a version is issued, a fingerprint (hash) of its contents is written to a public blockchain. The transaction link on a verified result lets you look at that record. Anchoring shows that exactly this content existed at that time and has not been changed since. Only hashes go on the blockchain, never names, emails or skills.',
+            'When you check a code, this site recomputes the fingerprint from the stored passport and reads the one recorded on the blockchain. It says "Verified on-chain" only if they match, and it says so plainly when the blockchain could not be reached. You can repeat the check yourself on Polygonscan, using the "Verify it yourself" section of a result.',
           ],
         },
         {
@@ -266,6 +267,7 @@ const ka: TrustCopy = {
           heading: 'რას ადასტურებს ბლოკჩეინზე დაფიქსირება',
           body: [
             'ვერსიის გაცემისას მისი შიგთავსის ანაბეჭდი (ჰეში) იწერება საჯარო ბლოკჩეინზე. გადამოწმებულ შედეგზე არსებული ტრანზაქციის ბმულით ამ ჩანაწერის ნახვა შეგიძლიათ. დაფიქსირება აჩვენებს, რომ ზუსტად ეს შიგთავსი ამ დროს არსებობდა და მას მერე არ შეცვლილა. ბლოკჩეინზე მხოლოდ ჰეშები იწერება, სახელები, ელფოსტები და უნარები არა.',
+            'კოდის შემოწმებისას ეს საიტი შენახული პასპორტიდან თავიდან ითვლის ანაბეჭდს და კითხულობს ბლოკჩეინზე ჩაწერილს. წარწერას „დადასტურებულია ბლოკჩეინზე“ მხოლოდ მაშინ აჩვენებს, თუ ისინი ემთხვევა, ხოლო თუ ბლოკჩეინთან დაკავშირება ვერ მოხერხდა, ამას პირდაპირ წერს. შემოწმების გამეორება თავადაც შეგიძლიათ Polygonscan-ზე, შედეგის განყოფილებით „თავად შეამოწმეთ“.',
           ],
         },
         {

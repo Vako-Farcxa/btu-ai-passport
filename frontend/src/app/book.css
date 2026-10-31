@@ -690,6 +690,103 @@ button:disabled {
   color: #8a6232;
 }
 
+.outcome-tampered .valid-icon {
+  background: #7a2430;
+}
+
+.outcome-tampered .certificate-head strong {
+  color: #7a2430;
+}
+
+.tampered-notice {
+  margin: 14px 0 0;
+  padding: 10px 14px;
+  border-left: 3px solid #7a2430;
+  background: rgba(122, 36, 48, 0.08);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink-900);
+}
+
+.onchain-badge {
+  margin: 14px 18px 0;
+  padding: 10px 14px;
+  border-left: 3px solid var(--success-700);
+  background: rgba(35, 99, 76, 0.08);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-900);
+}
+
+.onchain-badge strong {
+  display: block;
+  font: 600 14px var(--serif);
+  color: var(--success-700);
+}
+
+.onchain-badge p {
+  margin: 4px 0 0;
+}
+
+.onchain-badge a,
+.self-verify a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--navy-800);
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.onchain-badge a span,
+.self-verify a span {
+  margin-left: 6px;
+  color: var(--gold-500);
+}
+
+.onchain-unavailable {
+  border-left-color: #8a6232;
+  background: rgba(138, 98, 50, 0.08);
+}
+
+.onchain-unavailable strong {
+  color: #8a6232;
+}
+
+.self-verify {
+  margin: 4px 18px 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.self-verify summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--navy-800);
+}
+
+.self-verify dt {
+  margin-top: 8px;
+  color: var(--ink-600);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+}
+
+.self-verify dd {
+  margin: 2px 0 0;
+}
+
+.self-verify code {
+  display: block;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+
 .pending-notice {
   margin: 14px 0 0;
   padding: 10px 14px;
@@ -1160,6 +1257,9 @@ button:disabled {
 .stamp-button:focus-visible,
 .back-link:focus-visible,
 .transaction-link:focus-visible,
+.onchain-badge a:focus-visible,
+.self-verify a:focus-visible,
+.self-verify summary:focus-visible,
 .verify-page input:focus-visible {
   outline: 2px solid var(--gold-300);
   outline-offset: 3px;
