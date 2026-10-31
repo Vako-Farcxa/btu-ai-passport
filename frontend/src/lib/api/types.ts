@@ -1,5 +1,13 @@
 import { z } from 'zod'
 
+import { explorerTxUrl } from '@/lib/explorer'
+
+const explorerLinkSchema = z
+  .string()
+  .refine((value) => explorerTxUrl(value) !== null, {
+    message: 'Not an https transaction link on the Amoy explorer',
+  })
+
 export const skillSchema = z.object({
   skill: z.string(),
   badge: z.string(),
@@ -12,7 +20,7 @@ const foundFields = {
   version: z.number().int().positive(),
   is_latest: z.boolean(),
   skills: z.array(skillSchema),
-  tx_url: z.string().url(),
+  tx_url: explorerLinkSchema,
 }
 
 export const verifyResultSchema = z.discriminatedUnion('outcome', [
@@ -37,7 +45,7 @@ export const passportVersionSchema = z.object({
   skills: z.array(skillSchema),
   anchor: z.object({
     status: z.enum(['pending', 'confirmed', 'failed']),
-    tx_url: z.string().url().nullable(),
+    tx_url: explorerLinkSchema.nullable(),
   }),
 })
 

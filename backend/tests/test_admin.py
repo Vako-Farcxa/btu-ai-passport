@@ -30,6 +30,7 @@ def _token(email: str, *, key: rsa.RSAPrivateKey = _PRIVATE, expired: bool = Fal
     now = int(time.time())
     payload = {
         "aud": "authenticated",
+        "iss": "https://test-project.supabase.co/auth/v1",
         "email": email,
         "exp": now - 30 if expired else now + 600,
         "sub": "user",

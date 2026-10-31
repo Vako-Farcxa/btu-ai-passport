@@ -45,6 +45,7 @@ from passport_api.schemas import (
     Skill,
     SyncResult,
 )
+from passport_api.search import contains_filter
 from passport_api.sheet_admin import (
     ALREADY_AWARDED,
     AdminGspreadSheet,
@@ -201,9 +202,9 @@ def list_students(
     )
     if not include_deleted:
         query = query.is_("deleted_at", "null")
-    if search:
-        like = f"%{search}%"
-        query = query.or_(f"email.ilike.{like},full_name.ilike.{like}")
+    search_filter = contains_filter(["email", "full_name"], search) if search else None
+    if search_filter:
+        query = query.or_(search_filter)
     count_resp = (
         get_supabase()
         .table("students")

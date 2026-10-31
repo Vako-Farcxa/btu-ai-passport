@@ -17,7 +17,15 @@ export async function GET(request: Request) {
     ?.split('; ')
     .find((part) => part.startsWith(`${POST_LOGIN_COOKIE}=`))
     ?.slice(POST_LOGIN_COOKIE.length + 1)
-  const response = NextResponse.redirect(new URL(safeNext(cookie), url.origin))
-  response.cookies.set(POST_LOGIN_COOKIE, '', { path: '/', maxAge: 0 })
+  let target = new URL(safeNext(cookie), url.origin)
+  // Belt and braces: whatever safeNext returned, never leave this site.
+  if (target.origin !== url.origin) target = new URL('/passport', url.origin)
+  const response = NextResponse.redirect(target)
+  response.cookies.set(POST_LOGIN_COOKIE, '', {
+    path: '/',
+    maxAge: 0,
+    sameSite: 'lax',
+    secure: url.protocol === 'https:',
+  })
   return response
 }

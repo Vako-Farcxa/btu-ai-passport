@@ -1,6 +1,8 @@
 import { createBrowserClient } from '@supabase/ssr'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
+import { sessionCookieOptions, writeCookie } from '@/lib/cookies'
+
 const MOCK_COOKIE = 'passport_mock_bearer'
 
 function readCookie(name: string): string | null {
@@ -17,7 +19,11 @@ export function createSupabaseBrowser(): SupabaseClient | null {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   if (!url || !key) return null
-  return createBrowserClient(url, key)
+  const secure =
+    typeof window !== 'undefined' && window.location.protocol === 'https:'
+  return createBrowserClient(url, key, {
+    cookieOptions: sessionCookieOptions(secure),
+  })
 }
 
 export async function readAccessToken(): Promise<string | null> {
@@ -44,7 +50,7 @@ export async function signInWithGoogle(
   if (next) {
     // The redirect URL stays exactly as Supabase allows it. The callback route reads
     // this short-lived cookie to send the user back where they started.
-    document.cookie = `${POST_LOGIN_COOKIE}=${encodeURIComponent(next)}; path=/; max-age=600; SameSite=Lax`
+    writeCookie(POST_LOGIN_COOKIE, encodeURIComponent(next), 600)
   }
   const { error } = await client.auth.signInWithOAuth({
     provider: 'google',

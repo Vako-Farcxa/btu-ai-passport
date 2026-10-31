@@ -24,3 +24,4 @@ Thumbs.db
 .vscode/
 backend/var/
 .preview/
+backend/.coverage

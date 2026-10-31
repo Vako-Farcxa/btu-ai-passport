@@ -20,6 +20,8 @@ uv run uvicorn passport_api.main:app --reload
 
 The API runs on `http://localhost:8000`. Health check endpoint: `GET /health`.
 
+The interactive API docs (`/docs`, `/redoc`, `/openapi.json`) are off by default so a deployed API does not publish its route map. To use them locally, put `ENABLE_API_DOCS=true` in `backend/.env`.
+
 ## Quality Checks & Tests
 
 Run all checks as defined in `AGENTS.md`:

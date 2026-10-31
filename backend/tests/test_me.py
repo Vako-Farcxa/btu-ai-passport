@@ -25,6 +25,7 @@ def _token(email: str, *, key: rsa.RSAPrivateKey = _PRIVATE, expired: bool = Fal
     now = int(time.time())
     payload = {
         "aud": "authenticated",
+        "iss": "https://test-project.supabase.co/auth/v1",
         "email": email,
         "exp": now - 30 if expired else now + 600,
         "sub": "user",
@@ -159,7 +160,6 @@ def test_owner_downloads_one_language_and_cannot_read_another_student(
 ) -> None:
     _use_test_jwks(monkeypatch)
     monkeypatch.setattr(settings, "pdf_storage_dir", str(tmp_path))
-    monkeypatch.setattr(settings, "supabase_url", "")
     monkeypatch.setattr(settings, "supabase_service_role_key", "")
     own_en = "BTU-A1B2C3D4E5/v2/en.pdf"
     own_ka = "BTU-A1B2C3D4E5/v2/ka.pdf"

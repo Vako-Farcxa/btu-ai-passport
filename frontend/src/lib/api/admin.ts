@@ -1,3 +1,4 @@
+import { apiBaseUrl } from '@/lib/api/base-url'
 import { readAccessToken } from '@/lib/supabase/client'
 
 export interface AdminSkillEntry {
@@ -129,8 +130,6 @@ export interface AdminAwardResponse {
   }
 }
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
-
 export class AdminAccessError extends Error {
   readonly code: 'signed_out' | 'not_authorized'
 
@@ -154,7 +153,7 @@ async function getHeaders(): Promise<HeadersInit> {
 
 /** Asks the backend whether the signed-in user is an admin. Never guesses. */
 export async function fetchAdminMe(): Promise<{ email: string }> {
-  const res = await fetch(`${API_BASE}/admin/me`, {
+  const res = await fetch(`${apiBaseUrl()}/admin/me`, {
     headers: await getHeaders(),
     cache: 'no-store',
   })
@@ -185,9 +184,12 @@ export async function fetchAdminStudents(params?: {
   if (params?.offset !== undefined) query.set('offset', String(params.offset))
   if (params?.limit !== undefined) query.set('limit', String(params.limit))
 
-  const res = await fetch(`${API_BASE}/admin/students?${query.toString()}`, {
-    headers: await getHeaders(),
-  })
+  const res = await fetch(
+    `${apiBaseUrl()}/admin/students?${query.toString()}`,
+    {
+      headers: await getHeaders(),
+    },
+  )
   if (!res.ok) throw new Error(`Failed to load students: ${res.statusText}`)
   return res.json()
 }
@@ -196,7 +198,7 @@ export async function fetchAdminStudent(
   passportId: string,
 ): Promise<AdminStudentDetail> {
   const res = await fetch(
-    `${API_BASE}/admin/students/${encodeURIComponent(passportId)}`,
+    `${apiBaseUrl()}/admin/students/${encodeURIComponent(passportId)}`,
     {
       headers: await getHeaders(),
     },
@@ -207,7 +209,7 @@ export async function fetchAdminStudent(
 
 export async function deleteAdminStudent(passportId: string): Promise<void> {
   const res = await fetch(
-    `${API_BASE}/admin/students/${encodeURIComponent(passportId)}`,
+    `${apiBaseUrl()}/admin/students/${encodeURIComponent(passportId)}`,
     {
       method: 'DELETE',
       headers: await getHeaders(),
@@ -222,7 +224,7 @@ export async function deleteAdminStudent(passportId: string): Promise<void> {
 export async function fetchAdminSyncRuns(
   limit = 50,
 ): Promise<AdminSyncRunList> {
-  const res = await fetch(`${API_BASE}/admin/sync-runs?limit=${limit}`, {
+  const res = await fetch(`${apiBaseUrl()}/admin/sync-runs?limit=${limit}`, {
     headers: await getHeaders(),
   })
   if (!res.ok) throw new Error(`Failed to load sync runs: ${res.statusText}`)
@@ -262,7 +264,7 @@ export function describeSyncResult(res: AdminSyncResult): SyncNotice {
 }
 
 export async function triggerAdminSync(): Promise<AdminSyncResult> {
-  const res = await fetch(`${API_BASE}/admin/sync`, {
+  const res = await fetch(`${apiBaseUrl()}/admin/sync`, {
     method: 'POST',
     headers: await getHeaders(),
   })
@@ -271,7 +273,7 @@ export async function triggerAdminSync(): Promise<AdminSyncResult> {
 }
 
 export async function fetchAdminPendingVersions(): Promise<AdminVersionPendingList> {
-  const res = await fetch(`${API_BASE}/admin/versions/pending`, {
+  const res = await fetch(`${apiBaseUrl()}/admin/versions/pending`, {
     headers: await getHeaders(),
   })
   if (!res.ok)
@@ -283,7 +285,7 @@ export async function retryAdminAnchor(
   versionId: string,
 ): Promise<{ status: string }> {
   const res = await fetch(
-    `${API_BASE}/admin/versions/${encodeURIComponent(versionId)}/anchor`,
+    `${apiBaseUrl()}/admin/versions/${encodeURIComponent(versionId)}/anchor`,
     {
       method: 'POST',
       headers: await getHeaders(),
@@ -335,7 +337,7 @@ async function failure(res: Response, fallback: string): Promise<Error> {
 }
 
 export async function fetchAdminSkills(): Promise<AdminCatalogSkill[]> {
-  const res = await fetch(`${API_BASE}/admin/skills`, {
+  const res = await fetch(`${apiBaseUrl()}/admin/skills`, {
     headers: await getHeaders(),
   })
   if (!res.ok) throw await failure(res, 'Failed to load skills')
@@ -346,7 +348,7 @@ export async function fetchAdminSkills(): Promise<AdminCatalogSkill[]> {
 export async function createAdminCatalogSkill(
   input: AdminCatalogSkillInput,
 ): Promise<AdminCatalogSkill> {
-  const res = await fetch(`${API_BASE}/admin/skills`, {
+  const res = await fetch(`${apiBaseUrl()}/admin/skills`, {
     method: 'POST',
     headers: await getHeaders(),
     body: JSON.stringify(input),
@@ -360,7 +362,7 @@ export async function updateAdminCatalogSkill(
   input: Partial<AdminCatalogSkillInput>,
 ): Promise<AdminCatalogSkill> {
   const res = await fetch(
-    `${API_BASE}/admin/skills/${encodeURIComponent(id)}`,
+    `${apiBaseUrl()}/admin/skills/${encodeURIComponent(id)}`,
     {
       method: 'PATCH',
       headers: await getHeaders(),
@@ -377,7 +379,7 @@ export async function awardAdminSkill(input: {
   awarded_on: string | null
   students: AwardStudentInput[]
 }): Promise<AdminAwardResponse> {
-  const res = await fetch(`${API_BASE}/admin/awards`, {
+  const res = await fetch(`${apiBaseUrl()}/admin/awards`, {
     method: 'POST',
     headers: await getHeaders(),
     body: JSON.stringify(input),
@@ -457,7 +459,7 @@ export async function fetchAdminFlags(
   status?: AdminFlagStatus,
 ): Promise<AdminFlagList> {
   const query = status ? `?status=${status}` : ''
-  const res = await fetch(`${API_BASE}/admin/flags${query}`, {
+  const res = await fetch(`${apiBaseUrl()}/admin/flags${query}`, {
     headers: await getHeaders(),
     cache: 'no-store',
   })
@@ -469,11 +471,14 @@ export async function updateAdminFlag(
   id: string,
   input: { status: 'resolved' | 'dismissed'; admin_note: string },
 ): Promise<AdminFlag> {
-  const res = await fetch(`${API_BASE}/admin/flags/${encodeURIComponent(id)}`, {
-    method: 'PATCH',
-    headers: await getHeaders(),
-    body: JSON.stringify(input),
-  })
+  const res = await fetch(
+    `${apiBaseUrl()}/admin/flags/${encodeURIComponent(id)}`,
+    {
+      method: 'PATCH',
+      headers: await getHeaders(),
+      body: JSON.stringify(input),
+    },
+  )
   if (!res.ok) throw await failure(res, 'Failed to update the flag')
   return res.json()
 }

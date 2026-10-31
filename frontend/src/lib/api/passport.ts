@@ -1,3 +1,4 @@
+import { apiBaseUrl } from '@/lib/api/base-url'
 import { messages, type Locale } from '@/i18n/messages'
 import {
   passportResponseSchema,
@@ -40,7 +41,7 @@ export async function downloadPassportPdf(
   version: number,
   lang: Locale,
 ): Promise<Blob> {
-  const base = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
+  const base = apiBaseUrl()
   const response = await fetch(`${base}${passportPdfPath(version, lang)}`, {
     headers: { Authorization: `Bearer ${token}` },
     cache: 'no-store',
@@ -87,7 +88,7 @@ export function renderPassportLines(
 }
 
 export async function getMyPassport(token: string): Promise<PassportResponse> {
-  const base = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
+  const base = apiBaseUrl()
   const response = await fetch(`${base}/me/passport`, {
     headers: { Authorization: `Bearer ${token}` },
     cache: 'no-store',

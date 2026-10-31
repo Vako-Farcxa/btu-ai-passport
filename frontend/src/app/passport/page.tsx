@@ -23,6 +23,7 @@ import { flagForVersion } from '@/lib/api/flags'
 import { useMyFlags } from '@/lib/api/use-flags'
 import { useMyPassport } from '@/lib/api/use-passport'
 import type { PassportVersion } from '@/lib/api/types'
+import { explorerTxUrl } from '@/lib/explorer'
 import { readAccessToken } from '@/lib/supabase/client'
 
 export default function PassportPage() {
@@ -140,6 +141,7 @@ export default function PassportPage() {
           <ol className="version-list">
             {versions.map((version) => {
               const flag = flagForVersion(myFlags.flags, version.version)
+              const txUrl = explorerTxUrl(version.anchor.tx_url)
               return (
                 <li key={version.version} className="version-card">
                   <div className="version-head">
@@ -179,8 +181,8 @@ export default function PassportPage() {
                         copy.downloadPdf
                       )}
                     </PrimaryButton>
-                    {version.anchor.tx_url ? (
-                      <a className="action-button" href={version.anchor.tx_url}>
+                    {txUrl ? (
+                      <a className="action-button" href={txUrl}>
                         {copy.transaction}
                         <span aria-hidden="true">↗</span>
                       </a>
