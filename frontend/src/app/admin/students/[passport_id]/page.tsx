@@ -434,7 +434,7 @@ function StudentDetailContent() {
                                 {skill.badge}
                               </span>
                             ) : (
-                              '—'
+                              'N/A'
                             )}
                           </td>
                           <td className="px-6 py-3 text-slate-600">

@@ -262,10 +262,10 @@ export default function AdminSyncPage() {
                         : 'In Progress'}
                     </td>
                     <td className="px-6 py-3.5 text-xs font-mono font-medium text-slate-800">
-                      {run.rows_read ?? '—'}
+                      {run.rows_read ?? 'N/A'}
                     </td>
                     <td className="px-6 py-3.5 text-xs font-mono font-semibold text-slate-900">
-                      {run.versions_created ?? '—'}
+                      {run.versions_created ?? 'N/A'}
                     </td>
                     <td className="px-6 py-3.5 text-xs text-slate-500 truncate max-w-sm">
                       {run.error ?? 'None (Successful)'}

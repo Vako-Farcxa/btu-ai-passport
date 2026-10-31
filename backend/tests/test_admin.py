@@ -96,7 +96,7 @@ def test_btu_non_admin_returns_403(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 # ---------------------------------------------------------------------------
-# GET /admin/students — list
+# GET /admin/students: list
 # ---------------------------------------------------------------------------
 
 
@@ -157,7 +157,7 @@ def test_list_students_returns_correct_shape(monkeypatch: pytest.MonkeyPatch) ->
 
 
 # ---------------------------------------------------------------------------
-# GET /admin/students/{passport_id} — detail
+# GET /admin/students/{passport_id}: detail
 # ---------------------------------------------------------------------------
 
 
@@ -257,7 +257,7 @@ def test_soft_delete_already_deleted_returns_409(monkeypatch: pytest.MonkeyPatch
 
 
 # ---------------------------------------------------------------------------
-# Anchor retry — already confirmed returns 409
+# Anchor retry: already confirmed returns 409
 # ---------------------------------------------------------------------------
 
 
@@ -294,7 +294,7 @@ def test_retry_confirmed_anchor_returns_409(monkeypatch: pytest.MonkeyPatch) -> 
 
 
 # ---------------------------------------------------------------------------
-# PDF regenerate — exists without force returns 409
+# PDF regenerate: exists without force returns 409
 # ---------------------------------------------------------------------------
 
 

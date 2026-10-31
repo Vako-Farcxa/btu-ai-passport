@@ -4,7 +4,7 @@ Every route here sits behind the router-level `_admin_guard` dependency: a valid
 JWT with an allowed email that is listed in admin_users. The guard runs before request
 bodies are validated, so a caller without it gets 401 or 403 and nothing else.
 Sheet-managed students (admin_managed=False) are read-only from the admin
-panel's perspective — their skills can only be changed via the Google Sheet.
+panel's perspective, their skills can only be changed via the Google Sheet.
 """
 
 import logging
@@ -270,7 +270,7 @@ def _require_admin_student(passport_id: str) -> dict[str, object]:
 
 
 # ---------------------------------------------------------------------------
-# Students — read
+# Students: read
 # ---------------------------------------------------------------------------
 
 
@@ -352,7 +352,7 @@ def get_student(
 
 
 # ---------------------------------------------------------------------------
-# Students — write (new students are created by awarding a skill, see /admin/awards)
+# Students: write (new students are created by awarding a skill, see /admin/awards)
 # ---------------------------------------------------------------------------
 
 
