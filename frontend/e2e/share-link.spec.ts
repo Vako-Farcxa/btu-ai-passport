@@ -49,13 +49,14 @@ test('the verify page without a code does not call the API', async ({
 test('a student copies a share link for a version', async ({
   page,
   context,
+  baseURL,
 }) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write'])
   await context.addCookies([
     {
       name: 'passport_mock_bearer',
       value: 'test-token',
-      url: 'http://localhost:3000',
+      url: baseURL!,
     },
   ])
   await page.route(ME, async (route) => {
@@ -82,7 +83,7 @@ test('a student copies a share link for a version', async ({
   await page.getByRole('button', { name: 'Copy share link' }).click()
   await expect(page.getByText('Share link copied')).toBeVisible()
   const text = await page.evaluate(() => navigator.clipboard.readText())
-  expect(text).toBe(`http://localhost:3000/verify?code=${CODE}`)
+  expect(text).toBe(`${baseURL}/verify?code=${CODE}`)
 
   await page.getByRole('button', { name: 'ქართული' }).click()
   await expect(
