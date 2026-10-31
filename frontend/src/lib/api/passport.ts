@@ -1,5 +1,10 @@
 import { apiBaseUrl } from '@/lib/api/base-url'
 import { messages, type Locale } from '@/i18n/messages'
+import {
+  isRateLimited,
+  rateLimitMessage,
+  retryAfterOf,
+} from '@/lib/api/rate-limit'
 import { formatIssuedDate } from '@/lib/api/verify'
 import {
   passportResponseSchema,
@@ -15,6 +20,7 @@ export type PassportErrorCode =
   | 'pdf_not_ready'
   | 'passport_revoked'
   | 'version_revoked'
+  | 'rate_limited'
   | 'error'
 
 /** What a 403 means: the API sends a code for a revoked passport or version. */
@@ -29,19 +35,24 @@ function forbiddenCode(payload: unknown): PassportErrorCode {
 
 export class PassportRequestError extends Error {
   readonly code: PassportErrorCode
+  /** Seconds to wait, when the API answered 429. */
+  readonly retryAfter: number | null
 
-  constructor(code: PassportErrorCode) {
+  constructor(code: PassportErrorCode, retryAfter: number | null = null) {
     super(code)
     this.name = 'PassportRequestError'
     this.code = code
+    this.retryAfter = retryAfter
   }
 }
 
 export function explainPassportError(
   code: PassportErrorCode,
   locale: Locale,
+  retryAfter: number | null = null,
 ): string {
   const copy = messages[locale]
+  if (code === 'rate_limited') return rateLimitMessage(locale, retryAfter)
   if (code === 'domain_not_allowed') return copy.domainNotAllowed
   if (code === 'unauthorized') return copy.signInRequired
   if (code === 'pdf_not_ready') return copy.pdfNotReady
@@ -64,6 +75,9 @@ export async function downloadPassportPdf(
     headers: { Authorization: `Bearer ${token}` },
     cache: 'no-store',
   })
+  if (isRateLimited(response)) {
+    throw new PassportRequestError('rate_limited', retryAfterOf(response))
+  }
   if (response.status === 409) throw new PassportRequestError('pdf_not_ready')
   if (response.status === 403) {
     const payload: unknown = await response.json().catch(() => null)
@@ -115,6 +129,9 @@ export async function getMyPassport(token: string): Promise<PassportResponse> {
     cache: 'no-store',
   })
   const payload: unknown = await response.json().catch(() => null)
+  if (isRateLimited(response, payload)) {
+    throw new PassportRequestError('rate_limited', retryAfterOf(response))
+  }
   if (response.status === 403)
     throw new PassportRequestError(forbiddenCode(payload))
   if (response.status === 401) throw new PassportRequestError('unauthorized')

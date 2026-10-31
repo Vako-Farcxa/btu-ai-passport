@@ -62,7 +62,9 @@ export default function PassportPage() {
       window.setTimeout(() => URL.revokeObjectURL(url), 1000)
     } catch (error) {
       const code = error instanceof PassportRequestError ? error.code : 'error'
-      setPdfNotice(explainPassportError(code, locale))
+      const wait =
+        error instanceof PassportRequestError ? error.retryAfter : null
+      setPdfNotice(explainPassportError(code, locale, wait))
     } finally {
       setDownloading(null)
     }
@@ -102,7 +104,7 @@ export default function PassportPage() {
       ) : null}
       {session.kind === 'error' && session.code !== 'passport_revoked' ? (
         <p className="page-alert" role="alert">
-          {explainPassportError(session.code, locale)}
+          {explainPassportError(session.code, locale, session.retryAfter)}
         </p>
       ) : null}
       {session.kind === 'ready' && passport === null ? (

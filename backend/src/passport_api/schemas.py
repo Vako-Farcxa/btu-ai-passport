@@ -26,6 +26,7 @@ ErrorCode = Literal[
     "invalid_comment",
     "flag_already_open",
     "flag_rate_limited",
+    "rate_limited",
     "flag_not_found",
     "passport_revoked",
     "version_revoked",

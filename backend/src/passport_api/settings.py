@@ -27,6 +27,16 @@ class Settings(BaseSettings):
     # Serves /docs, /redoc and /openapi.json. Off by default so a deployed API does not
     # publish its route map. Turn it on locally with ENABLE_API_DOCS=true.
     enable_api_docs: bool = False
+    # Rate limits (in memory, per process, one-minute window). 0 turns a limit off,
+    # RATE_LIMIT_ENABLED=false turns them all off.
+    rate_limit_enabled: bool = True
+    rate_limit_verify_per_minute: int = 30  # per client IP
+    rate_limit_flags_per_minute: int = 5  # per signed-in student
+    rate_limit_admin_writes_per_minute: int = 30  # per admin
+    # How many proxies in front of this app add themselves to X-Forwarded-For. The client
+    # address is the entry that many places from the right. 0 ignores the header (local
+    # runs). On Render the right value is 3: Cloudflare, Render's edge and its load balancer.
+    trusted_proxy_hops: int = 0
 
 
 settings = Settings()

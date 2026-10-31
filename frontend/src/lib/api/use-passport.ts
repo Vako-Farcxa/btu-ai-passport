@@ -13,7 +13,7 @@ import { readAccessToken } from '@/lib/supabase/client'
 export type PassportState =
   | { kind: 'loading' }
   | { kind: 'signed_out' }
-  | { kind: 'error'; code: PassportErrorCode }
+  | { kind: 'error'; code: PassportErrorCode; retryAfter?: number | null }
   | { kind: 'ready'; body: PassportResponse }
 
 export function useMyPassport(): PassportState {
@@ -32,9 +32,15 @@ export function useMyPassport(): PassportState {
         if (!cancelled) setState({ kind: 'ready', body })
       } catch (error) {
         if (cancelled) return
-        const code =
-          error instanceof PassportRequestError ? error.code : 'error'
-        setState({ kind: 'error', code })
+        if (error instanceof PassportRequestError) {
+          setState({
+            kind: 'error',
+            code: error.code,
+            retryAfter: error.retryAfter,
+          })
+          return
+        }
+        setState({ kind: 'error', code: 'error' })
       }
     }
     void load()

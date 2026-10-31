@@ -31,3 +31,7 @@ services:
         sync: false
       - key: ALLOWED_EMAIL_DOMAINS
         sync: false
+      # How many proxies add themselves to X-Forwarded-For in front of the app, so rate
+      # limits count the real visitor. See "Rate limits" in backend/README.md.
+      - key: TRUSTED_PROXY_HOPS
+        value: "3"
