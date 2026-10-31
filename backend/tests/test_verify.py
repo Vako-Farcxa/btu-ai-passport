@@ -1,10 +1,11 @@
 from dataclasses import replace
 
+import pytest
 from fastapi.testclient import TestClient
 
 from passport_api.demo_data import DEMO_VERSIONS, apply_demo_seed
 from passport_api.main import app
-from passport_api.store import MemoryStore
+from passport_api.store import MemoryStore, normalize_anchor_status
 from passport_api.verify import verify_code
 
 VALID = "A1B2-C3D4-E5F6-G7H8"
@@ -96,10 +97,28 @@ def test_unknown_code_is_not_found_without_passport_fields() -> None:
     assert response.json() == {"outcome": "not_found"}
 
 
-def test_unconfirmed_anchor_is_error_without_passport_fields() -> None:
+def test_unconfirmed_anchor_is_pending_without_passport_fields() -> None:
     response = client.post("/verify", json={"code": PENDING})
     assert response.status_code == 200
-    assert response.json() == {"outcome": "error"}
+    assert response.json() == {"outcome": "pending"}
+
+
+@pytest.mark.parametrize("status", ["pending", "retrying", "failed_permanent"])
+def test_every_unconfirmed_status_reads_as_pending_never_error(status: str) -> None:
+    unconfirmed = replace(
+        DEMO_VERSIONS[1],
+        anchor_status=normalize_anchor_status(status),
+        tx_hash="0x" + "ab" * 32 if status != "pending" else None,
+    )
+    result = verify_code(MemoryStore([unconfirmed]), unconfirmed.verification_code)
+    assert result.model_dump() == {"outcome": "pending"}
+    assert unconfirmed.holder_name not in result.model_dump_json()
+
+
+def test_confirmed_without_a_transaction_hash_is_still_an_error() -> None:
+    broken = replace(DEMO_VERSIONS[1], anchor_status="confirmed", tx_hash=None)
+    result = verify_code(MemoryStore([broken]), broken.verification_code)
+    assert result.model_dump() == {"outcome": "error"}
 
 
 def test_blank_code_is_not_not_found() -> None:

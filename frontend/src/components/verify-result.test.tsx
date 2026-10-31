@@ -52,6 +52,7 @@ const RESULTS: Record<string, VerifyResult> = {
     outcome: 'revoked',
     revoked_at: '2026-10-30T10:00:00+00:00',
   }),
+  pending: { outcome: 'pending' },
   not_found: { outcome: 'not_found' },
   error: { outcome: 'error' },
 }
@@ -177,6 +178,49 @@ describe('revoked result', () => {
   })
 })
 
+describe('pending result', () => {
+  const PENDING = verifyResultSchema.parse({ outcome: 'pending' })
+
+  it('says pending on-chain confirmation, never error, valid or revoked', () => {
+    const { getByTestId } = render(
+      <VerifyResultCard locale="en" result={PENDING} />,
+    )
+    const card = getByTestId('verify-result')
+    expect(card).toHaveAttribute('aria-label', 'Pending on-chain confirmation')
+    expect(card).toHaveClass('outcome-pending')
+    expect(card).not.toHaveClass('outcome-error')
+    expect(card).not.toHaveClass('outcome-valid')
+    expect(card.textContent).not.toMatch(/error|valid|revoked/i)
+    expect(getByTestId('pending-notice')).toHaveTextContent(
+      /not confirmed yet/i,
+    )
+  })
+
+  it('says it in Georgian too, with no English left', () => {
+    const { getByTestId, container } = render(
+      <VerifyResultCard locale="ka" result={PENDING} />,
+    )
+    expect(getByTestId('verify-result')).toHaveAttribute(
+      'aria-label',
+      messages.ka.outcomes.pending,
+    )
+    expect(getByTestId('pending-notice')).toHaveTextContent(
+      messages.ka.pendingNotice,
+    )
+    expect(englishWords(userFacingText(container))).toEqual([])
+  })
+
+  it('shows no holder, skills, version or transaction link', () => {
+    const { container } = render(
+      <VerifyResultCard locale="en" result={PENDING} />,
+    )
+    expect(container.querySelector('.holder')).toBeNull()
+    expect(container.querySelector('.transaction-link')).toBeNull()
+    expect(container.querySelector('.testnet-note')).toBeNull()
+    expect(container.textContent).not.toContain(DATA.holder)
+  })
+})
+
 describe('translations', () => {
   it('has the same keys in English and Georgian', () => {
     expect(Object.keys(messages.ka).sort()).toEqual(
@@ -213,7 +257,7 @@ describe('translations', () => {
     },
   )
 
-  it.each(['not_found', 'error'] as const)(
+  it.each(['not_found', 'error', 'pending'] as const)(
     'shows no test network note when there is no anchor (%s)',
     (outcome) => {
       const { queryByTestId } = render(

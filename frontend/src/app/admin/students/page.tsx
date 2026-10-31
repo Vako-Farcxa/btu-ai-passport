@@ -9,6 +9,7 @@ import {
   restoreAdminStudent,
   type AdminStudent,
 } from '@/lib/api/admin'
+import { anchorBadgeClasses, anchorStatusLabel } from '@/lib/anchor-status'
 
 export default function AdminStudentsPage() {
   const [students, setStudents] = useState<AdminStudent[]>([])
@@ -309,17 +310,17 @@ export default function AdminStudentsPage() {
                       {student.version_count} v
                     </td>
                     <td className="px-6 py-4 text-xs">
-                      <span
-                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium capitalize ${
-                          student.latest_anchor_status === 'confirmed'
-                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                            : student.latest_anchor_status === 'pending'
-                              ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                              : 'bg-rose-50 text-rose-700 border border-rose-200'
-                        }`}
-                      >
-                        {student.latest_anchor_status ?? 'N/A'}
-                      </span>
+                      {student.latest_anchor_status ? (
+                        <span
+                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${anchorBadgeClasses(
+                            student.latest_anchor_status,
+                          )}`}
+                        >
+                          {anchorStatusLabel(student.latest_anchor_status)}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400">N/A</span>
+                      )}
                     </td>
                     <td className="px-6 py-4 text-right text-xs space-x-2">
                       <Link

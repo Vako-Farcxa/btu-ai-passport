@@ -6,6 +6,7 @@ import {
   formatIssuedDate,
   labelsFor,
   newerVersionNotice,
+  pendingNotice,
   presentSkills,
   revokedNotice,
   submitDecision,
@@ -103,6 +104,31 @@ describe('newer version notice', () => {
   })
 })
 
+describe('pending notice', () => {
+  it('is null for every other outcome', () => {
+    expect(pendingNotice({ outcome: 'error' }, 'en')).toBeNull()
+    expect(pendingNotice({ outcome: 'not_found' }, 'ka')).toBeNull()
+  })
+
+  it('is the translated sentence for a pending result', () => {
+    const result = verifyResultSchema.parse({ outcome: 'pending' })
+    expect(pendingNotice(result, 'en')).toBe(messages.en.pendingNotice)
+    expect(pendingNotice(result, 'ka')).toBe(messages.ka.pendingNotice)
+    expect(messages.ka.pendingNotice).not.toBe(messages.en.pendingNotice)
+  })
+
+  it('has the labels the product asked for', () => {
+    expect(labelsFor('pending', 'en')).toBe('Pending on-chain confirmation')
+    expect(labelsFor('pending', 'ka')).not.toBe(labelsFor('error', 'ka'))
+  })
+
+  it('is accepted by the response schema and carries nothing else', () => {
+    expect(verifyResultSchema.parse({ outcome: 'pending' })).toEqual({
+      outcome: 'pending',
+    })
+  })
+})
+
 describe('revoked notice', () => {
   it('is null for every other outcome', () => {
     expect(revokedNotice({ outcome: 'error' }, 'en')).toBeNull()
@@ -130,10 +156,15 @@ describe('revoked notice', () => {
 
   it('has a distinct label from every other outcome', () => {
     for (const locale of ['en', 'ka'] as const) {
-      const labels = ['valid', 'outdated', 'revoked', 'not_found', 'error'].map(
-        (code) => labelsFor(code as 'valid', locale),
-      )
-      expect(new Set(labels).size).toBe(5)
+      const labels = [
+        'valid',
+        'outdated',
+        'revoked',
+        'pending',
+        'not_found',
+        'error',
+      ].map((code) => labelsFor(code as 'valid', locale))
+      expect(new Set(labels).size).toBe(6)
     }
   })
 })

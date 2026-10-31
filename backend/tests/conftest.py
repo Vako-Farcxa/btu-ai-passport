@@ -1,7 +1,9 @@
+import dataclasses
 from collections.abc import Iterator
 
 import pytest
 
+import passport_api.anchoring as anchoring
 import passport_api.auth as auth
 from passport_api.settings import Settings, settings
 
@@ -22,3 +24,11 @@ def isolated_settings(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     auth.clear_jwks_cache()
     yield
     auth.clear_jwks_cache()
+
+
+@pytest.fixture(autouse=True)
+def quick_anchor_settle(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Never really wait for receipts in tests: poll once and move on."""
+    monkeypatch.setattr(
+        anchoring, "DEFAULT_POLICY", dataclasses.replace(anchoring.DEFAULT_POLICY, settle_seconds=0)
+    )

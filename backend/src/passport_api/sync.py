@@ -12,7 +12,8 @@ from typing import Any, Protocol, cast
 import gspread
 from postgrest.exceptions import APIError
 
-from passport_api.chain import AnchorChain, chain_from_settings, publish_anchor
+from passport_api.anchoring import AnchorRecord, reconcile_anchors
+from passport_api.chain import AnchorChain, chain_from_settings
 from passport_api.db import get_supabase
 from passport_api.fingerprint import (
     canonical_skills,
@@ -88,6 +89,9 @@ class CatalogSkill:
 # example by a deploy) and is released so it cannot block every later sync.
 STALE_LOCK_AFTER = timedelta(minutes=10)
 STALE_LOCK_ERROR = "stale_lock"
+# Versions the reconciler still works on. "failed" is the legacy name for "retrying".
+OPEN_ANCHOR = ("pending", "retrying", "failed")
+ANCHOR_LOCK_NAME = "reconciler"
 STUDENT_ARCHIVED = "student_archived"
 
 SKILLS_TAB = "Skills"
@@ -212,6 +216,14 @@ class VersionRecord:
     issued_at: str
     skills: tuple[Skill, ...]
     anchored_at: str | None = None
+    # Anchoring bookkeeping (migration 0010). See passport_api.anchoring.
+    anchor_nonce: int | None = None
+    anchor_gas_price: int | None = None
+    anchor_submitted_at: str | None = None
+    anchor_attempts: int = 0
+    anchor_last_error: str | None = None
+    anchor_next_attempt_at: str | None = None
+    anchor_tx_hashes: list[str] = dataclasses.field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -302,15 +314,11 @@ class SyncStore(Protocol):
 
     def pending_anchors(self) -> list[VersionRecord]: ...
 
-    def save_anchor(
-        self,
-        email: str,
-        version_number: int,
-        *,
-        status: str,
-        tx_hash: str | None,
-        anchored_at: str | None,
-    ) -> None: ...
+    def save_anchor(self, email: str, version_number: int, record: AnchorRecord) -> None: ...
+
+    def try_lock_anchors(self, now: datetime, until: datetime) -> bool: ...
+
+    def unlock_anchors(self) -> None: ...
 
 
 class FakeSheet:
@@ -435,6 +443,7 @@ class MemorySyncStore:
         self.runs: list[RunRecord] = []
         self.skills: dict[str, CatalogSkill] = {}
         self._sources: dict[str, str] = {}
+        self._anchor_lock_until: datetime | None = None
 
     def has_running(self) -> bool:
         return any(run.status == "running" for run in self.runs)
@@ -542,24 +551,24 @@ class MemorySyncStore:
         raise RuntimeError("version_missing")
 
     def pending_anchors(self) -> list[VersionRecord]:
-        return [version for version in self.versions if version.anchor_status != "confirmed"]
+        return [version for version in self.versions if version.anchor_status in OPEN_ANCHOR]
 
-    def save_anchor(
-        self,
-        email: str,
-        version_number: int,
-        *,
-        status: str,
-        tx_hash: str | None,
-        anchored_at: str | None,
-    ) -> None:
+    def save_anchor(self, email: str, version_number: int, record: AnchorRecord) -> None:
         for version in self.versions:
             if version.email == email and version.version_number == version_number:
-                version.anchor_status = status
-                version.tx_hash = tx_hash
-                version.anchored_at = anchored_at
+                if version is not record:
+                    _copy_anchor_fields(record, version)
                 return
         raise RuntimeError("version_missing")
+
+    def try_lock_anchors(self, now: datetime, until: datetime) -> bool:
+        if self._anchor_lock_until is not None and self._anchor_lock_until > now:
+            return False
+        self._anchor_lock_until = until
+        return True
+
+    def unlock_anchors(self) -> None:
+        self._anchor_lock_until = None
 
     def _close(self, status: str, rows_read: int, versions_created: int, error: str | None) -> None:
         for run in reversed(self.runs):
@@ -790,66 +799,72 @@ class SupabaseSyncStore:
         response = (
             get_supabase()
             .table("passport_versions")
-            .select(
-                "version_number, holder_name, verification_code, verification_id_hash, "
-                "skill_fingerprint, content_hash, anchor_status, tx_hash, anchored_at, issued_at, "
-                "skill_entries(skill, badge, awarded_on, description, position), "
-                "students(email, passport_id)"
-            )
-            .neq("anchor_status", "confirmed")
+            .select(_ANCHOR_SELECT)
+            .in_("anchor_status", list(OPEN_ANCHOR))
+            .order("issued_at")
             .execute()
         )
-        pending: list[VersionRecord] = []
+        records: list[VersionRecord] = []
         for row in _table_rows(response.data):
-            student = _student_embed(row.get("students"))
-            if student is None:
-                continue
-            issued_at = row.get("issued_at")
-            tx_hash = row.get("tx_hash")
-            anchored_at = row.get("anchored_at")
-            pending.append(
-                VersionRecord(
-                    passport_id=str(student["passport_id"]),
-                    email=str(student["email"]),
-                    version_number=_as_int(row["version_number"]),
-                    holder_name=str(row["holder_name"]),
-                    verification_code=str(row["verification_code"]),
-                    verification_id_hash=str(row["verification_id_hash"]),
-                    skill_fingerprint=str(row["skill_fingerprint"]),
-                    content_hash=str(row["content_hash"]),
-                    anchor_status=str(row["anchor_status"]),
-                    pdf_en_path=None,
-                    pdf_ka_path=None,
-                    tx_hash=None if tx_hash is None else str(tx_hash),
-                    issued_at=_now() if issued_at is None else str(issued_at),
-                    skills=_skills_from_rows(row.get("skill_entries")),
-                    anchored_at=None if anchored_at is None else str(anchored_at),
-                )
-            )
-        return pending
+            record = _anchor_record(row)
+            if record is not None:
+                records.append(record)
+        return records
 
-    def save_anchor(
-        self,
-        email: str,
-        version_number: int,
-        *,
-        status: str,
-        tx_hash: str | None,
-        anchored_at: str | None,
-    ) -> None:
+    def version_by_id(self, version_id: str) -> VersionRecord | None:
+        response = (
+            get_supabase()
+            .table("passport_versions")
+            .select(_ANCHOR_SELECT)
+            .eq("id", version_id)
+            .limit(1)
+            .execute()
+        )
+        rows = _table_rows(response.data)
+        return _anchor_record(rows[0]) if rows else None
+
+    def save_anchor(self, email: str, version_number: int, record: AnchorRecord) -> None:
         student_id = self._student_id(email)
         (
             get_supabase()
             .table("passport_versions")
             .update(
                 {
-                    "anchor_status": status,
-                    "tx_hash": tx_hash,
-                    "anchored_at": anchored_at,
+                    "anchor_status": record.anchor_status,
+                    "tx_hash": record.tx_hash,
+                    "anchored_at": record.anchored_at,
+                    "anchor_nonce": record.anchor_nonce,
+                    "anchor_gas_price": record.anchor_gas_price,
+                    "anchor_submitted_at": record.anchor_submitted_at,
+                    "anchor_attempts": record.anchor_attempts,
+                    "anchor_last_error": record.anchor_last_error,
+                    "anchor_next_attempt_at": record.anchor_next_attempt_at,
+                    "anchor_tx_hashes": list(record.anchor_tx_hashes),
                 }
             )
             .eq("student_id", student_id)
             .eq("version_number", version_number)
+            .execute()
+        )
+
+    def try_lock_anchors(self, now: datetime, until: datetime) -> bool:
+        # One conditional UPDATE is atomic: of two runs, only one sees a row come back.
+        response = (
+            get_supabase()
+            .table("anchor_reconcile_lock")
+            .update({"locked_until": until.isoformat()})
+            .eq("name", ANCHOR_LOCK_NAME)
+            .lt("locked_until", now.isoformat())
+            .execute()
+        )
+        return bool(_table_rows(response.data))
+
+    def unlock_anchors(self) -> None:
+        (
+            get_supabase()
+            .table("anchor_reconcile_lock")
+            .update({"locked_until": "1970-01-01T00:00:00+00:00"})
+            .eq("name", ANCHOR_LOCK_NAME)
             .execute()
         )
 
@@ -1136,27 +1151,81 @@ def _fill_pending_pdfs(store: SyncStore, emails: set[str]) -> None:
             _log.warning("pdf_publish_failed", exc_info=True)
 
 
+_ANCHOR_SELECT = (
+    "id, version_number, holder_name, verification_code, verification_id_hash, "
+    "skill_fingerprint, content_hash, anchor_status, tx_hash, anchored_at, issued_at, "
+    "anchor_nonce, anchor_gas_price, anchor_submitted_at, anchor_attempts, anchor_last_error, "
+    "anchor_next_attempt_at, anchor_tx_hashes, "
+    "skill_entries(skill, badge, awarded_on, description, position), "
+    "students(email, passport_id)"
+)
+
+
+def _anchor_record(row: dict[str, Any]) -> VersionRecord | None:
+    student = _student_embed(row.get("students"))
+    if student is None:
+        return None
+    issued_at = row.get("issued_at")
+    hashes = row.get("anchor_tx_hashes")
+    return VersionRecord(
+        passport_id=str(student["passport_id"]),
+        email=str(student["email"]),
+        version_number=_as_int(row["version_number"]),
+        holder_name=str(row["holder_name"]),
+        verification_code=str(row["verification_code"]),
+        verification_id_hash=str(row["verification_id_hash"]),
+        skill_fingerprint=str(row["skill_fingerprint"]),
+        content_hash=str(row["content_hash"]),
+        anchor_status=str(row["anchor_status"]),
+        pdf_en_path=None,
+        pdf_ka_path=None,
+        tx_hash=_opt_str(row.get("tx_hash")),
+        issued_at=_now() if issued_at is None else str(issued_at),
+        skills=_skills_from_rows(row.get("skill_entries")),
+        anchored_at=_opt_str(row.get("anchored_at")),
+        anchor_nonce=_opt_int(row.get("anchor_nonce")),
+        anchor_gas_price=_opt_int(row.get("anchor_gas_price")),
+        anchor_submitted_at=_opt_str(row.get("anchor_submitted_at")),
+        anchor_attempts=_opt_int(row.get("anchor_attempts")) or 0,
+        anchor_last_error=_opt_str(row.get("anchor_last_error")),
+        anchor_next_attempt_at=_opt_str(row.get("anchor_next_attempt_at")),
+        anchor_tx_hashes=[str(h) for h in hashes] if isinstance(hashes, list) else [],
+    )
+
+
+def _opt_str(value: object) -> str | None:
+    return None if value is None else str(value)
+
+
+def _opt_int(value: object) -> int | None:
+    return None if value is None else _as_int(value)
+
+
+def _copy_anchor_fields(source: AnchorRecord, target: VersionRecord) -> None:
+    target.anchor_status = source.anchor_status
+    target.tx_hash = source.tx_hash
+    target.anchored_at = source.anchored_at
+    target.anchor_nonce = source.anchor_nonce
+    target.anchor_gas_price = source.anchor_gas_price
+    target.anchor_submitted_at = source.anchor_submitted_at
+    target.anchor_attempts = source.anchor_attempts
+    target.anchor_last_error = source.anchor_last_error
+    target.anchor_next_attempt_at = source.anchor_next_attempt_at
+    target.anchor_tx_hashes = list(source.anchor_tx_hashes)
+
+
 def _anchor_pending(store: SyncStore, emails: set[str], chain: AnchorChain | None) -> None:
-    # Every unconfirmed version is retried on each run, not only rows that changed,
-    # so a failed anchor recovers on the next scheduled sync.
+    # Every unconfirmed version is looked at on each run, not only rows that changed, so a
+    # dropped or stuck transaction recovers on the next scheduled sync. A broken chain never
+    # fails the sync: the ledger is already saved and the reconciler runs again later.
     del emails
     client = chain if chain is not None else chain_from_settings()
     if client is None:
         return
-    now = _now()
-    for pending in store.pending_anchors():
-        try:
-            publish_anchor(pending, client, now=now)
-        except Exception:
-            pending.anchor_status = "failed"
-            pending.anchored_at = None
-        store.save_anchor(
-            pending.email,
-            pending.version_number,
-            status=pending.anchor_status,
-            tx_hash=pending.tx_hash,
-            anchored_at=pending.anchored_at,
-        )
+    try:
+        reconcile_anchors(store, client)
+    except Exception:
+        _log.exception("anchor_reconcile_failed")
 
 
 def _skill_row(skill: CatalogSkill, with_ka: bool) -> dict[str, Any]:

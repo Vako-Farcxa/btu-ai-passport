@@ -16,6 +16,7 @@ ErrorCode = Literal[
     "skill_not_found",
     "student_already_deleted",
     "anchor_already_confirmed",
+    "anchor_busy",
     "student_email_taken",
     "pdf_already_exists",
     "skill_name_taken",
@@ -87,6 +88,22 @@ class PassportResponse(BaseModel):
     passport: Passport | None
 
 
+class AnchorReconcileResult(BaseModel):
+    """Outcome of one anchor reconciliation run. Counts only, no hashes or error text."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    status: Literal["completed", "skipped", "no_chain"]
+    checked: int = 0
+    confirmed: int = 0
+    submitted: int = 0
+    replaced: int = 0
+    retrying: int = 0
+    failed_permanent: int = 0
+    waiting: int = 0
+    error: str | None = None
+
+
 class SyncResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -112,6 +129,9 @@ class AdminSkillEntry(BaseModel):
     position: int
 
 
+AdminAnchorStatus = Literal["pending", "retrying", "confirmed", "failed_permanent"]
+
+
 class AdminVersion(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -119,7 +139,9 @@ class AdminVersion(BaseModel):
     version_number: int
     holder_name: str
     verification_code: str
-    anchor_status: Literal["pending", "confirmed", "failed"]
+    anchor_status: AdminAnchorStatus
+    anchor_attempts: int = 0
+    anchor_last_error: str | None = None
     tx_hash: str | None
     issued_at: datetime
     pdf_en_path: str | None
@@ -138,7 +160,7 @@ class AdminStudent(BaseModel):
     admin_managed: bool
     deleted_at: datetime | None
     version_count: int
-    latest_anchor_status: Literal["pending", "confirmed", "failed"] | None
+    latest_anchor_status: AdminAnchorStatus | None
     created_at: datetime
 
 
@@ -187,9 +209,13 @@ class AdminVersionPending(BaseModel):
     passport_id: str
     holder_name: str
     version_number: int
-    anchor_status: Literal["pending", "failed"]
+    anchor_status: Literal["pending", "retrying", "failed_permanent"]
     issued_at: datetime
     tx_hash: str | None
+    anchor_attempts: int = 0
+    anchor_last_error: str | None = None
+    anchor_submitted_at: datetime | None = None
+    anchor_next_attempt_at: datetime | None = None
 
 
 class AdminVersionPendingList(BaseModel):

@@ -3,8 +3,10 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header
 
+from passport_api.anchoring import reconcile_anchors
+from passport_api.chain import chain_from_settings
 from passport_api.errors import APIError
-from passport_api.schemas import SyncResult
+from passport_api.schemas import AnchorReconcileResult, SyncResult
 from passport_api.settings import settings
 from passport_api.sync import (
     GspreadSheet,
@@ -48,3 +50,16 @@ def run_internal_sync(
     if not _authorized(x_sync_token):
         raise APIError(401, "sync_unauthorized")
     return run_sync(store, sheet)
+
+
+@router.post("/internal/anchors/reconcile")
+def run_anchor_reconcile(
+    x_sync_token: Annotated[str | None, Header()] = None,
+    store: SyncStore = _store_dependency,
+) -> AnchorReconcileResult:
+    """Check receipts, confirm mined anchors, replace stuck or dropped transactions and retry
+    failures. Guarded like /internal/sync. Safe to call at any time and as often as wanted:
+    runs never overlap and nothing is sent twice."""
+    if not _authorized(x_sync_token):
+        raise APIError(401, "sync_unauthorized")
+    return reconcile_anchors(store, chain_from_settings())

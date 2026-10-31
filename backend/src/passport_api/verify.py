@@ -47,6 +47,16 @@ class VerifyRevoked(BaseModel):
     revoked_at: str
 
 
+class VerifyPending(BaseModel):
+    """The code exists but its on-chain anchor is not confirmed yet (first transaction in
+    flight, retrying after a failure, or waiting for an admin). Carries no name and no skills:
+    nothing is vouched for until the anchor is confirmed."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    outcome: str
+
+
 class VerifyError(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -55,7 +65,7 @@ class VerifyError(BaseModel):
 
 def verify_code(
     store: VersionStore, raw_code: str
-) -> VerifyFound | VerifyOutdated | VerifyRevoked | VerifyNotFound | VerifyError:
+) -> VerifyFound | VerifyOutdated | VerifyRevoked | VerifyNotFound | VerifyPending | VerifyError:
     if not raw_code.strip():
         raise APIError(422, "code_required")
     found = store.find(raw_code)
@@ -65,7 +75,12 @@ def verify_code(
     revoked_at = found.revoked_at
     if revoked_at is not None:
         return VerifyRevoked(outcome="revoked", revoked_at=revoked_at)
-    if found.anchor_status != "confirmed" or not found.tx_hash:
+    if found.anchor_status != "confirmed":
+        # Pending, retrying and exhausted anchors all read the same to the public. The
+        # reconciler keeps working on them and admins see the detail.
+        return VerifyPending(outcome="pending")
+    if not found.tx_hash:
+        # Confirmed without a transaction hash is inconsistent data, not a normal state.
         return VerifyError(outcome="error")
     latest = store.latest_version(found.passport_id)
     is_latest = found.version >= latest.version

@@ -4,7 +4,23 @@ from typing import Literal, Protocol
 
 from passport_api.schemas import Skill
 
-AnchorStatus = Literal["pending", "confirmed", "failed"]
+# pending: waiting for the first transaction or its receipt. retrying: a send failed or a stuck
+# transaction was replaced, and the reconciler will try again. failed_permanent: the attempt
+# cap was reached (or the chain slot is taken by other content), so an admin has to step in.
+AnchorStatus = Literal["pending", "retrying", "confirmed", "failed_permanent"]
+
+
+def normalize_anchor_status(value: str) -> AnchorStatus:
+    """Map a stored status to a known one. Legacy "failed" rows were retried every sync, which
+    is what "retrying" means now. An unknown value is treated as failed_permanent so it is
+    surfaced to an admin instead of being shown as confirmed."""
+    if value == "pending":
+        return "pending"
+    if value == "confirmed":
+        return "confirmed"
+    if value in ("retrying", "failed"):
+        return "retrying"
+    return "failed_permanent"
 
 
 @dataclass(frozen=True)

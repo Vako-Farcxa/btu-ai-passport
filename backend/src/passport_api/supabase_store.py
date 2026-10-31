@@ -2,7 +2,7 @@ from typing import cast
 
 from passport_api.db import get_supabase
 from passport_api.schemas import Skill
-from passport_api.store import AnchorStatus, LatestVersion, StoredVersion
+from passport_api.store import AnchorStatus, LatestVersion, StoredVersion, normalize_anchor_status
 
 
 class SupabaseStore:
@@ -100,11 +100,7 @@ class SupabaseStore:
 
 
 def _anchor_status(value: str) -> AnchorStatus:
-    if value == "pending":
-        return "pending"
-    if value == "confirmed":
-        return "confirmed"
-    return "failed"
+    return normalize_anchor_status(value)
 
 
 def _version_from_row(row: dict[str, object]) -> StoredVersion:

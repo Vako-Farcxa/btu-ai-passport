@@ -23,6 +23,7 @@ vi.mock('@/lib/api/admin', async () => {
     restoreAdminStudent: vi.fn(),
     revokeAdminVersion: vi.fn(),
     unrevokeAdminVersion: vi.fn(),
+    retryAdminAnchor: vi.fn(),
   }
 })
 
@@ -32,6 +33,8 @@ const version = (n: number, code: string) => ({
   holder_name: 'Nino Beridze',
   verification_code: code,
   anchor_status: 'confirmed',
+  anchor_attempts: 1,
+  anchor_last_error: null as string | null,
   tx_hash: null,
   issued_at: '2026-10-28T10:00:00Z',
   revoked_at: null as string | null,
@@ -161,6 +164,99 @@ describe('admin student detail revocation controls', () => {
     )
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'This version is already revoked.',
+    )
+  })
+})
+
+describe('admin student detail anchoring', () => {
+  const detail = (versions: object[]) =>
+    ({
+      email: 'nino@btu.edu.ge',
+      full_name: 'Nino Beridze',
+      passport_id: 'BTU-ABC',
+      admin_managed: false,
+      deleted_at: null,
+      versions,
+    }) as never
+
+  afterEach(() => {
+    cleanup()
+    vi.clearAllMocks()
+  })
+
+  it('shows nothing extra for a confirmed version', async () => {
+    vi.mocked(api.fetchAdminStudent).mockResolvedValue(
+      detail([version(1, 'AAAA-BBBB-CCCC-DDDD')]),
+    )
+    render(<AdminStudentDetailPage />)
+    await screen.findByText(/Verify Code/)
+    expect(screen.queryByTestId('anchor-detail')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Retry anchoring' })).toBeNull()
+  })
+
+  it('explains a failed anchor and retries it', async () => {
+    const failed = {
+      ...version(1, 'AAAA-BBBB-CCCC-DDDD'),
+      anchor_status: 'failed_permanent',
+      anchor_attempts: 6,
+      anchor_last_error: 'insufficient_funds',
+    }
+    vi.mocked(api.fetchAdminStudent)
+      .mockResolvedValueOnce(detail([failed]))
+      .mockResolvedValue(detail([version(1, 'AAAA-BBBB-CCCC-DDDD')]))
+    vi.mocked(api.retryAdminAnchor).mockResolvedValue({ status: 'confirmed' })
+    render(<AdminStudentDetailPage />)
+    const box = await screen.findByTestId('anchor-detail')
+    expect(box).toHaveTextContent('Anchoring needs attention')
+    expect(box).toHaveTextContent('Attempts so far: 6')
+    expect(box).toHaveTextContent(/no test MATIC/)
+    expect(screen.getByText(/Anchor: Needs attention/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Retry anchoring' }))
+    await waitFor(() => expect(api.retryAdminAnchor).toHaveBeenCalledWith('v1'))
+    expect(await screen.findByTestId('anchor-notice')).toHaveTextContent(
+      'Anchored and confirmed',
+    )
+    await waitFor(() =>
+      expect(screen.queryByTestId('anchor-detail')).toBeNull(),
+    )
+  })
+
+  it('offers no retry while a first transaction is still being mined', async () => {
+    vi.mocked(api.fetchAdminStudent).mockResolvedValue(
+      detail([
+        {
+          ...version(1, 'AAAA-BBBB-CCCC-DDDD'),
+          anchor_status: 'pending',
+          anchor_attempts: 1,
+        },
+      ]),
+    )
+    render(<AdminStudentDetailPage />)
+    expect(await screen.findByTestId('anchor-detail')).toHaveTextContent(
+      'Waiting for the blockchain',
+    )
+    expect(screen.queryByRole('button', { name: 'Retry anchoring' })).toBeNull()
+  })
+
+  it('shows the API error when the retry is refused', async () => {
+    vi.mocked(api.fetchAdminStudent).mockResolvedValue(
+      detail([
+        {
+          ...version(1, 'AAAA-BBBB-CCCC-DDDD'),
+          anchor_status: 'retrying',
+          anchor_attempts: 2,
+        },
+      ]),
+    )
+    vi.mocked(api.retryAdminAnchor).mockRejectedValue(
+      new Error('Another anchoring run is in progress. Try again in a minute.'),
+    )
+    render(<AdminStudentDetailPage />)
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Retry anchoring' }),
+    )
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Another anchoring run is in progress',
     )
   })
 })

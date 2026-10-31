@@ -33,6 +33,7 @@ export const verifyResultSchema = z.discriminatedUnion('outcome', [
     latest_issued_at: z.string().nullish(),
   }),
   z.object({ outcome: z.literal('revoked'), revoked_at: z.string().nullish() }),
+  z.object({ outcome: z.literal('pending') }),
   z.object({ outcome: z.literal('not_found') }),
   z.object({ outcome: z.literal('error') }),
 ])

@@ -96,3 +96,12 @@ export function revokedNotice(
   if (date === null) return copy.revokedNoticeNoDate
   return copy.revokedNotice.replace('{date}', date)
 }
+
+/** The "not confirmed on the blockchain yet" note, or null for every other outcome. */
+export function pendingNotice(
+  result: VerifyResult,
+  locale: Locale,
+): string | null {
+  if (result.outcome !== 'pending') return null
+  return messages[locale].pendingNotice
+}

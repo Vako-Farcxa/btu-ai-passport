@@ -1,5 +1,6 @@
 export type Locale = 'en' | 'ka'
-export type Outcome = 'valid' | 'outdated' | 'revoked' | 'not_found' | 'error'
+export type Outcome =
+  'valid' | 'outdated' | 'revoked' | 'pending' | 'not_found' | 'error'
 export type BadgeCode = 'BDG-AI-001' | 'BDG-AI-002' | 'BDG-AI-003'
 type BadgeLevel = { title: string; text: string }
 
@@ -81,6 +82,7 @@ type Copy = {
   myFlagsTitle: string
   myFlagsEmpty: string
   newReply: string
+  pendingNotice: string
   revokedNotice: string
   revokedNoticeNoDate: string
   passportRevokedTitle: string
@@ -108,6 +110,7 @@ export const messages: Record<Locale, Copy> = {
       valid: 'Valid',
       outdated: 'Outdated version',
       revoked: 'Revoked',
+      pending: 'Pending on-chain confirmation',
       not_found: 'Not found',
       error: 'Error',
     },
@@ -197,6 +200,8 @@ export const messages: Record<Locale, Copy> = {
     myFlagsTitle: 'My flags',
     myFlagsEmpty: 'You have not flagged anything.',
     newReply: 'New reply',
+    pendingNotice:
+      'This code exists, but its record on the blockchain is not confirmed yet. This usually takes a few minutes. Check again later. Nothing is shown until it is confirmed.',
     revokedNotice:
       'This passport version was revoked on {date}. It is no longer valid and must not be relied on.',
     revokedNoticeNoDate:
@@ -226,6 +231,7 @@ export const messages: Record<Locale, Copy> = {
       valid: 'ნამდვილია',
       outdated: 'მოძველებული ვერსია',
       revoked: 'გაუქმებულია',
+      pending: 'ელოდება ბლოკჩეინზე დადასტურებას',
       not_found: 'ვერ მოიძებნა',
       error: 'შეცდომა',
     },
@@ -316,6 +322,8 @@ export const messages: Record<Locale, Copy> = {
     myFlagsTitle: 'ჩემი შეტყობინებები',
     myFlagsEmpty: 'ჯერ არაფერი გაგიგზავნიათ.',
     newReply: 'ახალი პასუხი',
+    pendingNotice:
+      'ეს კოდი არსებობს, მაგრამ მისი ჩანაწერი ბლოკჩეინზე ჯერ არ დადასტურებულა. ეს ჩვეულებრივ რამდენიმე წუთს გრძელდება. სცადეთ მოგვიანებით. დადასტურებამდე არაფერი ნაჩვენებია.',
     revokedNotice:
       'ეს პასპორტის ვერსია გაუქმდა {date}. ის აღარ არის ნამდვილი და მასზე დაყრდნობა არ შეიძლება.',
     revokedNoticeNoDate:

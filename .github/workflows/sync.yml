@@ -15,3 +15,18 @@ jobs:
             --request POST \
             --header "X-Sync-Token: ${{ secrets.SYNC_TOKEN }}" \
             "${{ secrets.SYNC_URL }}/internal/sync"
+
+  reconcile-anchors:
+    # Checks receipts, confirms mined anchors and replaces stuck or dropped transactions.
+    # The sync also does this, but this job runs even when the sheet sync failed or was
+    # skipped, so a stuck anchor never waits on the sheet.
+    needs: sync
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: POST anchor reconcile
+        run: |
+          curl --fail-with-body --silent --show-error --max-time 120 \
+            --request POST \
+            --header "X-Sync-Token: ${{ secrets.SYNC_TOKEN }}" \
+            "${{ secrets.SYNC_URL }}/internal/anchors/reconcile"
