@@ -166,7 +166,7 @@ export function AddStudentDialog({
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="text-slate-400 hover:text-slate-600 text-lg leading-none"
+            className="text-slate-500 hover:text-slate-600 text-lg leading-none"
           >
             ✕
           </button>
@@ -326,7 +326,7 @@ export function AddStudentDialog({
                   className={inputClass}
                 />
                 <FieldError id="new-email-error" message={fieldErrors.email} />
-                <p className="text-[11px] text-slate-400 mt-1">
+                <p className="text-[11px] text-slate-500 mt-1">
                   University email only, at least 3 characters before @, not
                   just digits. Student ID and passport ID are assigned
                   automatically.
@@ -458,16 +458,16 @@ export function AddStudentDialog({
                     onChange={(e) => setAwardedOn(e.target.value)}
                     className={inputClass}
                   />
-                  <p className="text-[11px] text-slate-400 mt-1">
+                  <p className="text-[11px] text-slate-500 mt-1">
                     Leave empty to use today&apos;s date
                   </p>
                 </div>
               </div>
-              <p className="text-[11px] text-slate-400">
+              <p className="text-[11px] text-slate-500">
                 Missing a skill? Create it on the{' '}
                 <Link
                   href="/admin/skills"
-                  className="text-indigo-600 hover:underline"
+                  className="text-indigo-600 underline hover:text-indigo-800"
                 >
                   Skills Catalog
                 </Link>{' '}

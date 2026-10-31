@@ -221,7 +221,7 @@ function AwardForm() {
               onChange={(e) => setAwardedOn(e.target.value)}
               className={inputClass}
             />
-            <p className="text-[11px] text-slate-400 mt-1">
+            <p className="text-[11px] text-slate-500 mt-1">
               Leave empty to use today&apos;s date
             </p>
           </div>
@@ -244,7 +244,7 @@ function AwardForm() {
             }
             className={`${inputClass} font-mono`}
           />
-          <p className="text-[11px] text-slate-400 mt-1">
+          <p className="text-[11px] text-slate-500 mt-1">
             Add a first and last name after the email only for students who do
             not have a passport yet.
           </p>
@@ -323,7 +323,7 @@ function AwardForm() {
 export default function AdminAwardsPage() {
   return (
     <Suspense
-      fallback={<p className="text-xs text-slate-400">Loading skills...</p>}
+      fallback={<p className="text-xs text-slate-500">Loading skills...</p>}
     >
       <AwardForm />
     </Suspense>

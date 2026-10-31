@@ -62,7 +62,7 @@ function FlagCard({
           <span className="font-semibold text-slate-900">
             {flag.student_email}
           </span>
-          <span className="text-slate-400"> · </span>
+          <span className="text-slate-500"> · </span>
           <Link
             href={`/admin/students/${encodeURIComponent(flag.passport_id)}`}
             className="font-mono text-xs text-indigo-600 hover:underline"
@@ -113,7 +113,7 @@ function FlagCard({
           onChange={(e) => setNote(e.target.value)}
           className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
         />
-        <p className="text-[11px] text-slate-400 mt-1">
+        <p className="text-[11px] text-slate-500 mt-1">
           {note.trim().length} / {FLAG_NOTE_MAX}. The student sees this on their
           passport page.
         </p>

@@ -247,7 +247,7 @@ export default function AdminLayout({
                 Student Portal
               </Link>
               <span>•</span>
-              <span className="font-mono text-slate-400">
+              <span className="font-mono text-slate-600">
                 Polygon Amoy Testnet
               </span>
             </div>

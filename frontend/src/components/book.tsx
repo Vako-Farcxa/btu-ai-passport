@@ -11,12 +11,12 @@ import { useCoverMotion, useOpenBookMotion } from '@/components/motion'
 export function BrandMark({ locale }: { locale: Locale }) {
   const name = messages[locale].universityName
   return (
-    <Link className="brand-mark" href="/" aria-label={name}>
+    <Link className="brand-mark" href="/">
       <span className="monogram" aria-hidden="true">
         B
       </span>
-      <span className="brand-word">
-        {locale === 'en' ? name.toUpperCase() : name}
+      <span className="brand-word" lang={locale}>
+        {name}
       </span>
     </Link>
   )

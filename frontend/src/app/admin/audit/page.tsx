@@ -91,7 +91,7 @@ export default function AdminAuditPage() {
               <tr>
                 <td
                   colSpan={5}
-                  className="px-6 py-12 text-center text-slate-400 text-xs"
+                  className="px-6 py-12 text-center text-slate-500 text-xs"
                 >
                   Loading activity...
                 </td>
@@ -100,7 +100,7 @@ export default function AdminAuditPage() {
               <tr>
                 <td
                   colSpan={5}
-                  className="px-6 py-12 text-center text-slate-400 text-xs"
+                  className="px-6 py-12 text-center text-slate-500 text-xs"
                 >
                   Nothing has been changed in the panel yet.
                 </td>

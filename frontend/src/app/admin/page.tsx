@@ -319,7 +319,7 @@ export default function AdminDashboardPage() {
                 <tr>
                   <td
                     colSpan={5}
-                    className="px-6 py-8 text-center text-slate-400 text-xs"
+                    className="px-6 py-8 text-center text-slate-500 text-xs"
                   >
                     No sync runs recorded yet.
                   </td>

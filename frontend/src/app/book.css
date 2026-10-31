@@ -103,6 +103,10 @@ button:disabled {
   color: rgba(255, 255, 255, 0.78);
 }
 
+.brand-word:lang(en) {
+  text-transform: uppercase;
+}
+
 .language-switcher {
   display: flex;
   align-items: center;

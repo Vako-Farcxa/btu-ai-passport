@@ -15,6 +15,8 @@ const eslintConfig = defineConfig([
     'node_modules/**',
     'dist/**',
     'coverage/**',
+    'playwright-report/**',
+    'test-results/**',
     '**/*.min.js',
   ]),
 ])
