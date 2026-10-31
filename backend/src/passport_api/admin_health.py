@@ -12,7 +12,7 @@ Rules, each one an alert with a severity (warning = amber, critical = red):
   every 4 hours in practice, up to 7), so only a longer silence means it is not running or
   always failing,
 - an anchor is failed_permanent (critical, an admin has to act),
-- an anchor has been pending or retrying for more than 60 minutes (warning),
+- an anchor has been pending or retrying for more than 8 hours (warning), matching the sync cadence,
 - the database consistency report lists problems, or could not be produced (warning).
 
 "Skipped" syncs (another run was in progress) and a sync that is still running are ignored.
@@ -29,7 +29,7 @@ from passport_api.store import normalize_anchor_status
 
 SYNC_STALE_AFTER = timedelta(hours=8)
 SYNC_CRITICAL_AFTER = timedelta(hours=24)
-ANCHOR_STUCK_AFTER = timedelta(minutes=60)
+ANCHOR_STUCK_AFTER = timedelta(hours=8)
 _REASON_MAX = 120
 
 

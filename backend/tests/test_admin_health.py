@@ -125,24 +125,25 @@ def test_a_failed_permanent_anchor_is_red() -> None:
     assert health.anchors_failed_permanent == 2
 
 
-def test_an_anchor_open_for_over_an_hour_is_amber() -> None:
-    fresh = _anchor("retrying", 59)
-    old = _anchor("retrying", 120, anchor_last_error="rpc_unreachable")
-    older_pending = _anchor("pending", 300)
+def test_an_anchor_open_for_over_eight_hours_is_amber() -> None:
+    fresh = _anchor("retrying", 7 * 60)
+    old = _anchor("retrying", 9 * 60, anchor_last_error="rpc_unreachable")
+    older_pending = _anchor("pending", 12 * 60)
     health = _health(versions=[fresh, old, older_pending])
     assert health.status == "warning"
     alert = health.alerts[0]
     assert alert.code == "anchors_stuck"
     assert alert.count == 2
     assert health.anchors_stuck == 2
-    assert "oldest 5 hours" in alert.message
+    assert "over 8 hours" in alert.message
+    assert "oldest 12 hours" in alert.message
 
 
 def test_the_stuck_reason_is_the_oldest_ones_stored_code() -> None:
     health = _health(
         versions=[
-            _anchor("retrying", 100, anchor_last_error="insufficient_funds"),
-            _anchor("retrying", 400, anchor_last_error="rpc_unreachable"),
+            _anchor("retrying", 10 * 60, anchor_last_error="insufficient_funds"),
+            _anchor("retrying", 20 * 60, anchor_last_error="rpc_unreachable"),
         ]
     )
     assert health.alerts[0].reason == "rpc_unreachable"
@@ -159,7 +160,7 @@ def test_a_recent_broadcast_resets_the_stuck_clock() -> None:
 
 
 def test_the_legacy_failed_status_counts_as_retrying() -> None:
-    health = _health(versions=[_anchor("failed", 200)])
+    health = _health(versions=[_anchor("failed", 9 * 60)])
     assert _codes(health) == ["anchors_stuck"]
 
 

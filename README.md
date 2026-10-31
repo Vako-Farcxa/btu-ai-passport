@@ -183,7 +183,7 @@ Setup: share the sheet with the service account as Editor, set `SHEET_ID` and `G
 
 - `GET /health`: the API process is alive. It touches nothing else, so it is cheap and safe to ping often.
 - `GET /health/ready`: checks the database, the Google Sheet and the Amoy RPC and reports each one. `200` when the database works (overall `ok`, or `degraded` if only the Sheet or the chain is down), `503` when it does not. The answer is cached for 60 seconds, so frequent pings cannot use up the Sheets or RPC quotas, and it never shows a URL or secret.
-- The admin dashboard (`/admin`) shows a red or amber banner when the last sync failed (with the reason), no sync has finished for over an hour, an anchor is stuck or gave up, or the database consistency check finds problems.
+- The admin dashboard (`/admin`) shows a red or amber banner when the last sync failed (with the reason), no sync has finished for 8 hours (red after 24), an anchor has been open for over 8 hours or gave up, or the database consistency check finds problems.
 
 ### Uptime monitoring with UptimeRobot (free)
 
