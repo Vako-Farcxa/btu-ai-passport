@@ -346,3 +346,76 @@ def test_anchor_version_not_found(monkeypatch: pytest.MonkeyPatch) -> None:
         )
     assert resp.status_code == 404
     assert resp.json() == {"code": "version_not_found"}
+
+
+def _pdf_version_row(*, with_pdfs: bool) -> dict[str, Any]:
+    return {
+        "id": "vvvvvvvv-0001-0000-0000-000000000001",
+        "version_number": 2,
+        "holder_name": "Nino Beridze",
+        "verification_code": "ABCD-EFGH-IJKL-MNOP",
+        "issued_at": "2026-01-01T00:00:00+00:00",
+        "pdf_en_path": "BTU-TEST/v2/en.pdf" if with_pdfs else None,
+        "pdf_ka_path": "BTU-TEST/v2/ka.pdf" if with_pdfs else None,
+        "skill_entries": [
+            {
+                "skill": "Prompt Engineering",
+                "badge": "BDG-AI-001",
+                "awarded_on": "2026-01-01",
+                "description": None,
+                "position": 0,
+            }
+        ],
+        "students": [{"email": "student@btu.edu.ge", "passport_id": "BTU-TEST000001"}],
+    }
+
+
+@pytest.mark.parametrize(("with_pdfs", "force"), [(False, False), (True, True)])
+def test_regenerate_pdf_writes_both_files_and_records_the_action(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Any, with_pdfs: bool, force: bool
+) -> None:
+    from passport_api import audit
+    from passport_api.settings import settings
+
+    _patch_require_admin(monkeypatch, "admin@btu.edu.ge")
+    monkeypatch.setattr(settings, "supabase_url", "")
+    monkeypatch.setattr(settings, "pdf_storage_dir", str(tmp_path))
+    with patch("passport_api.api.admin.get_supabase") as mock_db:
+        select_chain = (
+            mock_db.return_value.table.return_value.select.return_value.eq.return_value.limit
+        )
+        select_chain.return_value.execute.return_value.data = [
+            _pdf_version_row(with_pdfs=with_pdfs)
+        ]
+        resp = client.post(
+            f"/admin/versions/vvvvvvvv-0001-0000-0000-000000000001/pdf?force={str(force).lower()}",
+            headers={"Authorization": "Bearer fake"},
+        )
+        update_call = mock_db.return_value.table.return_value.update.call_args
+    assert resp.status_code == 200
+    assert resp.json() == {
+        "en_path": "BTU-TEST000001/v2/en.pdf",
+        "ka_path": "BTU-TEST000001/v2/ka.pdf",
+    }
+    assert (tmp_path / "BTU-TEST000001/v2/en.pdf").read_bytes().startswith(b"%PDF")
+    assert (tmp_path / "BTU-TEST000001/v2/ka.pdf").read_bytes().startswith(b"%PDF")
+    assert update_call.args[0] == {
+        "pdf_en_path": "BTU-TEST000001/v2/en.pdf",
+        "pdf_ka_path": "BTU-TEST000001/v2/ka.pdf",
+    }
+    entries = audit.memory_store.recent(10)
+    assert [e.action for e in entries] == ["pdf.regenerate"]
+    assert entries[0].detail == {"force": force}
+
+
+def test_regenerate_pdf_unknown_version_is_404(monkeypatch: pytest.MonkeyPatch) -> None:
+    _patch_require_admin(monkeypatch, "admin@btu.edu.ge")
+    with patch("passport_api.api.admin.get_supabase") as mock_db:
+        chain = mock_db.return_value.table.return_value.select.return_value.eq.return_value.limit
+        chain.return_value.execute.return_value.data = []
+        resp = client.post(
+            "/admin/versions/00000000-0000-0000-0000-000000000000/pdf",
+            headers={"Authorization": "Bearer fake"},
+        )
+    assert resp.status_code == 404
+    assert resp.json() == {"code": "version_not_found"}
