@@ -450,6 +450,17 @@ const ERROR_MESSAGES: Record<string, string> = {
   missing_skill: 'A skill is required.',
   anchor_busy: 'Another anchoring run is in progress. Try again in a minute.',
   anchor_already_confirmed: 'This version is already confirmed on-chain.',
+  invalid_full_name:
+    'The full name in the Sheet must be letters only (Latin or Georgian), 2 to 101 characters.',
+  invalid_passport_id:
+    'The passport ID must be 4 to 40 characters: capital letters, digits and dashes.',
+  invalid_awarded_on:
+    'A date in the Sheet is not a real date. Use YYYY-MM-DD, or leave it empty.',
+  other_row_invalid:
+    'Another row for this student has a problem, so none of their rows were saved.',
+  invalid_request:
+    'Some of the data sent was not valid. Check it and try again.',
+  audit_unavailable: 'The activity log could not be loaded. Try again later.',
 }
 
 export function adminErrorMessage(code: string): string {
@@ -606,4 +617,44 @@ export async function updateAdminFlag(
   )
   if (!res.ok) throw await failure(res, 'Failed to update the flag')
   return res.json()
+}
+
+export interface AdminAuditEntry {
+  id: string
+  created_at: string
+  actor: string
+  action: string
+  target_type: string
+  target: string
+  detail: Record<string, string | number | boolean | null>
+}
+
+export async function fetchAdminAudit(limit = 100): Promise<AdminAuditEntry[]> {
+  const res = await apiFetch(`${apiBaseUrl()}/admin/audit?limit=${limit}`, {
+    headers: await getHeaders(),
+    cache: 'no-store',
+  })
+  if (!res.ok) throw await failure(res, 'Failed to load the activity log')
+  const body: { entries: AdminAuditEntry[] } = await res.json()
+  return body.entries
+}
+
+const AUDIT_ACTIONS: Record<string, string> = {
+  'student.archive': 'Archived a student',
+  'student.restore': 'Restored a student',
+  'version.revoke': 'Revoked a version',
+  'version.unrevoke': 'Restored a version',
+  'sync.run': 'Ran a sync',
+  'skill.create': 'Added a skill to the catalog',
+  'skill.update': 'Edited a catalog skill',
+  'skill.award': 'Awarded a skill',
+  'anchor.retry': 'Retried anchoring',
+  'pdf.regenerate': 'Regenerated PDFs',
+  'flag.resolved': 'Resolved a flag',
+  'flag.dismissed': 'Dismissed a flag',
+}
+
+/** A readable label for an audit action code. Unknown codes are shown as they are. */
+export function auditActionLabel(action: string): string {
+  return AUDIT_ACTIONS[action] ?? action
 }
