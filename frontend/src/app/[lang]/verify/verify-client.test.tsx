@@ -137,7 +137,9 @@ describe('verify page while the code input is edited', () => {
     fireEvent.submit(input.closest('form') as HTMLFormElement)
     expect(await screen.findByText('Nino Beridze')).toBeInTheDocument()
     expect(fetchMock).toHaveBeenCalledTimes(2)
-    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({
+    expect(
+      JSON.parse((fetchMock.mock.calls[1]?.[1] as { body: string }).body),
+    ).toEqual({
       code: 'EEEE-FFFF-GGGG-HHHH',
     })
     expect(screen.queryByText('Ana Kiknadze')).toBeNull()

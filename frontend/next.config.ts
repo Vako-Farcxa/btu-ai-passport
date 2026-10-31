@@ -15,6 +15,9 @@ const nextConfig: NextConfig = {
   },
   cacheComponents: true,
   partialPrefetching: true,
+  // The root layout sits under the `[lang]` segment, so Next.js cannot build its own 404 for
+  // an unknown address from it. `app/global-not-found.tsx` is that page instead.
+  experimental: { globalNotFound: true },
   turbopack: {
     rules: {
       '*.css': {

@@ -1348,8 +1348,18 @@ button:disabled {
     padding: 10px 16px;
   }
 
+  /* Hidden from the eye but not from screen readers: display: none would leave the logo
+     link without an accessible name. */
   .brand-word {
-    display: none;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
   }
 
   .language-switcher {

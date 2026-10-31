@@ -29,18 +29,14 @@ for (const path of ['/', '/verify', '/about', '/privacy', '/terms']) {
     await hydrated(page.locator('main'))
     expect(await violations(page)).toEqual([])
 
-    // The brand text is hidden here, so the link needs its own name.
-    await expect(page.locator('.brand-word')).toBeHidden()
-    const logo = page
-      .getByRole('link', {
-        name: 'Business and Technology University',
-      })
-      .first()
+    // The brand text is not shown on a phone, but the logo link must keep its name.
+    const word = await page.locator('.brand-word').boundingBox()
+    expect(word?.width ?? 0).toBeLessThanOrEqual(1)
+    const logo = page.getByRole('link', {
+      name: 'Business and Technology University',
+    })
     await expect(logo).toHaveAttribute('href', '/')
-    await expect(page.locator('a.brand-mark')).toHaveAttribute(
-      'aria-label',
-      /\S/,
-    )
+    await expect(logo).toBeVisible()
 
     const overflow = await page.evaluate(
       () =>
