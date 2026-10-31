@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     # Turn it off with ONCHAIN_VERIFY=false. The timeout is per RPC request, in seconds.
     onchain_verify: bool = True
     onchain_timeout_seconds: float = 3.0
+    # /health/ready: the longest the database, Sheet and chain checks may take, in seconds.
+    health_timeout_seconds: float = 4.0
     # Comma-separated email domains accepted for sign-in and sheet rows.
     allowed_email_domains: str = "btu.edu.ge"
     # Local demos only. Accepts the "demo-admin" bearer token on /admin. Never set it on a

@@ -1,0 +1,100 @@
+name: Nightly backup
+
+# Every night this exports the database tables (through Supabase's REST API with the service
+# role key) and the Google Sheet (read only), packs them into one file, ENCRYPTS it, and
+# keeps it as a workflow artifact for 30 days. The repository is public and anyone signed in
+# to GitHub can download the artifacts of a public repository, so the file is encrypted with
+# BACKUP_PASSPHRASE before it is uploaded: without that passphrase it is unreadable.
+# Nothing readable is ever uploaded or printed. Restore steps: docs/RESTORE.md.
+#
+# 22:05 UTC is 02:05 in Tbilisi (UTC+4, no daylight saving). It is five minutes past the
+# hour so it does not collide with the sheet sync, which runs at :00, :15, :30 and :45.
+on:
+  schedule:
+    - cron: "5 22 * * *"
+  workflow_dispatch:
+
+# One backup at a time. A running one is never cancelled.
+concurrency:
+  group: backup
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    name: Backup
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v6
+
+      # Secrets are passed through env (never pasted into the command line), and GitHub masks
+      # their values in the log. This step only names the ones that are missing.
+      - name: Check that the secrets are set
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          SHEET_ID: ${{ secrets.SHEET_ID }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          missing=""
+          for name in SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY GOOGLE_SERVICE_ACCOUNT_JSON SHEET_ID BACKUP_PASSPHRASE; do
+            if [ -z "${!name}" ]; then missing="$missing $name"; fi
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Add these repository secrets, then run the backup again:$missing"
+            exit 1
+          fi
+
+      - name: Set up uv and Python
+        uses: astral-sh/setup-uv@v10.3.3
+        with:
+          python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - name: Install dependencies
+        run: uv sync --frozen --no-dev
+
+      # Writes to the runner's temp folder, which is not uploaded. If one half fails (say the
+      # Sheet) the other half is still saved, and the last step fails the run so GitHub emails
+      # you.
+      - name: Export the database and the Sheet
+        id: export
+        continue-on-error: true
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          SHEET_ID: ${{ secrets.SHEET_ID }}
+        run: uv run python scripts/backup.py --out "$RUNNER_TEMP/backup"
+
+      - name: Encrypt
+        id: encrypt
+        env:
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          stamp="$(TZ=Asia/Tbilisi date +%Y-%m-%d)"
+          mkdir -p "$RUNNER_TEMP/upload"
+          bash ../.github/scripts/encrypt-backup.sh "$RUNNER_TEMP/backup" "$RUNNER_TEMP/upload/btu-backup-$stamp.tar.gz.enc"
+
+      # Only the encrypted file is uploaded.
+      - name: Upload the encrypted backup
+        uses: actions/upload-artifact@v7
+        with:
+          name: btu-backup-encrypted-${{ github.run_number }}
+          path: ${{ runner.temp }}/upload/*.enc
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Fail the run if the export was incomplete
+        if: steps.export.outcome == 'failure'
+        run: |
+          echo "::error::The export was incomplete. The encrypted backup holds only what could be read. See the Export step."
+          exit 1

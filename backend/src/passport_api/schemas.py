@@ -33,6 +33,7 @@ ErrorCode = Literal[
     "student_not_deleted",
     "version_already_revoked",
     "version_not_revoked",
+    "health_unavailable",
 ]
 
 
@@ -400,3 +401,60 @@ class AdminFlagUpdate(BaseModel):
 
     status: Literal["resolved", "dismissed"]
     admin_note: str = Field(default="", max_length=5000)
+
+
+class ReadyComponent(BaseModel):
+    """One dependency in /health/ready. `reason` is a short fixed code, never a URL or secret."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    status: Literal["ok", "down", "not_configured"]
+    reason: str | None = None
+
+
+class ReadyReport(BaseModel):
+    """Body of /health/ready. "down" (HTTP 503) means the database is unusable, "degraded"
+    means the database works but the Sheet or the chain does not."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    status: Literal["ok", "degraded", "down"]
+    components: dict[str, ReadyComponent]
+    checked_at: datetime
+
+
+class HealthAlert(BaseModel):
+    """One problem for the admin dashboard banner. `reason` is a short stored code."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    code: Literal[
+        "sync_failed",
+        "sync_stale",
+        "sync_never_succeeded",
+        "anchors_failed_permanent",
+        "anchors_stuck",
+        "inconsistencies",
+        "consistency_check_failed",
+    ]
+    severity: Literal["warning", "critical"]
+    message: str
+    reason: str | None = None
+    count: int | None = None
+
+
+class AdminHealth(BaseModel):
+    """Result of GET /admin/health: what is wrong right now, worst first."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    status: Literal["ok", "warning", "critical"]
+    checked_at: datetime
+    alerts: list[HealthAlert]
+    last_sync_status: Literal["completed", "failed"] | None
+    last_sync_error: str | None
+    last_sync_at: datetime | None
+    last_success_at: datetime | None
+    anchors_failed_permanent: int
+    anchors_stuck: int
+    inconsistencies: int | None

@@ -5,6 +5,7 @@ from fastapi.responses import JSONResponse
 from passport_api.api.admin import router as admin_router
 from passport_api.api.flags import admin_router as flags_admin_router
 from passport_api.api.flags import router as flags_router
+from passport_api.api.health import router as health_router
 from passport_api.api.me import router as me_router
 from passport_api.api.sync import router as sync_router
 from passport_api.api.verify import router as verify_router
@@ -44,6 +45,7 @@ app.add_middleware(
     docs_paths=("/docs", "/redoc", "/openapi.json") if settings.enable_api_docs else (),
 )
 
+app.include_router(health_router)
 app.include_router(verify_router)
 app.include_router(me_router)
 app.include_router(sync_router)
@@ -56,8 +58,3 @@ app.include_router(flags_admin_router)
 def handle_api_error(_request: Request, exc: APIError) -> JSONResponse:
     body = ErrorBody(code=exc.code)
     return JSONResponse(status_code=exc.status_code, content=body.model_dump(), headers=exc.headers)
-
-
-@app.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok"}

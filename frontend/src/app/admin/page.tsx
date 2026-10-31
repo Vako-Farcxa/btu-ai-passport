@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import React, { useEffect, useState } from 'react'
 import { AddStudentDialog } from '@/components/admin/add-student-dialog'
+import { HealthBanner } from '@/components/admin/health-banner'
 import {
   describeSyncResult,
   fetchAdminFlags,
@@ -160,6 +161,8 @@ export default function AdminDashboardPage() {
           </button>
         </div>
       </div>
+
+      <HealthBanner refreshKey={lastSync?.id ?? ''} />
 
       {error && (
         <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-sm flex items-center justify-between">

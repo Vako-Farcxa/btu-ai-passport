@@ -18,7 +18,7 @@ uv sync
 uv run uvicorn passport_api.main:app --reload
 ```
 
-The API runs on `http://localhost:8000`. Health check endpoint: `GET /health`.
+The API runs on `http://localhost:8000`. Health checks: `GET /health` (alive, touches nothing) and `GET /health/ready` (database, Sheet and chain). See "Health checks" below.
 
 The interactive API docs (`/docs`, `/redoc`, `/openapi.json`) are off by default so a deployed API does not publish its route map. To use them locally, put `ENABLE_API_DOCS=true` in `backend/.env`.
 
@@ -93,6 +93,21 @@ the contract (`onchain.py`, read-only, no key) and compares again.
   skipped for 30 seconds. `ONCHAIN_VERIFY=false` switches the read off.
 - `scripts/verify_onchain.py` repeats the check from a passport's facts with no BTU server.
   Needs no migration.
+
+## Health checks
+
+- `GET /health` answers `{"status":"ok"}` and touches no dependency, so it is always cheap. Render's health check and the uptime monitor use it. `HEAD` works too.
+- `GET /health/ready` checks the three things the app depends on and reports each as `ok`, `down` (with a short `reason` such as `timeout`, `unreachable` or `http_401`) or `not_configured`:
+  - `database`: one tiny read through Supabase's REST API,
+  - `sheet`: opens the Google spreadsheet,
+  - `chain`: asks the Amoy RPC for the latest block.
+
+  The answer is `200` while the database works (overall `ok`, or `degraded` when only the Sheet or the chain is down) and `503` when it does not (overall `down`). Each check has a timeout (`HEALTH_TIMEOUT_SECONDS`, default 4) and the three run side by side. The result is cached for 60 seconds (15 when something is down), so pinging it every few minutes cannot burn the Google Sheets quota or a free RPC's limit. The body holds only fixed words, never a URL, key or error message. Neither route is rate limited.
+- `GET /admin/health` (admin only) feeds the red or amber banner on the admin dashboard: the last sync failed (with its reason code), no sync has completed for over 60 minutes (red after 3 hours), an anchor is `failed_permanent` or has waited over 60 minutes, or the consistency check (`sync_inconsistencies()`) found problems. Read only.
+
+## Backups
+
+`scripts/backup.py` exports every table (`passport_api/backup.py` lists them) to JSON Lines and every Sheet tab to CSV; `scripts/restore_backup.py` puts them back (dry run unless `--yes`). The nightly GitHub Actions workflow `backup.yml` runs the export and encrypts the result. Details and restore steps: [`docs/RESTORE.md`](../docs/RESTORE.md). A test fails if a migration adds a table that the backup does not list.
 
 ## Atomic sync
 
