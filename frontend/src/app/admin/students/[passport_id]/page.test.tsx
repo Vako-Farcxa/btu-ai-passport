@@ -4,9 +4,11 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { AdminFeedback } from '@/components/admin/admin-feedback'
 import * as api from '@/lib/api/admin'
 
 import AdminStudentDetailPage from './page'
@@ -26,6 +28,19 @@ vi.mock('@/lib/api/admin', async () => {
     retryAdminAnchor: vi.fn(),
   }
 })
+
+function renderPage() {
+  return render(
+    <AdminFeedback>
+      <AdminStudentDetailPage />
+    </AdminFeedback>,
+  )
+}
+
+async function answer(name: string) {
+  const dialog = await screen.findByRole('alertdialog')
+  fireEvent.click(within(dialog).getByRole('button', { name }))
+}
 
 const version = (n: number, code: string) => ({
   id: `v${n}`,
@@ -57,7 +72,7 @@ describe('admin student detail verify links', () => {
   afterEach(cleanup)
 
   it('opens the verify page with the version code, not the plain page', async () => {
-    render(<AdminStudentDetailPage />)
+    renderPage()
     await screen.findByText(/Verify Code/)
     const hrefs = screen
       .getAllByRole('link')
@@ -92,21 +107,21 @@ describe('admin student detail revocation controls', () => {
 
   it('shows no archived banner for an active student', async () => {
     vi.mocked(api.fetchAdminStudent).mockResolvedValue(detail({}))
-    render(<AdminStudentDetailPage />)
+    renderPage()
     await screen.findByText(/Verify Code/)
     expect(screen.queryByTestId('archived-banner')).toBeNull()
   })
 
   it('marks an archived student and restores them after a confirm', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     vi.mocked(api.fetchAdminStudent)
       .mockResolvedValueOnce(detail({ deleted_at: '2026-10-30T10:00:00Z' }))
       .mockResolvedValue(detail({}))
     vi.mocked(api.restoreAdminStudent).mockResolvedValue(undefined)
-    render(<AdminStudentDetailPage />)
+    renderPage()
     const banner = await screen.findByTestId('archived-banner')
     expect(banner).toHaveTextContent(/Revoked/)
     fireEvent.click(screen.getByRole('button', { name: 'Restore student' }))
+    await answer('Restore student')
     await waitFor(() =>
       expect(api.restoreAdminStudent).toHaveBeenCalledWith('BTU-ABC'),
     )
@@ -116,18 +131,70 @@ describe('admin student detail revocation controls', () => {
   })
 
   it('does nothing when the admin cancels the confirm', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(false)
     vi.mocked(api.fetchAdminStudent).mockResolvedValue(
       detail({ deleted_at: '2026-10-30T10:00:00Z' }),
     )
-    render(<AdminStudentDetailPage />)
+    renderPage()
     await screen.findByTestId('archived-banner')
     fireEvent.click(screen.getByRole('button', { name: 'Restore student' }))
+    await answer('Cancel')
+    await waitFor(() =>
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument(),
+    )
     expect(api.restoreAdminStudent).not.toHaveBeenCalled()
   })
 
+  it('cancels with Escape and puts focus back on the button that opened it', async () => {
+    vi.mocked(api.fetchAdminStudent).mockResolvedValue(detail({}))
+    renderPage()
+    const trigger = await screen.findByRole('button', {
+      name: 'Revoke version',
+    })
+    trigger.focus()
+    fireEvent.click(trigger)
+    const dialog = await screen.findByRole('alertdialog')
+    expect(dialog).toHaveAccessibleName('Revoke version 1?')
+    fireEvent.keyDown(document.activeElement ?? document.body, {
+      key: 'Escape',
+    })
+    await waitFor(() =>
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument(),
+    )
+    expect(api.revokeAdminVersion).not.toHaveBeenCalled()
+    await waitFor(() => expect(trigger).toHaveFocus())
+  })
+
+  it('styles revoking as a danger action and restoring as a normal one', async () => {
+    vi.mocked(api.fetchAdminStudent).mockResolvedValue(
+      detail({}, [
+        { ...version(1, 'AAAA-BBBB-CCCC-DDDD'), revoked_at: null },
+        {
+          ...version(2, 'EEEE-FFFF-GGGG-HHHH'),
+          revoked_at: '2026-10-30T10:00:00Z',
+        },
+      ]),
+    )
+    renderPage()
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Revoke version' }),
+    )
+    let dialog = await screen.findByRole('alertdialog')
+    expect(
+      within(dialog).getByRole('button', { name: 'Revoke version' }),
+    ).toHaveAttribute('data-variant', 'danger')
+    expect(dialog.textContent).not.toMatch(/\u2014|\u2013/)
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+    await waitFor(() =>
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument(),
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Restore version' }))
+    dialog = await screen.findByRole('alertdialog')
+    expect(
+      within(dialog).getByRole('button', { name: 'Restore version' }),
+    ).toHaveAttribute('data-variant', 'default')
+  })
+
   it('revokes a version and shows a revoked version with a restore button', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     vi.mocked(api.fetchAdminStudent)
       .mockResolvedValueOnce(detail({}))
       .mockResolvedValue(
@@ -139,10 +206,11 @@ describe('admin student detail revocation controls', () => {
         ]),
       )
     vi.mocked(api.revokeAdminVersion).mockResolvedValue(undefined)
-    render(<AdminStudentDetailPage />)
+    renderPage()
     fireEvent.click(
       await screen.findByRole('button', { name: 'Revoke version' }),
     )
+    await answer('Revoke version')
     await waitFor(() =>
       expect(api.revokeAdminVersion).toHaveBeenCalledWith('v1'),
     )
@@ -153,15 +221,15 @@ describe('admin student detail revocation controls', () => {
   })
 
   it('shows the error when the action fails', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     vi.mocked(api.fetchAdminStudent).mockResolvedValue(detail({}))
     vi.mocked(api.revokeAdminVersion).mockRejectedValue(
       new Error('This version is already revoked.'),
     )
-    render(<AdminStudentDetailPage />)
+    renderPage()
     fireEvent.click(
       await screen.findByRole('button', { name: 'Revoke version' }),
     )
+    await answer('Revoke version')
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'This version is already revoked.',
     )
@@ -188,7 +256,7 @@ describe('admin student detail anchoring', () => {
     vi.mocked(api.fetchAdminStudent).mockResolvedValue(
       detail([version(1, 'AAAA-BBBB-CCCC-DDDD')]),
     )
-    render(<AdminStudentDetailPage />)
+    renderPage()
     await screen.findByText(/Verify Code/)
     expect(screen.queryByTestId('anchor-detail')).toBeNull()
     expect(screen.queryByRole('button', { name: 'Retry anchoring' })).toBeNull()
@@ -205,7 +273,7 @@ describe('admin student detail anchoring', () => {
       .mockResolvedValueOnce(detail([failed]))
       .mockResolvedValue(detail([version(1, 'AAAA-BBBB-CCCC-DDDD')]))
     vi.mocked(api.retryAdminAnchor).mockResolvedValue({ status: 'confirmed' })
-    render(<AdminStudentDetailPage />)
+    renderPage()
     const box = await screen.findByTestId('anchor-detail')
     expect(box).toHaveTextContent('Anchoring needs attention')
     expect(box).toHaveTextContent('Attempts so far: 6')
@@ -231,7 +299,7 @@ describe('admin student detail anchoring', () => {
         },
       ]),
     )
-    render(<AdminStudentDetailPage />)
+    renderPage()
     expect(await screen.findByTestId('anchor-detail')).toHaveTextContent(
       'Waiting for the blockchain',
     )
@@ -251,7 +319,7 @@ describe('admin student detail anchoring', () => {
     vi.mocked(api.retryAdminAnchor).mockRejectedValue(
       new Error('Another anchoring run is in progress. Try again in a minute.'),
     )
-    render(<AdminStudentDetailPage />)
+    renderPage()
     fireEvent.click(
       await screen.findByRole('button', { name: 'Retry anchoring' }),
     )

@@ -9,7 +9,9 @@ import {
   restoreAdminStudent,
   type AdminStudent,
 } from '@/lib/api/admin'
+import { useConfirm } from '@/components/ui/confirm-dialog'
 import { anchorBadgeClasses, anchorStatusLabel } from '@/lib/anchor-status'
+import { notify } from '@/lib/toast'
 
 export default function AdminStudentsPage() {
   const [students, setStudents] = useState<AdminStudent[]>([])
@@ -17,6 +19,7 @@ export default function AdminStudentsPage() {
   const [search, setSearch] = useState('')
   const [showAdd, setShowAdd] = useState(false)
   const [tab, setTab] = useState<'all' | 'admin' | 'archived'>('all')
+  const confirm = useConfirm()
 
   const loadStudents = async () => {
     setLoading(true)
@@ -83,34 +86,43 @@ export default function AdminStudentsPage() {
   }
 
   const handleDelete = async (passportId: string, name: string) => {
-    if (
-      !confirm(
-        `Are you sure you want to archive student ${name}? This will preserve historical records but prevent new access.`,
-      )
-    ) {
-      return
-    }
+    const ok = await confirm({
+      title: `Archive ${name}?`,
+      description:
+        'Their codes will verify as Revoked and they will not be able to open their passport. Historical records are kept, and you can restore them later.',
+      confirmLabel: 'Archive student',
+      destructive: true,
+    })
+    if (!ok) return
     try {
       await deleteAdminStudent(passportId)
+      notify.success('Student archived', `${name} is now archived.`)
       await loadStudents()
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Failed to delete student')
+      notify.error(
+        'Could not archive the student',
+        err instanceof Error ? err.message : 'Please try again.',
+      )
     }
   }
 
   const handleRestore = async (passportId: string, name: string) => {
-    if (
-      !confirm(
-        `Restore student ${name}? Their codes will verify as valid again and they can open their passport.`,
-      )
-    ) {
-      return
-    }
+    const ok = await confirm({
+      title: `Restore ${name}?`,
+      description:
+        'Their codes will verify as valid again and they can open their passport.',
+      confirmLabel: 'Restore student',
+    })
+    if (!ok) return
     try {
       await restoreAdminStudent(passportId)
+      notify.success('Student restored', `${name} is active again.`)
       await loadStudents()
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Failed to restore student')
+      notify.error(
+        'Could not restore the student',
+        err instanceof Error ? err.message : 'Please try again.',
+      )
     }
   }
 

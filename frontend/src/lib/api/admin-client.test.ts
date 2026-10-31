@@ -158,7 +158,7 @@ describe('students', () => {
       reply(409, { code: 'student_already_deleted' }),
     )
     await expect(deleteAdminStudent('BTU-1')).rejects.toThrow(
-      'student_already_deleted',
+      'This student is already archived.',
     )
     fetchMock.mockResolvedValueOnce({
       ...reply(500),

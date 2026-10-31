@@ -18,6 +18,8 @@ import {
   explainAnchorError,
   retryMessage,
 } from '@/lib/anchor-status'
+import { useConfirm, type ConfirmOptions } from '@/components/ui/confirm-dialog'
+import { notify } from '@/lib/toast'
 import { explorerTxUrlFor } from '@/lib/explorer'
 import { shareLinkFor } from '@/lib/share'
 
@@ -35,13 +37,19 @@ function StudentDetailContent() {
   > | null>(null)
   const [busy, setBusy] = useState(false)
   const [reloads, setReloads] = useState(0)
+  const confirm = useConfirm()
 
-  async function act(question: string, run: () => Promise<void>) {
-    if (busy || !confirm(question)) return
+  async function act(
+    options: ConfirmOptions,
+    run: () => Promise<void>,
+    done: string,
+  ) {
+    if (busy || !(await confirm(options))) return
     setBusy(true)
     setActionError(null)
     try {
       await run()
+      notify.success(done)
       setReloads((count) => count + 1)
     } catch (err: unknown) {
       setActionError(err instanceof Error ? err.message : 'Action failed')
@@ -217,8 +225,14 @@ function StudentDetailContent() {
             disabled={busy}
             onClick={() =>
               void act(
-                `Restore ${student.full_name}? Their codes will verify as valid again and they can open their passport.`,
+                {
+                  title: `Restore ${student.full_name}?`,
+                  description:
+                    'Their codes will verify as valid again and they can open their passport.',
+                  confirmLabel: 'Restore student',
+                },
                 () => restoreAdminStudent(student.passport_id),
+                'Student restored',
               )
             }
             className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white rounded-lg text-xs font-semibold transition-colors shrink-0"
@@ -332,12 +346,26 @@ function StudentDetailContent() {
                     onClick={() =>
                       void act(
                         ver.revoked_at
-                          ? `Restore version ${ver.version_number}? Its code will verify normally again.`
-                          : `Revoke version ${ver.version_number}? Its code will show Revoked and its PDF will be refused. You can restore it later.`,
+                          ? {
+                              title: `Restore version ${ver.version_number}?`,
+                              description:
+                                'Its code will verify normally again.',
+                              confirmLabel: 'Restore version',
+                            }
+                          : {
+                              title: `Revoke version ${ver.version_number}?`,
+                              description:
+                                'Its code will show Revoked and its PDF will be refused. You can restore it later.',
+                              confirmLabel: 'Revoke version',
+                              destructive: true,
+                            },
                         () =>
                           ver.revoked_at
                             ? unrevokeAdminVersion(ver.id)
                             : revokeAdminVersion(ver.id),
+                        ver.revoked_at
+                          ? `Version ${ver.version_number} restored`
+                          : `Version ${ver.version_number} revoked`,
                       )
                     }
                     className={`font-sans font-semibold hover:underline disabled:opacity-60 ${
