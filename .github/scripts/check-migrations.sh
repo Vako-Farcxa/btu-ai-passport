@@ -56,7 +56,8 @@ echo "Checking the result"
 missing=$(psql_run -A -t <<'SQL'
 select string_agg(name, ', ') from (
   select t.name from (values
-    ('students'), ('passport_versions'), ('skill_entries'), ('source_records'), ('skills')
+    ('students'), ('passport_versions'), ('skill_entries'), ('source_records'), ('skills'),
+    ('admin_audit')
   ) as t(name)
   where to_regclass('public.' || t.name) is null
   union all

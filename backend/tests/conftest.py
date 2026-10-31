@@ -4,6 +4,7 @@ from collections.abc import Iterator
 import pytest
 
 import passport_api.anchoring as anchoring
+import passport_api.audit as audit
 import passport_api.auth as auth
 from passport_api.cache import clear_all_caches
 from passport_api.db import reset_client
@@ -28,6 +29,7 @@ def isolated_settings(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     limits.reset()
     clear_all_caches()
     reset_client()
+    audit.memory_store.clear()
     yield
     auth.clear_jwks_cache()
     limits.reset()

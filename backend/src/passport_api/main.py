@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -58,3 +59,11 @@ app.include_router(flags_admin_router)
 def handle_api_error(_request: Request, exc: APIError) -> JSONResponse:
     body = ErrorBody(code=exc.code)
     return JSONResponse(status_code=exc.status_code, content=body.model_dump(), headers=exc.headers)
+
+
+@app.exception_handler(RequestValidationError)
+def handle_invalid_request(_request: Request, _exc: RequestValidationError) -> JSONResponse:
+    """Malformed input gets the same `{code}` body as every other error. FastAPI's default
+    answer lists each field and echoes the value that was sent, which the app never needs."""
+    body = ErrorBody(code="invalid_request")
+    return JSONResponse(status_code=422, content=body.model_dump())

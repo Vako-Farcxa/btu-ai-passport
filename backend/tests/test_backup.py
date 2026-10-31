@@ -15,6 +15,7 @@ import pytest
 
 import passport_api.backup as backup
 from passport_api.backup import (
+    ADDED_LATER_TABLES,
     SKIPPED_TABLES,
     TABLES,
     BackupError,
@@ -257,6 +258,23 @@ def test_restore_upserts_parents_before_children_in_batches(
     for table in TABLES:
         sent = [row for t, batch, _ in target.posts if t == table for row in batch]
         assert sent == source.data[table]  # exactly what was exported, Georgian text included
+
+
+def test_restoring_an_older_backup_skips_tables_added_later(tmp_path: Path) -> None:
+    export_database(tmp_path, URL, KEY, client=FakeApi(_data()).client())
+    for table in ADDED_LATER_TABLES:
+        (tmp_path / "database" / f"{table}.jsonl").unlink()
+    target = FakeApi({})
+    restored = restore_database(tmp_path, URL, KEY, client=target.client())
+    assert set(restored) == {t for t in TABLES if t not in ADDED_LATER_TABLES}
+    assert not {table for table, _, _ in target.posts} & set(ADDED_LATER_TABLES)
+
+
+def test_a_missing_file_for_any_other_table_still_stops_the_restore(tmp_path: Path) -> None:
+    export_database(tmp_path, URL, KEY, client=FakeApi(_data()).client())
+    (tmp_path / "database" / "students.jsonl").unlink()
+    with pytest.raises(BackupError, match="table students: file missing"):
+        restore_database(tmp_path, URL, KEY, client=FakeApi({}).client())
 
 
 def test_restore_can_be_limited_to_some_tables(tmp_path: Path) -> None:

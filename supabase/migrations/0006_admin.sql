@@ -1,4 +1,4 @@
--- Migration 0005: Admin panel support
+-- Migration 0006: Admin panel support
 -- Adds the admin_users allow-list and extends the students table with
 -- admin_managed + deleted_at columns required by the admin panel.
 

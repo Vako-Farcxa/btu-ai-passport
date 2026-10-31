@@ -2,7 +2,7 @@
 
 ## Layout
 - `frontend/`: Next.js (App Router, TypeScript strict), Tailwind, shadcn/ui, GSAP, Supabase auth. Deployed on Vercel.
-- `backend/`: FastAPI (Python 3.12, uv). Google Sheets sync (gspread), PDF generation (pypdf + reportlab), Polygon Amoy anchoring (web3.py), Supabase (Postgres). Deployed on Railway/Render.
+- `backend/`: FastAPI (Python 3.12, uv). Google Sheets sync (gspread), PDF generation (pypdf + reportlab), Polygon Amoy anchoring (web3.py), Supabase (Postgres). Deployed on Render.
 - Specs live in `specs/` (spec-kit). Follow the current spec and plan; ask before deviating.
 
 ## Workflow

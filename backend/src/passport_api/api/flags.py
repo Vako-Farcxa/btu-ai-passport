@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, Header, Query
 
 from passport_api.api.admin import ADMIN_DEPENDENCIES, _admin_guard
 from passport_api.api.me import ensure_not_archived, get_store, require_active_student
+from passport_api.audit import record_admin_action
 from passport_api.auth import email_from_authorization
 from passport_api.errors import APIError
 from passport_api.flags import (
@@ -181,4 +182,11 @@ def update_flag(
     )
     if updated is None:
         raise APIError(404, "flag_not_found")
+    record_admin_action(
+        admin_email,
+        f"flag.{body.status}",
+        target_type="flag",
+        target=flag_id,
+        detail={"passport_id": updated.passport_id, "version": updated.version},
+    )
     return _admin_view(updated)
