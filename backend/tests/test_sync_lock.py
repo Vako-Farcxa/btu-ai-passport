@@ -149,11 +149,12 @@ def test_unexpected_error_marks_only_that_student(monkeypatch: pytest.MonkeyPatc
 def test_supabase_student_lookup_includes_admin_managed_students() -> None:
     with patch("passport_api.sync.get_supabase") as db:
         query = db.return_value.table.return_value.select.return_value
-        query.is_.return_value.execute.return_value.data = [
+        query.execute.return_value.data = [
             {
                 "email": "luka@btu.edu.ge",
                 "full_name": "Luka",
                 "passport_id": "BTU-J63ZVDGDK4",
+                "deleted_at": None,
                 "passport_versions": [
                     {"version_number": 1, "skill_fingerprint": "f", "holder_name": "Luka"}
                 ],
@@ -161,6 +162,75 @@ def test_supabase_student_lookup_includes_admin_managed_students() -> None:
         ]
         states = SupabaseSyncStore().current_students()
         assert list(states) == ["luka@btu.edu.ge"]
-        # Only archived students are left out. admin_managed is not a filter any more.
+        assert states["luka@btu.edu.ge"].archived is False
+        # admin_managed is not a filter, and archived students are no longer filtered out
+        # either: they are returned flagged, so the sync can refuse them by name.
         query.eq.assert_not_called()
-        query.is_.assert_called_once_with("deleted_at", "null")
+        query.is_.assert_not_called()
+
+
+def test_supabase_student_lookup_flags_archived_students() -> None:
+    with patch("passport_api.sync.get_supabase") as db:
+        query = db.return_value.table.return_value.select.return_value
+        query.execute.return_value.data = [
+            {
+                "email": "gone@btu.edu.ge",
+                "full_name": "Gone Student",
+                "passport_id": "BTU-GONE000001",
+                "deleted_at": "2026-10-30T10:00:00+00:00",
+                "passport_versions": [
+                    {"version_number": 2, "skill_fingerprint": "f", "holder_name": "Gone"}
+                ],
+            },
+            {
+                "email": "novers@btu.edu.ge",
+                "full_name": "No Versions",
+                "passport_id": "BTU-NOVERS0001",
+                "deleted_at": "2026-10-30T10:00:00+00:00",
+                "passport_versions": [],
+            },
+            {
+                "email": "empty@btu.edu.ge",
+                "full_name": "Active Without Versions",
+                "passport_id": "BTU-EMPTY00001",
+                "deleted_at": None,
+                "passport_versions": [],
+            },
+        ]
+        states = SupabaseSyncStore().current_students()
+    assert states["gone@btu.edu.ge"].archived is True
+    assert states["gone@btu.edu.ge"].latest_version == 2
+    assert states["novers@btu.edu.ge"].archived is True
+    assert states["novers@btu.edu.ge"].latest_version == 0
+    # Unchanged behaviour for an active student with no version yet.
+    assert "empty@btu.edu.ge" not in states
+
+
+def test_sync_refuses_new_versions_for_an_archived_student() -> None:
+    store = MemorySyncStore()
+    result = run_sync(store, FakeSheet([ROW]))
+    assert result.status == "completed"
+    assert len(store.versions) == 1
+    store.students[0].archived = True
+    changed = {**ROW, "skill": "Prompting"}
+    sheet = FakeSheet([ROW, changed])
+    result = run_sync(store, sheet)
+    assert result.status == "completed"
+    assert result.versions_created == 0
+    assert len(store.versions) == 1
+    outcomes = sheet.writes[0]
+    assert {(o.status, o.error) for o in outcomes} == {("FAILED", "student_archived")}
+    assert all(o.passport_id == store.students[0].passport_id for o in outcomes)
+
+
+def test_restoring_an_archived_student_lets_the_sync_issue_versions_again() -> None:
+    store = MemorySyncStore()
+    run_sync(store, FakeSheet([ROW]))
+    store.students[0].archived = True
+    changed = {**ROW, "skill": "Prompting"}
+    run_sync(store, FakeSheet([ROW, changed]))
+    assert len(store.versions) == 1
+    store.students[0].archived = False
+    result = run_sync(store, FakeSheet([ROW, changed]))
+    assert result.versions_created == 1
+    assert len(store.versions) == 2

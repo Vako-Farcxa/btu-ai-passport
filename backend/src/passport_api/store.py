@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Literal, Protocol
 
 from passport_api.schemas import Skill
@@ -20,6 +21,21 @@ class StoredVersion:
     skills: tuple[Skill, ...]
     pdf_en_path: str | None = None
     pdf_ka_path: str | None = None
+    # When an admin revoked this version, or None.
+    version_revoked_at: str | None = None
+    # When the student was archived, or None. Archiving revokes every version they hold.
+    student_archived_at: str | None = None
+
+    @property
+    def revoked_at(self) -> str | None:
+        """The earliest of the two dates, or None when the version is in good standing."""
+        dates = [d for d in (self.version_revoked_at, self.student_archived_at) if d]
+        return min(dates, key=_sort_key) if dates else None
+
+
+def _sort_key(value: str) -> datetime:
+    moment = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    return moment if moment.tzinfo else moment.replace(tzinfo=UTC)
 
 
 @dataclass(frozen=True)

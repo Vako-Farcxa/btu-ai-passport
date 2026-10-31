@@ -1,11 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
 
+import { messages } from '@/i18n/messages'
 import { verifyResultSchema } from '@/lib/api/types'
 import {
   formatIssuedDate,
   labelsFor,
   newerVersionNotice,
   presentSkills,
+  revokedNotice,
   submitDecision,
 } from '@/lib/api/verify'
 
@@ -98,5 +100,40 @@ describe('newer version notice', () => {
     })
     expect(newerVersionNotice(valid, 'en')).toBeNull()
     expect(newerVersionNotice({ outcome: 'not_found' }, 'en')).toBeNull()
+  })
+})
+
+describe('revoked notice', () => {
+  it('is null for every other outcome', () => {
+    expect(revokedNotice({ outcome: 'error' }, 'en')).toBeNull()
+    expect(revokedNotice({ outcome: 'not_found' }, 'ka')).toBeNull()
+  })
+
+  it('names the date, in both languages', () => {
+    const result = verifyResultSchema.parse({
+      outcome: 'revoked',
+      revoked_at: '2026-10-30T10:00:00+00:00',
+    })
+    expect(revokedNotice(result, 'en')).toContain('30 Oct 2026')
+    expect(revokedNotice(result, 'ka')).toContain('30 ოქტ. 2026')
+  })
+
+  it('falls back to a dateless sentence for a missing or broken date', () => {
+    for (const revoked_at of [undefined, null, 'not a date']) {
+      const result = verifyResultSchema.parse({
+        outcome: 'revoked',
+        revoked_at,
+      })
+      expect(revokedNotice(result, 'en')).toBe(messages.en.revokedNoticeNoDate)
+    }
+  })
+
+  it('has a distinct label from every other outcome', () => {
+    for (const locale of ['en', 'ka'] as const) {
+      const labels = ['valid', 'outdated', 'revoked', 'not_found', 'error'].map(
+        (code) => labelsFor(code as 'valid', locale),
+      )
+      expect(new Set(labels).size).toBe(5)
+    }
   })
 })

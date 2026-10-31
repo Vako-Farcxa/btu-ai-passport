@@ -3,7 +3,13 @@
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import React, { Suspense, useEffect, useState } from 'react'
-import { fetchAdminStudent, type AdminStudentDetail } from '@/lib/api/admin'
+import {
+  fetchAdminStudent,
+  restoreAdminStudent,
+  revokeAdminVersion,
+  unrevokeAdminVersion,
+  type AdminStudentDetail,
+} from '@/lib/api/admin'
 import { explorerTxUrlFor } from '@/lib/explorer'
 import { shareLinkFor } from '@/lib/share'
 
@@ -15,6 +21,23 @@ function StudentDetailContent() {
   const [student, setStudent] = useState<AdminStudentDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [reloads, setReloads] = useState(0)
+
+  async function act(question: string, run: () => Promise<void>) {
+    if (busy || !confirm(question)) return
+    setBusy(true)
+    setActionError(null)
+    try {
+      await run()
+      setReloads((count) => count + 1)
+    } catch (err: unknown) {
+      setActionError(err instanceof Error ? err.message : 'Action failed')
+    } finally {
+      setBusy(false)
+    }
+  }
 
   useEffect(() => {
     if (!passportId) return
@@ -44,7 +67,7 @@ function StudentDetailContent() {
     return () => {
       ignore = true
     }
-  }, [passportId])
+  }, [passportId, reloads])
 
   if (loading) {
     return (
@@ -151,6 +174,42 @@ function StudentDetailContent() {
         )}
       </div>
 
+      {student.deleted_at && (
+        <div
+          role="status"
+          data-testid="archived-banner"
+          className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 text-xs flex items-center justify-between gap-3"
+        >
+          <div>
+            <strong>This student is archived.</strong> Since{' '}
+            {new Date(student.deleted_at).toLocaleDateString()} every code below
+            verifies as Revoked, they cannot open their passport or download
+            PDFs, and the sync will not add new versions.
+          </div>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() =>
+              void act(
+                `Restore ${student.full_name}? Their codes will verify as valid again and they can open their passport.`,
+                () => restoreAdminStudent(student.passport_id),
+              )
+            }
+            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white rounded-lg text-xs font-semibold transition-colors shrink-0"
+          >
+            Restore student
+          </button>
+        </div>
+      )}
+      {actionError && (
+        <div
+          role="alert"
+          className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs"
+        >
+          {actionError}
+        </div>
+      )}
+
       {/* Where skills come from */}
       <div className="p-4 rounded-xl bg-blue-50/80 border border-blue-200/80 text-blue-900 text-xs flex items-center justify-between gap-3">
         <div>
@@ -209,6 +268,11 @@ function StudentDetailContent() {
                   >
                     Anchor: {ver.anchor_status}
                   </span>
+                  {ver.revoked_at && (
+                    <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                      REVOKED {new Date(ver.revoked_at).toLocaleDateString()}
+                    </span>
+                  )}
                 </div>
 
                 <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500 font-mono">
@@ -224,6 +288,26 @@ function StudentDetailContent() {
                   >
                     Verify ↗
                   </Link>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() =>
+                      void act(
+                        ver.revoked_at
+                          ? `Restore version ${ver.version_number}? Its code will verify normally again.`
+                          : `Revoke version ${ver.version_number}? Its code will show Revoked and its PDF will be refused. You can restore it later.`,
+                        () =>
+                          ver.revoked_at
+                            ? unrevokeAdminVersion(ver.id)
+                            : revokeAdminVersion(ver.id),
+                      )
+                    }
+                    className={`font-sans font-semibold hover:underline disabled:opacity-60 ${
+                      ver.revoked_at ? 'text-emerald-700' : 'text-rose-600'
+                    }`}
+                  >
+                    {ver.revoked_at ? 'Restore version' : 'Revoke version'}
+                  </button>
                   {ver.tx_hash && explorerTxUrlFor(ver.tx_hash) && (
                     <>
                       <span>•</span>

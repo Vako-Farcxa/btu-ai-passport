@@ -1,10 +1,13 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
   adminErrorMessage,
   describeSyncResult,
   awardSyncNotice,
   parseAwardStudents,
+  restoreAdminStudent,
+  revokeAdminVersion,
+  unrevokeAdminVersion,
   type AdminAwardResponse,
 } from '@/lib/api/admin'
 
@@ -100,5 +103,63 @@ describe('describeSyncResult', () => {
     })
     expect(notice.kind).toBe('error')
     expect(notice.text).toContain('sync_failed')
+  })
+})
+
+vi.mock('@/lib/supabase/client', () => ({ readAccessToken: async () => 'tok' }))
+
+describe('revocation calls', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('posts to the restore, revoke and unrevoke routes with the admin token', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 204 })
+    vi.stubGlobal('fetch', fetchMock)
+    await restoreAdminStudent('BTU-ABC')
+    await revokeAdminVersion('v-1')
+    await unrevokeAdminVersion('v-1')
+    const calls = fetchMock.mock.calls.map(([url, init]) => [
+      url,
+      init.method,
+      init.headers.Authorization,
+    ])
+    expect(calls).toEqual([
+      [
+        'http://localhost:8000/admin/students/BTU-ABC/restore',
+        'POST',
+        'Bearer tok',
+      ],
+      ['http://localhost:8000/admin/versions/v-1/revoke', 'POST', 'Bearer tok'],
+      [
+        'http://localhost:8000/admin/versions/v-1/unrevoke',
+        'POST',
+        'Bearer tok',
+      ],
+    ])
+  })
+
+  it('turns an API error code into a plain sentence', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 409,
+        json: async () => ({ code: 'version_already_revoked' }),
+      }),
+    )
+    await expect(revokeAdminVersion('v-1')).rejects.toThrow(
+      'This version is already revoked.',
+    )
+  })
+
+  it('explains the new error codes', () => {
+    for (const code of [
+      'student_archived',
+      'student_not_deleted',
+      'version_already_revoked',
+      'version_not_revoked',
+      'version_not_found',
+    ]) {
+      expect(adminErrorMessage(code)).not.toBe(code)
+    }
   })
 })

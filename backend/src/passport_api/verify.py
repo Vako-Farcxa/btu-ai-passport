@@ -37,6 +37,16 @@ class VerifyNotFound(BaseModel):
     outcome: str
 
 
+class VerifyRevoked(BaseModel):
+    """Revoked result. Deliberately carries no name and no skills: a revoked record may have
+    been issued to the wrong person or by mistake, so it is not shown any more."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    outcome: str
+    revoked_at: str
+
+
 class VerifyError(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -45,12 +55,16 @@ class VerifyError(BaseModel):
 
 def verify_code(
     store: VersionStore, raw_code: str
-) -> VerifyFound | VerifyOutdated | VerifyNotFound | VerifyError:
+) -> VerifyFound | VerifyOutdated | VerifyRevoked | VerifyNotFound | VerifyError:
     if not raw_code.strip():
         raise APIError(422, "code_required")
     found = store.find(raw_code)
     if found is None:
         return VerifyNotFound(outcome="not_found")
+    # Revocation outranks everything else, including a pending or failed anchor.
+    revoked_at = found.revoked_at
+    if revoked_at is not None:
+        return VerifyRevoked(outcome="revoked", revoked_at=revoked_at)
     if found.anchor_status != "confirmed" or not found.tx_hash:
         return VerifyError(outcome="error")
     latest = store.latest_version(found.passport_id)

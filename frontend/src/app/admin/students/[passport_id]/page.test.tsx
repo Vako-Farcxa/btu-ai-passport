@@ -1,4 +1,10 @@
-import { cleanup, render, screen } from '@testing-library/react'
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import * as api from '@/lib/api/admin'
@@ -11,7 +17,13 @@ vi.mock('next/navigation', () => ({
 vi.mock('@/lib/api/admin', async () => {
   const actual =
     await vi.importActual<typeof import('@/lib/api/admin')>('@/lib/api/admin')
-  return { ...actual, fetchAdminStudent: vi.fn() }
+  return {
+    ...actual,
+    fetchAdminStudent: vi.fn(),
+    restoreAdminStudent: vi.fn(),
+    revokeAdminVersion: vi.fn(),
+    unrevokeAdminVersion: vi.fn(),
+  }
 })
 
 const version = (n: number, code: string) => ({
@@ -22,6 +34,7 @@ const version = (n: number, code: string) => ({
   anchor_status: 'confirmed',
   tx_hash: null,
   issued_at: '2026-10-28T10:00:00Z',
+  revoked_at: null as string | null,
   skills: [],
 })
 
@@ -50,5 +63,104 @@ describe('admin student detail verify links', () => {
     expect(hrefs).toContain('/verify?code=AAAA-BBBB-CCCC-DDDD')
     expect(hrefs).toContain('/verify?code=EEEE-FFFF-GGGG-HHHH')
     expect(hrefs).not.toContain('/verify')
+  })
+})
+
+describe('admin student detail revocation controls', () => {
+  const detail = (
+    extra: object,
+    versions = [version(1, 'AAAA-BBBB-CCCC-DDDD')],
+  ) =>
+    ({
+      email: 'nino@btu.edu.ge',
+      full_name: 'Nino Beridze',
+      passport_id: 'BTU-ABC',
+      admin_managed: false,
+      deleted_at: null,
+      versions,
+      ...extra,
+    }) as never
+
+  afterEach(() => {
+    cleanup()
+    vi.restoreAllMocks()
+    vi.clearAllMocks()
+  })
+
+  it('shows no archived banner for an active student', async () => {
+    vi.mocked(api.fetchAdminStudent).mockResolvedValue(detail({}))
+    render(<AdminStudentDetailPage />)
+    await screen.findByText(/Verify Code/)
+    expect(screen.queryByTestId('archived-banner')).toBeNull()
+  })
+
+  it('marks an archived student and restores them after a confirm', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    vi.mocked(api.fetchAdminStudent)
+      .mockResolvedValueOnce(detail({ deleted_at: '2026-10-30T10:00:00Z' }))
+      .mockResolvedValue(detail({}))
+    vi.mocked(api.restoreAdminStudent).mockResolvedValue(undefined)
+    render(<AdminStudentDetailPage />)
+    const banner = await screen.findByTestId('archived-banner')
+    expect(banner).toHaveTextContent(/Revoked/)
+    fireEvent.click(screen.getByRole('button', { name: 'Restore student' }))
+    await waitFor(() =>
+      expect(api.restoreAdminStudent).toHaveBeenCalledWith('BTU-ABC'),
+    )
+    await waitFor(() =>
+      expect(screen.queryByTestId('archived-banner')).toBeNull(),
+    )
+  })
+
+  it('does nothing when the admin cancels the confirm', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(false)
+    vi.mocked(api.fetchAdminStudent).mockResolvedValue(
+      detail({ deleted_at: '2026-10-30T10:00:00Z' }),
+    )
+    render(<AdminStudentDetailPage />)
+    await screen.findByTestId('archived-banner')
+    fireEvent.click(screen.getByRole('button', { name: 'Restore student' }))
+    expect(api.restoreAdminStudent).not.toHaveBeenCalled()
+  })
+
+  it('revokes a version and shows a revoked version with a restore button', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    vi.mocked(api.fetchAdminStudent)
+      .mockResolvedValueOnce(detail({}))
+      .mockResolvedValue(
+        detail({}, [
+          {
+            ...version(1, 'AAAA-BBBB-CCCC-DDDD'),
+            revoked_at: '2026-10-30T10:00:00Z',
+          },
+        ]),
+      )
+    vi.mocked(api.revokeAdminVersion).mockResolvedValue(undefined)
+    render(<AdminStudentDetailPage />)
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Revoke version' }),
+    )
+    await waitFor(() =>
+      expect(api.revokeAdminVersion).toHaveBeenCalledWith('v1'),
+    )
+    expect(await screen.findByText(/^REVOKED/)).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Restore version' }),
+    ).toBeInTheDocument()
+  })
+
+  it('shows the error when the action fails', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    vi.mocked(api.fetchAdminStudent).mockResolvedValue(detail({}))
+    vi.mocked(api.revokeAdminVersion).mockRejectedValue(
+      new Error('This version is already revoked.'),
+    )
+    render(<AdminStudentDetailPage />)
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Revoke version' }),
+    )
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'This version is already revoked.',
+    )
   })
 })

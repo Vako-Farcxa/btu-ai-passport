@@ -674,6 +674,43 @@ button:disabled {
   color: var(--ink-900);
 }
 
+.outcome-revoked .valid-icon {
+  background: #7a2430;
+}
+
+.outcome-revoked .certificate-head strong {
+  color: #7a2430;
+}
+
+.revoked-notice {
+  margin: 14px 0 0;
+  padding: 10px 14px;
+  border-left: 3px solid #7a2430;
+  background: rgba(122, 36, 48, 0.08);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink-900);
+}
+
+.revoked-badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border: 1px solid #e2c2c2;
+  border-radius: 999px;
+  color: #7a2430;
+  background: rgba(122, 36, 48, 0.08);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.revoked-note {
+  margin: 10px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #7a2430;
+}
+
 .outcome-error .valid-icon {
   background: #7a2430;
 }

@@ -6,6 +6,7 @@ import { AddStudentDialog } from '@/components/admin/add-student-dialog'
 import {
   fetchAdminStudents,
   deleteAdminStudent,
+  restoreAdminStudent,
   type AdminStudent,
 } from '@/lib/api/admin'
 
@@ -93,6 +94,22 @@ export default function AdminStudentsPage() {
       await loadStudents()
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : 'Failed to delete student')
+    }
+  }
+
+  const handleRestore = async (passportId: string, name: string) => {
+    if (
+      !confirm(
+        `Restore student ${name}? Their codes will verify as valid again and they can open their passport.`,
+      )
+    ) {
+      return
+    }
+    try {
+      await restoreAdminStudent(passportId)
+      await loadStudents()
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Failed to restore student')
     }
   }
 
@@ -263,6 +280,11 @@ export default function AdminStudentsPage() {
                           →
                         </span>
                       </Link>
+                      {student.deleted_at && (
+                        <span className="mt-1 inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold bg-rose-50 text-rose-700 border border-rose-200">
+                          Archived
+                        </span>
+                      )}
                     </td>
                     <td className="px-6 py-4 text-xs font-mono text-slate-600">
                       {student.email}
@@ -306,6 +328,22 @@ export default function AdminStudentsPage() {
                       >
                         View Details
                       </Link>
+                      {student.deleted_at && (
+                        <>
+                          <span className="text-slate-300">|</span>
+                          <button
+                            onClick={() =>
+                              handleRestore(
+                                student.passport_id,
+                                student.full_name,
+                              )
+                            }
+                            className="text-emerald-700 hover:text-emerald-900 font-medium transition-colors"
+                          >
+                            Restore
+                          </button>
+                        </>
+                      )}
                       {!student.deleted_at && (
                         <>
                           <span className="text-slate-300">|</span>

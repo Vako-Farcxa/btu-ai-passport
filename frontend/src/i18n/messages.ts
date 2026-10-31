@@ -1,5 +1,5 @@
 export type Locale = 'en' | 'ka'
-export type Outcome = 'valid' | 'outdated' | 'not_found' | 'error'
+export type Outcome = 'valid' | 'outdated' | 'revoked' | 'not_found' | 'error'
 export type BadgeCode = 'BDG-AI-001' | 'BDG-AI-002' | 'BDG-AI-003'
 type BadgeLevel = { title: string; text: string }
 
@@ -81,6 +81,13 @@ type Copy = {
   myFlagsTitle: string
   myFlagsEmpty: string
   newReply: string
+  revokedNotice: string
+  revokedNoticeNoDate: string
+  passportRevokedTitle: string
+  passportRevoked: string
+  versionRevokedBadge: string
+  versionRevokedNote: string
+  versionRevokedPdf: string
 }
 
 export const messages: Record<Locale, Copy> = {
@@ -100,6 +107,7 @@ export const messages: Record<Locale, Copy> = {
     outcomes: {
       valid: 'Valid',
       outdated: 'Outdated version',
+      revoked: 'Revoked',
       not_found: 'Not found',
       error: 'Error',
     },
@@ -189,6 +197,17 @@ export const messages: Record<Locale, Copy> = {
     myFlagsTitle: 'My flags',
     myFlagsEmpty: 'You have not flagged anything.',
     newReply: 'New reply',
+    revokedNotice:
+      'This passport version was revoked on {date}. It is no longer valid and must not be relied on.',
+    revokedNoticeNoDate:
+      'This passport version has been revoked. It is no longer valid and must not be relied on.',
+    passportRevokedTitle: 'Passport unavailable',
+    passportRevoked:
+      'This passport has been revoked by BTU, so it can no longer be viewed or downloaded. If you think this is a mistake, contact the BTU AI Skills team.',
+    versionRevokedBadge: 'Revoked',
+    versionRevokedNote:
+      'This version was revoked on {date}. Its PDF is no longer available.',
+    versionRevokedPdf: 'This version was revoked, so its PDF is not available.',
   },
   ka: {
     title: 'პასპორტის შემოწმება',
@@ -206,6 +225,7 @@ export const messages: Record<Locale, Copy> = {
     outcomes: {
       valid: 'ნამდვილია',
       outdated: 'მოძველებული ვერსია',
+      revoked: 'გაუქმებულია',
       not_found: 'ვერ მოიძებნა',
       error: 'შეცდომა',
     },
@@ -296,6 +316,17 @@ export const messages: Record<Locale, Copy> = {
     myFlagsTitle: 'ჩემი შეტყობინებები',
     myFlagsEmpty: 'ჯერ არაფერი გაგიგზავნიათ.',
     newReply: 'ახალი პასუხი',
+    revokedNotice:
+      'ეს პასპორტის ვერსია გაუქმდა {date}. ის აღარ არის ნამდვილი და მასზე დაყრდნობა არ შეიძლება.',
+    revokedNoticeNoDate:
+      'ეს პასპორტის ვერსია გაუქმებულია. ის აღარ არის ნამდვილი და მასზე დაყრდნობა არ შეიძლება.',
+    passportRevokedTitle: 'პასპორტი მიუწვდომელია',
+    passportRevoked:
+      'ეს პასპორტი BTU-მ გააუქმა, ამიტომ მისი ნახვა და გადმოწერა აღარ შეიძლება. თუ ფიქრობთ, რომ ეს შეცდომაა, დაუკავშირდით BTU-ის AI უნარების გუნდს.',
+    versionRevokedBadge: 'გაუქმებულია',
+    versionRevokedNote:
+      'ეს ვერსია გაუქმდა {date}. მისი PDF აღარ არის ხელმისაწვდომი.',
+    versionRevokedPdf: 'ეს ვერსია გაუქმებულია, ამიტომ მისი PDF მიუწვდომელია.',
   },
 }
 

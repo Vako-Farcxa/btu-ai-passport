@@ -15,9 +15,9 @@ class SupabaseStore:
             .table("passport_versions")
             .select(
                 "student_id, version_number, holder_name, verification_code, "
-                "anchor_status, tx_hash, issued_at, pdf_en_path, pdf_ka_path, "
+                "anchor_status, tx_hash, issued_at, pdf_en_path, pdf_ka_path, revoked_at, "
                 "skill_entries(skill, badge, awarded_on, description, position), "
-                "students(email, full_name, passport_id)"
+                "students(email, full_name, passport_id, deleted_at)"
             )
             .eq("verification_code", normalized)
             .limit(1)
@@ -68,9 +68,9 @@ class SupabaseStore:
             get_supabase()
             .table("students")
             .select(
-                "email, full_name, passport_id, "
+                "email, full_name, passport_id, deleted_at, "
                 "passport_versions(version_number, holder_name, verification_code, "
-                "anchor_status, tx_hash, issued_at, pdf_en_path, pdf_ka_path, "
+                "anchor_status, tx_hash, issued_at, pdf_en_path, pdf_ka_path, revoked_at, "
                 "skill_entries(skill, badge, awarded_on, description, position))"
             )
             .eq("email", email.strip().lower())
@@ -93,6 +93,7 @@ class SupabaseStore:
                 "email": student.get("email"),
                 "full_name": student.get("full_name"),
                 "passport_id": student.get("passport_id"),
+                "deleted_at": student.get("deleted_at"),
             }
             versions.append(_version_from_row(row))
         return tuple(versions)
@@ -123,6 +124,8 @@ def _version_from_row(row: dict[str, object]) -> StoredVersion:
     issued_at = row.get("issued_at")
     pdf_en_path = row.get("pdf_en_path")
     pdf_ka_path = row.get("pdf_ka_path")
+    revoked_at = row.get("revoked_at")
+    archived_at = student.get("deleted_at")
     return StoredVersion(
         passport_id=str(student["passport_id"]),
         email=str(student["email"]),
@@ -136,4 +139,6 @@ def _version_from_row(row: dict[str, object]) -> StoredVersion:
         skills=skills,
         pdf_en_path=None if pdf_en_path is None else str(pdf_en_path),
         pdf_ka_path=None if pdf_ka_path is None else str(pdf_ka_path),
+        version_revoked_at=None if revoked_at is None else str(revoked_at),
+        student_archived_at=None if archived_at is None else str(archived_at),
     )

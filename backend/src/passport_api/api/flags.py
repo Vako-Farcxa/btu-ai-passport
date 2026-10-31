@@ -9,7 +9,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Header, Query
 
 from passport_api.api.admin import _admin_guard
-from passport_api.api.me import get_store
+from passport_api.api.me import ensure_not_archived, get_store, require_active_student
 from passport_api.auth import email_from_authorization
 from passport_api.errors import APIError
 from passport_api.flags import (
@@ -93,10 +93,9 @@ def create_flag(
     comment = clean_comment(body.comment)
     if not comment_valid(comment):
         raise APIError(422, "invalid_comment")
-    own = next(
-        (item for item in get_store().versions_for_email(email) if item.version == body.version),
-        None,
-    )
+    versions = get_store().versions_for_email(email)
+    require_active_student(versions)
+    own = next((item for item in versions if item.version == body.version), None)
     if own is None:
         # Somebody else's version looks exactly like one that does not exist.
         raise APIError(404, "version_not_found")
@@ -120,6 +119,7 @@ def my_flags(
     flags: FlagStore = _store_dependency,
 ) -> StudentFlagList:
     email = email_from_authorization(authorization)
+    ensure_not_archived(email)
     return _student_list(flags.for_student(email))
 
 
@@ -130,6 +130,7 @@ def mark_my_flags_seen(
 ) -> StudentFlagList:
     """The student opened their flags: every admin reply so far counts as read."""
     email = email_from_authorization(authorization)
+    ensure_not_archived(email)
     flags.mark_seen(email, datetime.now(UTC))
     return _student_list(flags.for_student(email))
 

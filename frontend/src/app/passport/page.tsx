@@ -18,6 +18,7 @@ import {
   explainPassportError,
   orderedVersions,
   PassportRequestError,
+  revokedVersionNote,
 } from '@/lib/api/passport'
 import { flagForVersion } from '@/lib/api/flags'
 import { useMyFlags } from '@/lib/api/use-flags'
@@ -90,7 +91,16 @@ export default function PassportPage() {
           {copy.signInRequired}
         </p>
       ) : null}
-      {session.kind === 'error' ? (
+      {session.kind === 'error' && session.code === 'passport_revoked' ? (
+        <div className="empty-state" data-testid="passport-revoked">
+          <div className="empty-glyph" aria-hidden="true">
+            ✕
+          </div>
+          <h2>{copy.passportRevokedTitle}</h2>
+          <p role="alert">{copy.passportRevoked}</p>
+        </div>
+      ) : null}
+      {session.kind === 'error' && session.code !== 'passport_revoked' ? (
         <p className="page-alert" role="alert">
           {explainPassportError(session.code, locale)}
         </p>
@@ -142,6 +152,7 @@ export default function PassportPage() {
             {versions.map((version) => {
               const flag = flagForVersion(myFlags.flags, version.version)
               const txUrl = explorerTxUrl(version.anchor.tx_url)
+              const revoked = Boolean(version.revoked_at)
               return (
                 <li key={version.version} className="version-card">
                   <div className="version-head">
@@ -150,10 +161,16 @@ export default function PassportPage() {
                         {copy.versionLabel} {version.version}
                         {version.is_current ? ` · ${copy.currentVersion}` : ''}
                       </h3>
-                      <ShareLinkButton
-                        code={version.verification_code}
-                        locale={locale}
-                      />
+                      {revoked ? (
+                        <span className="revoked-badge">
+                          {copy.versionRevokedBadge}
+                        </span>
+                      ) : (
+                        <ShareLinkButton
+                          code={version.verification_code}
+                          locale={locale}
+                        />
+                      )}
                     </div>
                     {flag ? (
                       <FlagBadge
@@ -164,23 +181,30 @@ export default function PassportPage() {
                     ) : null}
                   </div>
                   <VersionFacts locale={locale} version={version} />
+                  {revoked ? (
+                    <p className="revoked-note" data-testid="version-revoked">
+                      {revokedVersionNote(version, locale)}
+                    </p>
+                  ) : null}
                   <div className="version-actions">
-                    <PrimaryButton
-                      type="button"
-                      tone="navy"
-                      disabled={downloading !== null}
-                      aria-busy={downloading === version.version}
-                      onClick={() => void onDownload(version.version)}
-                    >
-                      {downloading === version.version ? (
-                        <>
-                          <Spinner />
-                          {copy.preparingPdf}
-                        </>
-                      ) : (
-                        copy.downloadPdf
-                      )}
-                    </PrimaryButton>
+                    {revoked ? null : (
+                      <PrimaryButton
+                        type="button"
+                        tone="navy"
+                        disabled={downloading !== null}
+                        aria-busy={downloading === version.version}
+                        onClick={() => void onDownload(version.version)}
+                      >
+                        {downloading === version.version ? (
+                          <>
+                            <Spinner />
+                            {copy.preparingPdf}
+                          </>
+                        ) : (
+                          copy.downloadPdf
+                        )}
+                      </PrimaryButton>
+                    )}
                     {txUrl ? (
                       <a className="action-button" href={txUrl}>
                         {copy.transaction}
