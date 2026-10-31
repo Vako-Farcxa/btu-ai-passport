@@ -54,6 +54,8 @@ const ERRORS: Record<string, string> = {
     'The contract already holds different content for this code, so it can never be anchored here. Check the Sheet and re-issue the passport.',
   anchored_tx_unknown:
     'The hash is already on the chain, but its transaction could not be found. Look it up on Polygonscan.',
+  snapshot_mismatch:
+    'The skills stored for this version do not match its hash, so it was not sent to the chain. Ask a developer to check it.',
   wrong_chain: 'The configured RPC is not Polygon Amoy.',
   wrong_sender:
     'The configured wallet is not the contract issuer, so it cannot anchor.',

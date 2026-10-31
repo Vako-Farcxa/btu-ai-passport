@@ -1,3 +1,4 @@
+import copy
 import dataclasses
 import hashlib
 import json
@@ -12,7 +13,7 @@ from typing import Any, Protocol, cast
 import gspread
 from postgrest.exceptions import APIError
 
-from passport_api.anchoring import AnchorRecord, reconcile_anchors
+from passport_api.anchoring import SNAPSHOT_MISMATCH, AnchorRecord, reconcile_anchors
 from passport_api.chain import AnchorChain, chain_from_settings
 from passport_api.db import get_supabase
 from passport_api.fingerprint import (
@@ -93,6 +94,11 @@ STALE_LOCK_ERROR = "stale_lock"
 OPEN_ANCHOR = ("pending", "retrying", "failed")
 ANCHOR_LOCK_NAME = "reconciler"
 STUDENT_ARCHIVED = "student_archived"
+# Row error codes for a unit the database refused. See supabase/migrations/0011_atomic_sync.sql.
+SYNC_STALE = "sync_stale"
+_UNIT_STALE = "PS001"
+_UNIT_ARCHIVED = "PS002"
+_UNIT_MALFORMED = "PS003"
 
 SKILLS_TAB = "Skills"
 SKILLS_HEADER = ("skill_id", "name_en", "name_ka", "category", "description")
@@ -224,6 +230,9 @@ class VersionRecord:
     anchor_last_error: str | None = None
     anchor_next_attempt_at: str | None = None
     anchor_tx_hashes: list[str] = dataclasses.field(default_factory=list)
+    # Set when rows read from the database do not hash to the stored hashes (see
+    # snapshot_problem). The reconciler never sends such a version to the chain.
+    snapshot_error: str | None = None
 
 
 @dataclass(frozen=True)
@@ -258,6 +267,41 @@ class StudentState:
     archived: bool = False
 
 
+@dataclass(frozen=True)
+class StudentUnit:
+    """Everything one student's sync writes. The store commits it all or none of it.
+
+    `version` is None when the sheet matches the stored latest version: the unit then only
+    renames the student (when `rename`) and remembers the source rows.
+    """
+
+    email: str
+    passport_id: str
+    full_name: str
+    rename: bool
+    # Latest stored version number the unit was built on (0: none). A stale unit is refused.
+    expected_latest: int
+    version: VersionRecord | None
+    source_keys: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class UnitResult:
+    """What the store reports back after committing a unit: the rows as stored."""
+
+    passport_id: str
+    version_number: int | None
+    holder_name: str | None
+    created_student: bool
+    created_version: bool
+    # The stored skill snapshot of the version, in stored order. None when the unit had no version.
+    skills: tuple[Skill, ...] | None
+
+
+class SnapshotMismatchError(RuntimeError):
+    """The stored version does not hash to what was submitted. Never expected; never anchored."""
+
+
 @dataclass
 class _SkillFact:
     skill: str
@@ -290,15 +334,12 @@ class SyncStore(Protocol):
 
     def current_students(self) -> dict[str, StudentState]: ...
 
-    def save_student_name(self, email: str, full_name: str) -> None: ...
-
-    def insert_student(self, email: str, full_name: str, passport_id: str) -> None: ...
-
-    def insert_version(self, version: VersionRecord) -> None: ...
+    def commit_student_unit(self, unit: StudentUnit) -> UnitResult:
+        """Write the student, the new version with its skills and the source rows in ONE
+        transaction. Retrying a unit that already committed changes nothing."""
+        ...
 
     def upsert_skills(self, skills: list[CatalogSkill]) -> None: ...
-
-    def remember_source(self, record_key: str, email: str) -> None: ...
 
     def taken_passport_ids(self) -> set[str]: ...
 
@@ -478,8 +519,9 @@ class MemorySyncStore:
         for student in self.students:
             latest_version = latest.get(student.email)
             if latest_version is None:
-                if student.archived:
-                    states[student.email] = _archived_without_versions(student)
+                # No version yet: an archived student stays refused, an active one is healed
+                # by the next unit (it gets version 1).
+                states[student.email] = _without_versions(student)
                 continue
             states[student.email] = StudentState(
                 email=student.email,
@@ -492,31 +534,93 @@ class MemorySyncStore:
             )
         return states
 
-    def save_student_name(self, email: str, full_name: str) -> None:
-        for student in self.students:
-            if student.email == email:
-                student.full_name = full_name
-                return
-
     def insert_student(self, email: str, full_name: str, passport_id: str) -> None:
+        """Seed a bare student row (the shape of old admin-managed rows). Tests only."""
         if any(student.email == email for student in self.students):
             raise APIError({"code": _UNIQUE_VIOLATION, "message": "students_email_key"})
         self.students.append(
             StudentRecord(email=email, full_name=full_name, passport_id=passport_id)
         )
 
-    def insert_version(self, version: VersionRecord) -> None:
-        for skill in version.skills:
-            if skill.skill_id is not None and skill.skill_id not in self.skills:
-                raise RuntimeError("skill_not_in_catalog")
-        self.versions.append(version)
+    def commit_student_unit(self, unit: StudentUnit) -> UnitResult:
+        """Same rules as the sync_student_unit SQL function: all of the unit or none of it."""
+        before = (
+            copy.deepcopy(self.students),
+            list(self.versions),
+            dict(self._sources),
+        )
+        try:
+            return self._apply_unit(unit)
+        except BaseException:
+            self.students, self.versions, self._sources = before
+            raise
+
+    def _apply_unit(self, unit: StudentUnit) -> UnitResult:
+        student = next((s for s in self.students if s.email == unit.email), None)
+        version = unit.version
+        created_student = False
+        if student is None:
+            if version is None or unit.expected_latest != 0:
+                raise _unit_error(_UNIT_STALE, "sync_unit_stale")
+            if any(other.passport_id == unit.passport_id for other in self.students):
+                raise APIError({"code": _UNIQUE_VIOLATION, "message": "students_passport_id_key"})
+            student = StudentRecord(
+                email=unit.email, full_name=unit.full_name, passport_id=unit.passport_id
+            )
+            self.students.append(student)
+            created_student = True
+        else:
+            if student.archived:
+                raise _unit_error(_UNIT_ARCHIVED, "sync_unit_archived")
+            if student.passport_id != unit.passport_id:
+                raise _unit_error(_UNIT_STALE, "sync_unit_stale")
+            if unit.rename:
+                student.full_name = unit.full_name
+        owned = [v for v in self.versions if v.email == unit.email]
+        latest = max(owned, key=lambda v: v.version_number, default=None)
+        created_version = False
+        if version is not None:
+            if not version.skills:
+                raise _unit_error(_UNIT_MALFORMED, "sync_unit_malformed")
+            if latest is not None and latest.skill_fingerprint == version.skill_fingerprint:
+                if (
+                    latest.version_number != version.version_number
+                    or latest.content_hash != version.content_hash
+                ):
+                    raise _unit_error(_UNIT_STALE, "sync_unit_stale")
+            else:
+                if (latest.version_number if latest else 0) != unit.expected_latest:
+                    raise _unit_error(_UNIT_STALE, "sync_unit_stale")
+                if version.version_number != unit.expected_latest + 1:
+                    raise _unit_error(_UNIT_MALFORMED, "sync_unit_malformed")
+                for skill in version.skills:
+                    if skill.skill_id is not None and skill.skill_id not in self.skills:
+                        raise RuntimeError("skill_not_in_catalog")
+                # The stored copy is its own object, as a database row would be.
+                latest = dataclasses.replace(
+                    version,
+                    skills=tuple(version.skills),
+                    anchor_tx_hashes=list(version.anchor_tx_hashes),
+                )
+                self.versions.append(latest)
+                created_version = True
+        self._remember_sources(unit)
+        return UnitResult(
+            passport_id=student.passport_id,
+            version_number=None if latest is None else latest.version_number,
+            holder_name=None if latest is None else latest.holder_name,
+            created_student=created_student,
+            created_version=created_version,
+            skills=latest.skills if version is not None and latest is not None else None,
+        )
+
+    def _remember_sources(self, unit: StudentUnit) -> None:
+        for key in unit.source_keys:
+            self._sources.setdefault(key, unit.email)
 
     def upsert_skills(self, skills: list[CatalogSkill]) -> None:
         for skill in skills:
             self.skills[skill.id] = skill
-
-    def remember_source(self, record_key: str, email: str) -> None:
-        self._sources[record_key] = email
 
     def taken_passport_ids(self) -> set[str]:
         return {student.passport_id for student in self.students}
@@ -649,16 +753,17 @@ class SupabaseSyncStore:
             archived = row.get("deleted_at") is not None
             versions = _nested_rows(row.get("passport_versions"))
             if not versions:
-                if archived:
-                    states[str(row["email"])] = StudentState(
-                        email=str(row["email"]),
-                        full_name=str(row["full_name"]),
-                        passport_id=str(row["passport_id"]),
-                        latest_version=0,
-                        latest_fingerprint="",
-                        holder_name=str(row["full_name"]),
-                        archived=True,
-                    )
+                # No version yet: an archived student stays refused, an active one is healed
+                # by the next unit (it gets version 1) instead of failing with a conflict.
+                states[str(row["email"])] = StudentState(
+                    email=str(row["email"]),
+                    full_name=str(row["full_name"]),
+                    passport_id=str(row["passport_id"]),
+                    latest_version=0,
+                    latest_fingerprint="",
+                    holder_name=str(row["full_name"]),
+                    archived=archived,
+                )
                 continue
             latest = max(versions, key=lambda item: _as_int(item["version_number"]))
             email = str(row["email"])
@@ -673,54 +778,13 @@ class SupabaseSyncStore:
             )
         return states
 
-    def save_student_name(self, email: str, full_name: str) -> None:
-        get_supabase().table("students").update({"full_name": full_name, "updated_at": _now()}).eq(
-            "email", email
-        ).execute()
-
-    def insert_student(self, email: str, full_name: str, passport_id: str) -> None:
-        get_supabase().table("students").insert(
-            {"email": email, "full_name": full_name, "passport_id": passport_id}
-        ).execute()
-
-    def insert_version(self, version: VersionRecord) -> None:
-        student_id = self._student_id(version.email)
+    def commit_student_unit(self, unit: StudentUnit) -> UnitResult:
+        # One RPC is one Postgres transaction: the function either stores the student, the
+        # version, its skills and the source rows, or none of them.
         response = (
-            get_supabase()
-            .table("passport_versions")
-            .insert(
-                {
-                    "student_id": student_id,
-                    "version_number": version.version_number,
-                    "holder_name": version.holder_name,
-                    "verification_code": version.verification_code,
-                    "verification_id_hash": version.verification_id_hash,
-                    "skill_fingerprint": version.skill_fingerprint,
-                    "content_hash": version.content_hash,
-                    "anchor_status": "pending",
-                    "issued_at": version.issued_at,
-                }
-            )
-            .execute()
+            get_supabase().rpc("sync_student_unit", {"p_unit": _unit_payload(unit)}).execute()
         )
-        rows = _table_rows(response.data)
-        if not rows:
-            raise RuntimeError("version_not_created")
-        version_id = str(rows[0]["id"])
-        skill_rows = [
-            {
-                "version_id": version_id,
-                "skill": skill.skill,
-                "badge": skill.badge,
-                "awarded_on": skill.awarded_on,
-                "description": skill.description,
-                "skill_id": skill.skill_id,
-                "position": position,
-            }
-            for position, skill in enumerate(version.skills, start=1)
-        ]
-        if skill_rows:
-            get_supabase().table("skill_entries").insert(skill_rows).execute()
+        return _unit_result(response.data)
 
     def upsert_skills(self, skills: list[CatalogSkill]) -> None:
         # name_ka is sent only for skills that carry one (the Skills tab). Older databases
@@ -733,13 +797,6 @@ class SupabaseSyncStore:
             get_supabase().table("skills").upsert(
                 [_skill_row(skill, with_ka) for skill in batch], on_conflict="id"
             ).execute()
-
-    def remember_source(self, record_key: str, email: str) -> None:
-        get_supabase().table("source_records").upsert(
-            {"record_key": record_key, "email": email},
-            on_conflict="record_key",
-            ignore_duplicates=True,
-        ).execute()
 
     def taken_passport_ids(self) -> set[str]:
         response = get_supabase().table("students").select("passport_id").execute()
@@ -1012,40 +1069,51 @@ def _issue_versions(
                 passport_ids.add(passport_id)
             else:
                 passport_id = _mint(passport_ids, 10, _format_passport_id)
+            student_name = group.full_name
+            rename = False
             holder = group.full_name
-            version_number = 1
-            store.insert_student(email, holder, passport_id)
-            created += 1
-        elif state.latest_fingerprint == fingerprint:
-            passport_id = state.passport_id
-            holder = state.holder_name
-            version_number = state.latest_version
-            if group.full_name and group.full_name != state.full_name:
-                store.save_student_name(email, group.full_name)
+            expected_latest = 0
+            changed = True
         else:
+            # Includes a student with no version yet: its fingerprint is empty, so it gets
+            # version 1 here instead of failing as a conflict on every run.
             passport_id = state.passport_id
-            holder = group.full_name or state.holder_name
-            version_number = state.latest_version + 1
-            if group.full_name and group.full_name != state.full_name:
-                store.save_student_name(email, group.full_name)
+            rename = bool(group.full_name) and group.full_name != state.full_name
+            student_name = group.full_name if rename else state.full_name
+            expected_latest = state.latest_version
+            changed = state.latest_fingerprint != fingerprint
+            holder = (group.full_name or state.holder_name) if changed else state.holder_name
+        version_number = expected_latest + 1 if changed else expected_latest
+        unit = StudentUnit(
+            email=email,
+            passport_id=passport_id,
+            full_name=student_name,
+            rename=rename,
+            expected_latest=expected_latest,
+            version=(
+                _build_version(
+                    email=email,
+                    passport_id=passport_id,
+                    version_number=version_number,
+                    holder_name=holder,
+                    fingerprint=fingerprint,
+                    skills=skills,
+                    codes=codes,
+                    content_hashes=content_hashes,
+                )
+                if changed
+                else None
+            ),
+            source_keys=tuple(
+                _record_key(email, fact.skill, fact.badge, fact.raw_awarded_on)
+                for fact in group.rows
+            ),
+        )
+        # The whole unit commits at once. Anchoring and the Sheet write-back come after.
+        result = store.commit_student_unit(unit)
+        _check_snapshot(unit, result)
+        if result.created_version:
             created += 1
-        if state is None or state.latest_fingerprint != fingerprint:
-            _insert_version(
-                store,
-                email=email,
-                passport_id=passport_id,
-                version_number=version_number,
-                holder_name=holder,
-                fingerprint=fingerprint,
-                skills=skills,
-                codes=codes,
-                content_hashes=content_hashes,
-            )
-        for fact in group.rows:
-            store.remember_source(
-                _record_key(email, fact.skill, fact.badge, fact.raw_awarded_on),
-                email,
-            )
         synced.add(email)
         for index in group.indexes:
             results.append(
@@ -1067,7 +1135,7 @@ def _issue_versions(
     return created
 
 
-def _archived_without_versions(student: StudentRecord) -> StudentState:
+def _without_versions(student: StudentRecord) -> StudentState:
     return StudentState(
         email=student.email,
         full_name=student.full_name,
@@ -1075,19 +1143,25 @@ def _archived_without_versions(student: StudentRecord) -> StudentState:
         latest_version=0,
         latest_fingerprint="",
         holder_name=student.full_name,
-        archived=True,
+        archived=student.archived,
     )
 
 
 def _failure_code(exc: Exception) -> str:
     """Row error code for an unexpected failure. Never includes internal details."""
-    if isinstance(exc, APIError) and exc.code == _UNIQUE_VIOLATION:
-        return "student_conflict"
+    if isinstance(exc, SnapshotMismatchError):
+        return SNAPSHOT_MISMATCH
+    if isinstance(exc, APIError):
+        if exc.code == _UNIQUE_VIOLATION:
+            return "student_conflict"
+        if exc.code == _UNIT_STALE:
+            return SYNC_STALE
+        if exc.code == _UNIT_ARCHIVED:
+            return STUDENT_ARCHIVED
     return "sync_error"
 
 
-def _insert_version(
-    store: SyncStore,
+def _build_version(
     *,
     email: str,
     passport_id: str,
@@ -1097,7 +1171,8 @@ def _insert_version(
     skills: tuple[Skill, ...],
     codes: set[str],
     content_hashes: set[str],
-) -> None:
+) -> VersionRecord:
+    """The new version, hashed from exactly the skills that will be stored with it."""
     code = _mint(codes, 16, _format_code)
     document_hash = content_hash(
         holder_name=holder_name,
@@ -1108,23 +1183,142 @@ def _insert_version(
     if document_hash in content_hashes:
         raise RuntimeError("content_hash_collision")
     content_hashes.add(document_hash)
-    store.insert_version(
-        VersionRecord(
-            passport_id=passport_id,
-            email=email,
-            version_number=version_number,
-            holder_name=holder_name,
-            verification_code=code,
-            verification_id_hash=verification_id_hash(code),
-            skill_fingerprint=fingerprint,
-            content_hash=document_hash,
-            anchor_status="pending",
-            pdf_en_path=None,
-            pdf_ka_path=None,
-            tx_hash=None,
-            issued_at=_now(),
-            skills=skills,
+    return VersionRecord(
+        passport_id=passport_id,
+        email=email,
+        version_number=version_number,
+        holder_name=holder_name,
+        verification_code=code,
+        verification_id_hash=verification_id_hash(code),
+        skill_fingerprint=fingerprint,
+        content_hash=document_hash,
+        anchor_status="pending",
+        pdf_en_path=None,
+        pdf_ka_path=None,
+        tx_hash=None,
+        issued_at=_now(),
+        skills=skills,
+    )
+
+
+def snapshot_problem(
+    *,
+    holder_name: str,
+    passport_id: str,
+    version_number: int,
+    skills: tuple[Skill, ...],
+    skill_fingerprint_value: str,
+    content_hash_value: str,
+) -> str | None:
+    """Why stored content does not hash to the stored hashes, or None when it does."""
+    if not skills:
+        return "no_skills"
+    if skill_fingerprint(skills) != skill_fingerprint_value:
+        return "skill_fingerprint_mismatch"
+    expected = content_hash(
+        holder_name=holder_name, passport_id=passport_id, skills=skills, version=version_number
+    )
+    if expected != content_hash_value:
+        return "content_hash_mismatch"
+    return None
+
+
+def _check_snapshot(unit: StudentUnit, result: UnitResult) -> None:
+    """After the commit: the stored version must hash to what was submitted.
+
+    The hash was computed from the skills sent in the unit and the store wrote exactly those
+    in the same transaction. Reading them back and hashing again proves it. A failure here is
+    never expected; the version is then reported to the Sheet and the anchoring guard refuses
+    to anchor it.
+    """
+    version = unit.version
+    if version is None:
+        return
+    stored = result.skills
+    if (
+        stored is None
+        or result.version_number != version.version_number
+        or result.holder_name != version.holder_name
+        or result.passport_id != unit.passport_id
+        or snapshot_problem(
+            holder_name=version.holder_name,
+            passport_id=unit.passport_id,
+            version_number=version.version_number,
+            skills=stored,
+            skill_fingerprint_value=version.skill_fingerprint,
+            content_hash_value=version.content_hash,
         )
+        is not None
+    ):
+        raise SnapshotMismatchError(f"{unit.email} v{version.version_number}")
+
+
+def _unit_error(code: str, message: str) -> APIError:
+    """The error a failed sync_student_unit call raises, as PostgREST reports it."""
+    return APIError({"code": code, "message": message})
+
+
+def _unit_payload(unit: StudentUnit) -> dict[str, Any]:
+    version = unit.version
+    return {
+        "email": unit.email,
+        "passport_id": unit.passport_id,
+        "full_name": unit.full_name,
+        "rename": unit.rename,
+        "expected_latest": unit.expected_latest,
+        "source_keys": list(unit.source_keys),
+        "version": None
+        if version is None
+        else {
+            "version_number": version.version_number,
+            "holder_name": version.holder_name,
+            "verification_code": version.verification_code,
+            "verification_id_hash": version.verification_id_hash,
+            "skill_fingerprint": version.skill_fingerprint,
+            "content_hash": version.content_hash,
+            "issued_at": version.issued_at,
+            "skills": [
+                {
+                    "skill": skill.skill,
+                    "badge": skill.badge,
+                    "awarded_on": skill.awarded_on,
+                    "description": skill.description,
+                    "skill_id": skill.skill_id,
+                }
+                for skill in version.skills
+            ],
+        },
+    }
+
+
+def _unit_result(data: object) -> UnitResult:
+    if not isinstance(data, dict):
+        raise RuntimeError("sync_unit_no_result")
+    row = cast(dict[str, object], data)
+    stored = row.get("skills")
+    number = row.get("version_number")
+    holder = row.get("holder_name")
+    return UnitResult(
+        passport_id=str(row["passport_id"]),
+        version_number=None if number is None else _as_int(number),
+        holder_name=None if holder is None else str(holder),
+        created_student=bool(row.get("created_student")),
+        created_version=bool(row.get("created_version")),
+        skills=None if stored is None else _skills_from_stored(stored),
+    )
+
+
+def _skills_from_stored(value: object) -> tuple[Skill, ...]:
+    """Skills as returned by the unit function: already in stored (position) order."""
+    return tuple(
+        Skill(
+            skill=str(item["skill"]),
+            badge=str(item["badge"]),
+            awarded_on=None if item.get("awarded_on") is None else str(item["awarded_on"]),
+            description=str(item.get("description") or ""),
+            skill_id=None if item.get("skill_id") is None else str(item["skill_id"]),
+        )
+        for item in _nested_rows(value)
     )
 
 
@@ -1167,6 +1361,7 @@ def _anchor_record(row: dict[str, Any]) -> VersionRecord | None:
         return None
     issued_at = row.get("issued_at")
     hashes = row.get("anchor_tx_hashes")
+    skills = _skills_from_rows(row.get("skill_entries"))
     return VersionRecord(
         passport_id=str(student["passport_id"]),
         email=str(student["email"]),
@@ -1181,7 +1376,7 @@ def _anchor_record(row: dict[str, Any]) -> VersionRecord | None:
         pdf_ka_path=None,
         tx_hash=_opt_str(row.get("tx_hash")),
         issued_at=_now() if issued_at is None else str(issued_at),
-        skills=_skills_from_rows(row.get("skill_entries")),
+        skills=skills,
         anchored_at=_opt_str(row.get("anchored_at")),
         anchor_nonce=_opt_int(row.get("anchor_nonce")),
         anchor_gas_price=_opt_int(row.get("anchor_gas_price")),
@@ -1190,6 +1385,14 @@ def _anchor_record(row: dict[str, Any]) -> VersionRecord | None:
         anchor_last_error=_opt_str(row.get("anchor_last_error")),
         anchor_next_attempt_at=_opt_str(row.get("anchor_next_attempt_at")),
         anchor_tx_hashes=[str(h) for h in hashes] if isinstance(hashes, list) else [],
+        snapshot_error=snapshot_problem(
+            holder_name=str(row["holder_name"]),
+            passport_id=str(student["passport_id"]),
+            version_number=_as_int(row["version_number"]),
+            skills=skills,
+            skill_fingerprint_value=str(row["skill_fingerprint"]),
+            content_hash_value=str(row["content_hash"]),
+        ),
     )
 
 

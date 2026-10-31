@@ -9,7 +9,9 @@ from passport_api.sync import (
     STALE_LOCK_AFTER,
     FakeSheet,
     MemorySyncStore,
+    StudentUnit,
     SupabaseSyncStore,
+    UnitResult,
     run_sync,
 )
 
@@ -110,33 +112,58 @@ def _row(email: str, name: str) -> dict[str, str]:
     return {**ROW, "email": email, "full_name": name}
 
 
-def test_existing_email_conflict_fails_that_row_and_the_run_continues() -> None:
+def test_student_without_a_version_is_healed_by_the_next_sync() -> None:
     from passport_api.sync import StudentRecord
 
     store = MemorySyncStore()
-    # A student row exists without versions (the shape of the old admin-managed rows).
+    # A student row exists without versions (old admin-managed rows, or a crashed old sync).
     store.students.append(StudentRecord("clash@btu.edu.ge", "Clash", "BTU-CLASH00001"))
     sheet = FakeSheet([_row("clash@btu.edu.ge", "Clash"), _row("fine@btu.edu.ge", "Fine")])
     result = run_sync(store, sheet)
     assert result.status == "completed"
+    assert result.versions_created == 2
+    outcomes = {o.index: o for o in sheet.writes[0]}
+    assert (outcomes[0].status, outcomes[0].version) == ("SYNCED", "V1")
+    assert outcomes[0].passport_id == "BTU-CLASH00001"
+    assert outcomes[1].status == "SYNCED"
+    assert [s.email for s in store.students] == ["clash@btu.edu.ge", "fine@btu.edu.ge"]
+    assert {v.email: v.passport_id for v in store.versions}["clash@btu.edu.ge"] == "BTU-CLASH00001"
+    assert store.runs[-1].status == "completed"
+
+
+def test_a_unique_violation_from_the_database_fails_that_row_and_the_run_continues(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from postgrest.exceptions import APIError
+
+    store = MemorySyncStore()
+    original = store.commit_student_unit
+
+    def clashing(unit: StudentUnit) -> UnitResult:
+        if unit.email == "clash@btu.edu.ge":
+            raise APIError({"code": "23505", "message": "students_email_key"})
+        return original(unit)
+
+    monkeypatch.setattr(store, "commit_student_unit", clashing)
+    sheet = FakeSheet([_row("clash@btu.edu.ge", "Clash"), _row("fine@btu.edu.ge", "Fine")])
+    result = run_sync(store, sheet)
     assert result.versions_created == 1
     outcomes = {o.index: o for o in sheet.writes[0]}
     assert (outcomes[0].status, outcomes[0].error) == ("FAILED", "student_conflict")
     assert outcomes[1].status == "SYNCED"
-    assert [s.email for s in store.students] == ["clash@btu.edu.ge", "fine@btu.edu.ge"]
-    assert store.runs[-1].status == "completed"
+    assert [s.email for s in store.students] == ["fine@btu.edu.ge"]
 
 
 def test_unexpected_error_marks_only_that_student(monkeypatch: pytest.MonkeyPatch) -> None:
     store = MemorySyncStore()
-    original = store.insert_student
+    original = store.commit_student_unit
 
-    def flaky(email: str, full_name: str, passport_id: str) -> None:
-        if email == "bad@btu.edu.ge":
+    def flaky(unit: StudentUnit) -> UnitResult:
+        if unit.email == "bad@btu.edu.ge":
             raise RuntimeError("secret internal detail")
-        original(email, full_name, passport_id)
+        return original(unit)
 
-    monkeypatch.setattr(store, "insert_student", flaky)
+    monkeypatch.setattr(store, "commit_student_unit", flaky)
     sheet = FakeSheet([_row("bad@btu.edu.ge", "Bad"), _row("good@btu.edu.ge", "Good")])
     result = run_sync(store, sheet)
     assert result.status == "completed"
@@ -202,8 +229,10 @@ def test_supabase_student_lookup_flags_archived_students() -> None:
     assert states["gone@btu.edu.ge"].latest_version == 2
     assert states["novers@btu.edu.ge"].archived is True
     assert states["novers@btu.edu.ge"].latest_version == 0
-    # Unchanged behaviour for an active student with no version yet.
-    assert "empty@btu.edu.ge" not in states
+    # An active student with no version yet is listed (version 0) so the sync can heal it.
+    assert states["empty@btu.edu.ge"].latest_version == 0
+    assert states["empty@btu.edu.ge"].latest_fingerprint == ""
+    assert states["empty@btu.edu.ge"].archived is False
 
 
 def test_sync_refuses_new_versions_for_an_archived_student() -> None:

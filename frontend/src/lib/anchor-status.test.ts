@@ -30,6 +30,9 @@ describe('anchor status helpers', () => {
   it('explains known error codes and passes unknown ones through', () => {
     expect(explainAnchorError('slot_conflict')).toMatch(/different content/)
     expect(explainAnchorError('insufficient_funds')).toMatch(/faucet/)
+    expect(explainAnchorError('snapshot_mismatch')).toMatch(
+      /not sent to the chain/,
+    )
     expect(explainAnchorError('rpc_error: execution reverted')).toBe(
       'rpc_error: execution reverted',
     )
@@ -47,6 +50,7 @@ describe('anchor status helpers', () => {
       'max_attempts',
       'slot_conflict',
       'anchored_tx_unknown',
+      'snapshot_mismatch',
       'wrong_chain',
       'wrong_sender',
     ]) {
