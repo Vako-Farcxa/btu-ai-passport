@@ -147,7 +147,7 @@ export default function AdminSyncPage() {
             Sync Schedule
           </span>
           <p className="mt-1 text-sm font-bold text-slate-900">
-            Every 15 minutes
+            Every few hours
           </p>
           <p className="text-xs text-slate-500 mt-1">
             Configured in .github/workflows/sync.yml

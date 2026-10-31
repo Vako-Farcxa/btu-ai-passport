@@ -176,7 +176,7 @@ export default function AdminAnchorsPage() {
           <p className="text-xs text-slate-500 mt-1">
             {attention > 0
               ? `${attention} need${attention === 1 ? 's' : ''} attention`
-              : 'Checked automatically every 15 minutes'}
+              : 'Checked automatically on every sync'}
           </p>
         </div>
       </div>

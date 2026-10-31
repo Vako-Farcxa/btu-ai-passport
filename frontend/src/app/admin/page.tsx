@@ -283,7 +283,7 @@ export default function AdminDashboardPage() {
           </p>
           <div className="mt-2 flex items-baseline gap-2">
             <span className="text-xl font-bold text-slate-900">
-              Every 15 min
+              Every few hours
             </span>
           </div>
           <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">

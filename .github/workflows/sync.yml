@@ -2,6 +2,9 @@ name: Sheet sync
 
 on:
   schedule:
+    # Requested every 15 minutes, but GitHub delays and skips scheduled runs on its shared
+    # runners: in practice the sync runs about every 4 hours (up to 7). The docs and the admin
+    # health banner say "every few hours" for that reason.
     - cron: "*/15 * * * *"
   workflow_dispatch:
 

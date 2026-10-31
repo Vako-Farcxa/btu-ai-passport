@@ -13,6 +13,14 @@ It is also a test-engineering showcase: the interesting part is how it is checke
 > **Disclaimer:** this is a student hackathon project. It is a demo and **not an official BTU service**.
 > **Testnet:** passport versions are anchored on the **Polygon Amoy test network**. Test network data can be reset, so there is no guarantee a record stays available.
 
+## Try it
+
+Sign-in is limited to btu.edu.ge accounts, but the public verify page needs no account. Open the live result for a sample passport:
+
+**[Verify `NAM8-DQQV-7BX5-9MNZ`](https://btu-ai-passport.vercel.app/verify?code=NAM8-DQQV-7BX5-9MNZ)** (or paste the code into the field at [/verify](https://btu-ai-passport.vercel.app/verify)).
+
+It is a fictional student's latest passport version, so it shows **Valid, latest version** with the on-chain check. All names and data are fictional sample data. (The first request can take up to a minute while the free API server wakes up.)
+
 | Home | Admin sign-in gate |
 | --- | --- |
 | ![Home](docs/screenshots/home.webp) | ![Admin sign-in](docs/screenshots/admin-login.webp) |
@@ -42,7 +50,7 @@ The screenshots were taken on the live site. All names and data are fictional sa
 - Blockchain anchoring on Polygon Amoy, with a public transaction link per version.
 - Admin panel behind an allow-list: award skills, add students, manage the skills catalog, watch syncs and anchors, review student flags, revoke a version or archive a student.
 - Activity log: every change made in the admin panel is recorded with who did it and when (`/admin/audit`). A failed log write never blocks the change itself.
-- Google Sheet stays the source of truth. A sync runs every 15 minutes and writes the result back to each row.
+- Google Sheet stays the source of truth. A scheduled sync (GitHub Actions) runs every few hours and writes the result back to each row.
 - Students can flag an issue on a version and read the admin reply.
 - English and Georgian interface, About, Privacy and Terms pages.
 
@@ -55,7 +63,7 @@ flowchart LR
     Admin(["Admin"]) --> Web
     Web["Next.js<br/>(Vercel)"] -->|"REST + Supabase JWT"| API["FastAPI<br/>(Render)"]
     Web -->|Google sign-in| DB
-    Sheet["Google Sheet<br/>(source of truth)"] -->|every 15 min| Sync["Sync<br/>(GitHub Actions cron)"]
+    Sheet["Google Sheet<br/>(source of truth)"] -->|every few hours| Sync["Sync<br/>(GitHub Actions cron)"]
     Sync -->|"POST /internal/sync"| API
     API <-->|"students, versions, PDFs, audit log"| DB[("Supabase<br/>Postgres, Auth, Storage")]
     API -->|"status written back per row"| Sheet
@@ -87,8 +95,9 @@ How a passport gets from the Sheet to a verifiable record:
 - `supabase/`: database migrations
 - `docs/contract/`: contract ABI and Solidity source
 - `docs/screenshots/`: images used in this README
+- `docs/sheet-format.md`: the Google Sheet column contract
 - `docs/RESTORE.md`: how to restore a backup
-- `.github/workflows/sync.yml`: runs the sheet sync every 15 minutes
+- `.github/workflows/sync.yml`: requests the sheet sync every 15 minutes; GitHub's free scheduler delays it, so it really runs about every 4 hours
 - `.github/workflows/backup.yml`: nightly encrypted backup of the database and the Sheet (`docs/RESTORE.md` explains how to restore)
 - `.github/workflows/ci.yml`: tests and checks on every push and pull request (`.github/scripts/` has the migration check, `.github/dependabot.yml` the update schedule)
 
@@ -110,7 +119,7 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:3000. Try verifying with the demo code `K9M2-N3P4-Q5R6-S7T8` against the demo backend.
+Open http://localhost:3000. Without Supabase variables the backend serves built-in demo data, and `K9M2-N3P4-Q5R6-S7T8` is its (outdated, version 1) sample code. The live site's sample code is in [Try it](#try-it).
 
 ## Verify a passport yourself
 
@@ -164,7 +173,7 @@ Reads are cached in memory: a filled slot for 24 hours (it cannot change), an em
 
 ## Google Sheet
 
-The sync reads BTU's official test sheet layout (title rows above the header, with `BTU Email (Test)`, `Passport ID (Existing)`, `Skill Name`, `Date Earned` and so on) as well as the old `email, full_name, skill, badge, awarded_on` layout. Existing Passport IDs are kept. A new student needs a full name of letters only (Latin or Georgian) and, if a passport ID is typed, 4 to 40 capital letters, digits and dashes. A date must be `YYYY-MM-DD` or empty. If any row of a student has a bad value, none of that student's rows are saved and each row says why, so nothing is guessed. After each run it writes `Passport Sync Status` (`SYNCED`/`FAILED`), `Synced Passport Version` (`V1`, `V2`...), `Synced At (UTC)` and `Sync Error / Notes` back to each row. Full rules: `specs/001-ai-skills-passport/contracts/sheet.md`.
+The sync reads BTU's official test sheet layout (title rows above the header, with `BTU Email (Test)`, `Passport ID (Existing)`, `Skill Name`, `Date Earned` and so on) as well as the old `email, full_name, skill, badge, awarded_on` layout. Existing Passport IDs are kept. A new student needs a full name of letters only (Latin or Georgian) and, if a passport ID is typed, 4 to 40 capital letters, digits and dashes. A date must be `YYYY-MM-DD` or empty. If any row of a student has a bad value, none of that student's rows are saved and each row says why, so nothing is guessed. After each run it writes `Passport Sync Status` (`SYNCED`/`FAILED`), `Synced Passport Version` (`V1`, `V2`...), `Synced At (UTC)` and `Sync Error / Notes` back to each row. Full rules: [`docs/sheet-format.md`](docs/sheet-format.md).
 
 Setup: share the sheet with the service account as Editor, set `SHEET_ID` and `GOOGLE_SERVICE_ACCOUNT_JSON` in `backend/.env`, and set `ALLOWED_EMAIL_DOMAINS=btu.edu.ge,example.org` to accept the test emails. Run the files in `supabase/migrations/` in order.
 

@@ -501,7 +501,7 @@ def write_back_ranges(
     With `current` (the grid as it was read) a cell that already holds the new value is left
     alone, and the "synced at" time is only rewritten for a row where something else changed.
     A sheet that is already in sync then costs no write at all, instead of rewriting five cells
-    on every row every 15 minutes."""
+    on every row at every scheduled run."""
     lowered = [name.strip().lower() for name in header]
     columns: dict[str, int] = {}
     for field, names in _WRITE_COLUMNS.items():

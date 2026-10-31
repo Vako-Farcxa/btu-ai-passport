@@ -93,6 +93,6 @@ export function retryMessage(result: { status: string; error?: string }): {
     kind: 'warning',
     text: why
       ? `Not confirmed yet. ${why}`
-      : 'The transaction was sent and is waiting to be mined. It is checked again every few minutes.',
+      : 'The transaction was sent and is waiting to be mined. It is checked again on every sync.',
   }
 }

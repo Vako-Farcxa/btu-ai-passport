@@ -94,7 +94,7 @@ test('only warnings show an amber banner', async ({ page }) => {
         code: 'sync_stale',
         severity: 'warning',
         message:
-          'No sync has completed for 75 minutes. It should run every 15 minutes.',
+          'No sync has completed for 9 hours. It normally runs every few hours.',
         reason: null,
         count: null,
       },
@@ -103,7 +103,7 @@ test('only warnings show an amber banner', async ({ page }) => {
   await page.goto('/admin')
   const banner = page.getByTestId('health-banner')
   await expect(banner).toHaveAttribute('data-severity', 'warning')
-  await expect(banner).toContainText('75 minutes')
+  await expect(banner).toContainText('9 hours')
 })
 
 test('no banner when everything is fine', async ({ page }) => {
