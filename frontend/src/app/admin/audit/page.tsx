@@ -64,7 +64,12 @@ export default function AdminAuditPage() {
         </p>
       )}
 
-      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-x-auto">
+      <div
+        className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-x-auto"
+        role="region"
+        aria-label="Activity log"
+        tabIndex={0}
+      >
         <table className="w-full text-left text-sm">
           <caption className="sr-only">Recent admin activity</caption>
           <thead className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider border-b border-slate-100">

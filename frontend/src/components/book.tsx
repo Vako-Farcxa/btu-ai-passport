@@ -11,7 +11,8 @@ import { useCoverMotion, useOpenBookMotion } from '@/components/motion'
 export function BrandMark({ locale }: { locale: Locale }) {
   const name = messages[locale].universityName
   return (
-    <Link className="brand-mark" href="/">
+    // The visible name is hidden by CSS on phones, which would leave the link without a name.
+    <Link className="brand-mark" href="/" aria-label={name}>
       <span className="monogram" aria-hidden="true">
         B
       </span>

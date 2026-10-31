@@ -420,7 +420,12 @@ function StudentDetailContent() {
               )}
 
               {/* Skills Table in Version */}
-              <div className="overflow-x-auto">
+              <div
+                className="overflow-x-auto"
+                role="region"
+                aria-label="Passport versions"
+                tabIndex={0}
+              >
                 <table className="w-full text-left text-xs">
                   <thead className="bg-slate-50/40 text-slate-500 uppercase tracking-wider border-b border-slate-100">
                     <tr>
