@@ -39,10 +39,14 @@ def _bearer(email: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
-def _request(forwarded: list[str], peer: str | None = "10.0.0.9") -> Request:
+def _request(
+    forwarded: list[str], peer: str | None = "10.0.0.9", extra: dict[str, str] | None = None
+) -> Request:
+    headers = [(b"x-forwarded-for", value.encode()) for value in forwarded]
+    headers += [(name.encode(), value.encode()) for name, value in (extra or {}).items()]
     scope: dict[str, object] = {
         "type": "http",
-        "headers": [(b"x-forwarded-for", value.encode()) for value in forwarded],
+        "headers": headers,
         "client": None if peer is None else (peer, 5000),
     }
     return Request(scope)
@@ -130,6 +134,63 @@ def test_a_short_chain_falls_back_to_its_first_entry_then_the_peer() -> None:
 
 def test_junk_in_the_header_falls_back_to_the_peer() -> None:
     assert client_ip(_request(["not-an-ip, also-junk"]), 1) == "10.0.0.9"
+
+
+def test_cloudflare_header_wins_over_any_forwarded_chain() -> None:
+    # A longer chain than TRUSTED_PROXY_HOPS expects would pick a rotating Cloudflare edge
+    # address from the right; the Cloudflare header does not depend on the chain length.
+    chain = ["203.0.113.7, 172.70.1.1, 10.1.2.3, 10.4.5.6"]
+    request = _request(chain, extra={"cf-connecting-ip": "203.0.113.7"})
+    assert client_ip(request, 3) == "203.0.113.7"
+    assert client_ip(_request(chain), 3) == "172.70.1.1"  # the old behaviour, now the fallback
+
+
+def test_cloudflare_header_is_stable_while_the_edge_address_rotates() -> None:
+    first = _request(
+        ["203.0.113.7, 172.70.1.1, 10.1.2.3, 10.4.5.6"], extra={"cf-connecting-ip": "203.0.113.7"}
+    )
+    second = _request(
+        ["203.0.113.7, 104.22.17.40, 10.9.9.9, 10.8.8.8"], extra={"cf-connecting-ip": "203.0.113.7"}
+    )
+    assert client_ip(first, 3) == client_ip(second, 3) == "203.0.113.7"
+
+
+def test_true_client_ip_is_used_when_the_cloudflare_header_is_missing() -> None:
+    request = _request(["1.1.1.1, 2.2.2.2"], extra={"true-client-ip": "203.0.113.8"})
+    assert client_ip(request, 3) == "203.0.113.8"
+
+
+def test_a_junk_cloudflare_header_falls_back_to_the_chain() -> None:
+    request = _request(["203.0.113.7, 172.70.1.1"], extra={"cf-connecting-ip": "nonsense"})
+    assert client_ip(request, 2) == "203.0.113.7"
+
+
+def test_cloudflare_header_is_ignored_when_no_proxy_is_trusted() -> None:
+    request = _request([], peer="9.9.9.9", extra={"cf-connecting-ip": "1.1.1.1"})
+    assert client_ip(request, 0) == "9.9.9.9"
+
+
+def test_cloudflare_ipv6_visitors_share_a_bucket_per_64() -> None:
+    one = _request([], extra={"cf-connecting-ip": "2001:db8:1:2:aaaa:bbbb:cccc:1"})
+    other = _request([], extra={"cf-connecting-ip": "2001:db8:1:2:1111:2222:3333:4"})
+    assert client_ip(one, 3) == client_ip(other, 3) == "2001:db8:1:2::"
+
+
+def test_verify_limit_follows_the_cloudflare_header_not_the_chain_length(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "trusted_proxy_hops", 3)
+    monkeypatch.setattr(settings, "rate_limit_verify_per_minute", 2)
+
+    def verify(edge: str) -> int:
+        headers = {
+            "CF-Connecting-IP": "203.0.113.1",
+            # Longer than expected and with a different edge address on every request.
+            "X-Forwarded-For": f"203.0.113.1, {edge}, 10.0.0.1, 10.0.0.2",
+        }
+        return int(client.post("/verify", json={"code": VALID}, headers=headers).status_code)
+
+    assert [verify(f"104.22.17.{n}") for n in range(3)] == [200, 200, 429]
 
 
 def test_ipv6_clients_share_a_bucket_per_64() -> None:
