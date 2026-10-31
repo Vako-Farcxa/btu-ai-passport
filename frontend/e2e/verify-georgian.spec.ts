@@ -1,5 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 
+import { hydrated } from './helpers'
+
 const DATA = [
   'Nino Beridze',
   'Machine Learning',
@@ -125,6 +127,7 @@ test('the outdated result is Georgian including the newer version note', async (
 
 test('the empty-code prompt is Georgian', async ({ page }) => {
   await page.goto('/verify')
+  await hydrated(page.locator('#verification-code'))
   await page.getByRole('button', { name: 'შემოწმება' }).click()
   await expect(page.locator('#code-hint')).toHaveText(
     'შეიყვანეთ ვერიფიკაციის კოდი',

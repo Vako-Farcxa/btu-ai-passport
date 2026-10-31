@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test'
 
+import { hydrated } from './helpers'
+
 const VALID = 'A1B2-C3D4-E5F6-G7H8'
 const OUTDATED = 'K9M2-N3P4-Q5R6-S7T8'
 const PENDING = 'V2W3-X4Y5-Z6A7-B8C9'
@@ -55,6 +57,7 @@ test('verification page shows one still outcome', async ({ page }) => {
   })
   await page.goto('/verify')
 
+  await hydrated(page.getByLabel('Verification code'))
   await page.getByRole('button', { name: 'Check' }).click()
   await expect(page.locator('#code-hint')).toHaveText(
     'Enter a verification code',
@@ -66,6 +69,9 @@ test('verification page shows one still outcome', async ({ page }) => {
   await code.fill('ZZZZ-ZZZZ-ZZZZ-ZZZZ')
   await code.press('Enter')
   await expect(page.getByTestId('verify-result')).toHaveText(/Not found/)
+  await expect(page.getByTestId('not-found-notice')).toContainText(
+    'Check it for typing mistakes',
+  )
   await expect(page.getByTestId('verify-result')).not.toContainText('Nino')
 
   await code.fill(VALID)
