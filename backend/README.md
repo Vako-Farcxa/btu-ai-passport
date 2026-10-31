@@ -132,8 +132,61 @@ version, or a version whose stored skills differ from the hash that gets anchore
   `select * from sync_inconsistencies();` in the Supabase SQL editor (structure only), or
   `uv run python scripts/check_consistency.py`, or `GET /admin/consistency` as an admin (both
   also recompute the hashes).
-- The SQL tests (`tests/test_sync_postgres.py`) run against a throwaway Postgres started by the
+- The SQL tests (`tests/test_sync_postgres.py` and `tests/test_performance_postgres.py`) run against a throwaway Postgres started by the
   `pgserver` dev dependency.
+
+## Performance
+
+Measured with `scripts/profile_perf.py` (the sync) and `scripts/profile_api.py` (the admin
+dashboard and the passport page). Both run the real code against a mock Supabase and a mock
+Google Sheet on localhost, with the network cost added from stated numbers (60 ms per database
+round trip, two more for each new TCP and TLS connection, 350 ms per Sheets call, 20 Mbit/s
+uploads), so the numbers compare two versions of the code; they are not a forecast for one
+server. 250 students, 840 sheet rows.
+
+| What | Before | After |
+| --- | --- | --- |
+| Sync, nothing changed | 52.8 s, 261 database requests on 261 new connections, 3,750 sheet cells written | 2.2 s, 12 requests on 3 connections, 0 cells written |
+| Sync, 10 students got a new skill | 85.6 s, 58.6 MB uploaded | 4.2 s, 2.4 MB uploaded |
+| Sync, 30 new students | 157 s, 176 MB uploaded | 7.4 s, 7.2 MB uploaded |
+| One passport PDF (English or Georgian) | 2.8 MB | 87 to 193 KB, 1 to 24 skills |
+| Admin dashboard, cold | 924 ms, 16 requests, 29 KB | 184 ms, 3 requests, 1.7 KB |
+| Admin dashboard, visited again within 10 s | 924 ms | 20 ms, no database request |
+| Admin health banner | 708 ms, 5 requests | 176 ms, 2 requests |
+| Passport page (`/me/passport` and `/me/flags`) | 593 ms one after the other | 74 ms side by side |
+
+Where the time went and what changed:
+
+- **One Supabase client for the process** (`db.py`). It used to be built for every query, so
+  every query paid a new TCP and TLS connection. The client keeps a connection pool now.
+- **Unchanged students are skipped.** The sync already knows each student's skill fingerprint
+  and the source rows it has stored, so a student whose rows did not change is not sent to the
+  database. Only changed students are committed, 25 at a time through `sync_student_units()`
+  (migration `0012_performance.sql`), each in its own savepoint, so one failing student still
+  fails alone. Without the migration the backend logs `sync_student_units_missing` and commits
+  one student per call as before.
+- **Reads side by side, paged.** The five initial reads run in parallel, and every table read is
+  paged because PostgREST returns at most 1,000 rows per request.
+- **Sheet:** the spreadsheet is opened once, the first tab and the Skills tab are read in one
+  request, and the write-back is one `batchUpdate` of only the cells that differ from what was
+  read. `Synced At` therefore shows when a row last changed, not when the last run happened;
+  the sync runs table has the time of every run.
+- **PDFs:** the official template carried about 600 KB of Illustrator editing data, a thumbnail
+  and metadata on every page, and each page was merged from a separate overlay with its own copy
+  of the fonts and stamps. The renderer removes the editing data (the visible pages are
+  unchanged, a test compares them), draws all four overlays on one canvas, compresses the
+  streams and stores each font once. New versions upload their PDFs four at a time. To shrink
+  the PDFs that are already stored, run `uv run python scripts/shrink_stored_pdfs.py` (a dry run
+  that prints the sizes) and then again with `--apply`.
+- **Admin dashboard:** `GET /admin/stats` returns every number in one request (one SQL function,
+  `admin_dashboard_stats()`; without the migration, six counts run side by side). It replaced
+  loading 100 students with all their versions to count them in the browser. The stats and
+  the health banner are cached for 10 seconds, every admin write clears the cache, and the
+  "is this person an admin" answer is remembered for 30 seconds, so removing an admin takes
+  effect within 30 seconds.
+- **Passport page:** the archived check reads one column of one row instead of every version,
+  `/me/flags` runs it next to the flags query, the page asks for the flags at the same time as
+  the passport, and it shows placeholder shapes instead of a line of text while it loads.
 
 ## Quality Checks & Tests
 

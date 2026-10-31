@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Literal, Protocol
 
 from pypdf import PdfReader, PdfWriter
+from reportlab import rl_config
 from reportlab.lib.colors import Color, HexColor
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfbase import pdfmetrics
@@ -14,6 +15,10 @@ from storage3.types import FileOptions
 from passport_api.db import get_supabase
 from passport_api.schemas import Skill
 from passport_api.settings import settings
+
+# reportlab wraps every stream in ASCII85 on top of Flate by default, which makes images and
+# font subsets about a quarter larger. Viewers read plain Flate, so turn the wrapping off.
+rl_config.useA85 = 0
 
 Language = Literal["en", "ka"]
 _ASSETS = Path(__file__).resolve().parents[2] / "assets"
@@ -191,48 +196,66 @@ _TEXT: dict[Language, dict[str, str]] = {
 
 
 def render_pdf(lang: Language, document: PassportPdf) -> bytes:
-    writer = PdfWriter()
-    _add_page(writer, 0, _cover_overlay(lang, document))
-    _add_page(writer, 1, _about_overlay(lang, document))
+    """One passport PDF. All text is drawn on a single reportlab document, so each font is
+    embedded once (as a subset) and each stamp image once, and the template pages are slimmed
+    and compressed (see _template_bytes). A typical passport is a few hundred KB."""
+    buffer = BytesIO()
+    canvas = Canvas(buffer, pagesize=(_PAGE_W, _PAGE_H), pageCompression=1)
+    pages: list[int] = [0, 1]
+    _cover_overlay(canvas, lang, document)
+    _about_overlay(canvas, lang, document)
     cards = 10
     chunks = [document.skills[i : i + cards] for i in range(0, len(document.skills), cards)]
     for index, chunk in enumerate(chunks or [()]):
-        _add_page(writer, 2, _skillset_overlay(lang, document, chunk, index, len(chunks)))
+        _skillset_overlay(canvas, lang, document, chunk, index, len(chunks))
+        pages.append(2)
     rows = len(_TABLE_ROWS) - 1
     chunks = [document.skills[i : i + rows] for i in range(0, len(document.skills), rows)]
     for index, chunk in enumerate(chunks or [()]):
-        _add_page(writer, 3, _details_overlay(lang, document, chunk, index, len(chunks)))
+        _details_overlay(canvas, lang, document, chunk, index, len(chunks))
+        pages.append(3)
+    canvas.save()
+    overlay = PdfReader(BytesIO(buffer.getvalue()))
+    writer = PdfWriter()
+    for position, template_page in enumerate(pages):
+        # A fresh reader per page so repeated template pages never share objects.
+        page = PdfReader(BytesIO(_template_bytes())).pages[template_page]
+        added = writer.add_page(page)
+        added.merge_page(overlay.pages[position])
+        added.compress_content_streams()
+    # The four template pages carry the same three fonts. Keep one copy of anything identical.
+    writer.compress_identical_objects(remove_duplicates=True, remove_unreferenced=True)
     output = BytesIO()
     writer.write(output)
     return output.getvalue()
 
 
 def _template_bytes() -> bytes:
+    """The official template without what viewers never show.
+
+    Adobe Illustrator saved its whole editable document (about 600 KB of private data), a
+    thumbnail and XMP metadata inside the PDF. Every page of the output used to carry its own
+    copy of all that. The visible pages (text, vectors, fonts, layers) are untouched."""
     global _template_cache
     if _template_cache is None:
-        _template_cache = (_ASSETS / "templates" / "passport-official.pdf").read_bytes()
+        source = PdfReader(str(_ASSETS / "templates" / "passport-official.pdf"))
+        writer = PdfWriter(clone_from=source)
+        for page in writer.pages:
+            for key in ("/PieceInfo", "/Thumb", "/LastModified"):
+                if key in page:
+                    del page[key]
+        root = writer._root_object
+        for key in ("/Metadata", "/PieceInfo"):
+            if key in root:
+                del root[key]
+        writer.compress_identical_objects(remove_duplicates=True, remove_unreferenced=True)
+        slim = BytesIO()
+        writer.write(slim)
+        _template_cache = slim.getvalue()
     return _template_cache
 
 
 _template_cache: bytes | None = None
-
-
-def _add_page(writer: PdfWriter, index: int, overlay: bytes) -> None:
-    # A fresh reader per page so repeated template pages never share objects.
-    page = PdfReader(BytesIO(_template_bytes())).pages[index]
-    added = writer.add_page(page)
-    added.merge_page(PdfReader(BytesIO(overlay)).pages[0])
-
-
-def _new_canvas() -> tuple[BytesIO, Canvas]:
-    buffer = BytesIO()
-    return buffer, Canvas(buffer, pagesize=(_PAGE_W, _PAGE_H))
-
-
-def _finish(buffer: BytesIO, canvas: Canvas) -> bytes:
-    canvas.showPage()
-    canvas.save()
-    return buffer.getvalue()
 
 
 def _y(top: float) -> float:
@@ -247,8 +270,7 @@ def _cover(canvas: Canvas, box: tuple[float, float, float, float], fill: Color =
     canvas.restoreState()
 
 
-def _cover_overlay(lang: Language, document: PassportPdf) -> bytes:
-    buffer, canvas = _new_canvas()
+def _cover_overlay(canvas: Canvas, lang: Language, document: PassportPdf) -> None:
     first, _, rest = document.holder_name.strip().partition(" ")
     name_x, surname_x, date_x = 196.0, 246.0, 648.0
     if lang == "ka":
@@ -268,7 +290,7 @@ def _cover_overlay(lang: Language, document: PassportPdf) -> bytes:
     _draw_runs(canvas, document.issued_on, date_x, _y(267), 12)
     _passport_id(canvas, lang, document, right=True)
     _verification_lines(canvas, lang, document, 108, 500)
-    return _finish(buffer, canvas)
+    canvas.showPage()
 
 
 def _passport_id(canvas: Canvas, lang: Language, document: PassportPdf, right: bool) -> None:
@@ -316,12 +338,11 @@ def _verification_lines(
     canvas.linkURL(url, (x, _y(line_top) - 2, x + width, _y(line_top) + 8), relative=0)
 
 
-def _about_overlay(lang: Language, document: PassportPdf) -> bytes:
-    buffer, canvas = _new_canvas()
+def _about_overlay(canvas: Canvas, lang: Language, document: PassportPdf) -> None:
     if lang == "ka":
         _about_georgian(canvas)
     _passport_id(canvas, lang, document, right=False)
-    return _finish(buffer, canvas)
+    canvas.showPage()
 
 
 def _about_georgian(canvas: Canvas) -> None:
@@ -402,13 +423,13 @@ def _page_marker(canvas: Canvas, lang: Language, index: int, total: int, top: fl
 
 
 def _skillset_overlay(
+    canvas: Canvas,
     lang: Language,
     document: PassportPdf,
     skills: tuple[Skill, ...],
     index: int,
     total: int,
-) -> bytes:
-    buffer, canvas = _new_canvas()
+) -> None:
     if lang == "ka":
         _page_titles(
             canvas,
@@ -451,17 +472,17 @@ def _skillset_overlay(
         )
     _page_marker(canvas, lang, index, total, 470)
     _passport_id(canvas, lang, document, right=True)
-    return _finish(buffer, canvas)
+    canvas.showPage()
 
 
 def _details_overlay(
+    canvas: Canvas,
     lang: Language,
     document: PassportPdf,
     skills: tuple[Skill, ...],
     index: int,
     total: int,
-) -> bytes:
-    buffer, canvas = _new_canvas()
+) -> None:
     if lang == "ka":
         _page_titles(
             canvas,
@@ -489,7 +510,7 @@ def _details_overlay(
     _page_marker(canvas, lang, index, total, 470)
     _passport_id(canvas, lang, document, right=False)
     _verification_lines(canvas, lang, document, 72, 508)
-    return _finish(buffer, canvas)
+    canvas.showPage()
 
 
 def _draw_middle(

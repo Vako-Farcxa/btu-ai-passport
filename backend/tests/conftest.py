@@ -5,6 +5,8 @@ import pytest
 
 import passport_api.anchoring as anchoring
 import passport_api.auth as auth
+from passport_api.cache import clear_all_caches
+from passport_api.db import reset_client
 from passport_api.ratelimit import limits
 from passport_api.settings import Settings, settings
 
@@ -24,9 +26,13 @@ def isolated_settings(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     monkeypatch.setattr(settings, "supabase_url", TEST_SUPABASE_URL)
     auth.clear_jwks_cache()
     limits.reset()
+    clear_all_caches()
+    reset_client()
     yield
     auth.clear_jwks_cache()
     limits.reset()
+    clear_all_caches()
+    reset_client()
 
 
 @pytest.fixture(autouse=True)

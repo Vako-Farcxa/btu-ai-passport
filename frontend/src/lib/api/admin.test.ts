@@ -4,6 +4,7 @@ import {
   adminErrorMessage,
   describeSyncResult,
   fetchAdminHealth,
+  fetchAdminStats,
   awardSyncNotice,
   parseAwardStudents,
   restoreAdminStudent,
@@ -194,5 +195,43 @@ describe('fetchAdminHealth', () => {
         .mockResolvedValue({ ok: false, status: 503, headers: new Headers() }),
     )
     await expect(fetchAdminHealth()).rejects.toThrow(/503/)
+  })
+})
+
+describe('fetchAdminStats', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('reads every dashboard number from one route with the admin token and no cache', async () => {
+    const body = {
+      total_students: 3,
+      admin_managed_students: 1,
+      pending_anchors: 0,
+      failed_anchors: 0,
+      open_flags: 2,
+      recent_runs: [],
+    }
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue({ ok: true, status: 200, json: async () => body })
+    vi.stubGlobal('fetch', fetchMock)
+    await expect(fetchAdminStats()).resolves.toEqual(body)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const [url, init] = fetchMock.mock.calls[0] as [
+      string,
+      { headers: Record<string, string>; cache: string },
+    ]
+    expect(url).toBe('http://localhost:8000/admin/stats')
+    expect(init.headers.Authorization).toBe('Bearer tok')
+    expect(init.cache).toBe('no-store')
+  })
+
+  it('throws when the API cannot say', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue({ ok: false, status: 503, headers: new Headers() }),
+    )
+    await expect(fetchAdminStats()).rejects.toThrow(/503/)
   })
 })

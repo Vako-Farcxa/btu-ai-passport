@@ -2,6 +2,7 @@ import re
 from dataclasses import replace
 from io import BytesIO
 from pathlib import Path
+from typing import Any, cast
 
 import pytest
 from pypdf import PdfReader
@@ -231,3 +232,75 @@ def _unicode_map(data: bytes) -> dict[str, int]:
 def _georgian(char: str) -> bool:
     code = ord(char)
     return 0x10A0 <= code <= 0x10FF or 0x1C90 <= code <= 0x1CBF or 0x2D00 <= code <= 0x2D2F
+
+
+# --- size: a stored passport must stay small -------------------------------------------------
+
+# A version is stored as two PDFs, and the free storage plan is 1 GB. The official template used
+# to be copied whole onto every page with its Illustrator editing data, which made each PDF
+# about 5.8 MB. They are now well under 500 KB.
+MAX_PDF_BYTES = 400_000
+
+
+def test_a_passport_pdf_is_small_in_both_languages() -> None:
+    for lang in ("en", "ka"):
+        assert len(render_pdf(lang, _document())) < MAX_PDF_BYTES
+
+
+def test_a_passport_with_many_skills_stays_small() -> None:
+    document = replace(
+        _document(),
+        skills=tuple(
+            Skill(skill=f"{ENGLISH_SKILL} {n}", badge="Stamp", awarded_on="2025-06-01")
+            for n in range(24)
+        ),
+    )
+    for lang in ("en", "ka"):
+        assert len(render_pdf(lang, document)) < MAX_PDF_BYTES
+
+
+def test_the_template_editing_data_is_not_copied_into_the_pdf() -> None:
+    reader = PdfReader(BytesIO(render_pdf("en", _document())))
+    for page in reader.pages:
+        assert "/PieceInfo" not in page
+        assert "/Thumb" not in page
+    root: Any = reader.trailer["/Root"]
+    assert "/PieceInfo" not in root
+    assert "/Metadata" not in root
+
+
+def test_each_font_is_embedded_once_however_many_pages_use_it() -> None:
+    reader = PdfReader(BytesIO(render_pdf("ka", _document())))
+    files: dict[str, set[int]] = {}
+    for page in reader.pages:
+        resources: Any = page["/Resources"]
+        fonts = resources.get("/Font") or {}
+        for ref in fonts.values():
+            font = ref.get_object()
+            descriptor = font.get("/FontDescriptor")
+            if descriptor is None:
+                continue
+            descriptor = descriptor.get_object()
+            for key in ("/FontFile", "/FontFile2", "/FontFile3"):
+                if key in descriptor:
+                    name = str(font["/BaseFont"]).split("+")[-1]
+                    files.setdefault(name, set()).add(descriptor.raw_get(key).idnum)
+    assert any("NotoSansGeorgian" in name for name in files)
+    assert {name: len(ids) for name, ids in files.items() if len(ids) > 1} == {}
+
+
+def test_slimming_the_template_changes_nothing_a_reader_can_see() -> None:
+    from passport_api.pdf import _template_bytes
+
+    original = PdfReader(str(ASSETS / "templates" / "passport-official.pdf"))
+    slim = PdfReader(BytesIO(_template_bytes()))
+    assert len(slim.pages) == len(original.pages) == 4
+    for before, after in zip(original.pages, slim.pages, strict=True):
+        assert before.mediabox == after.mediabox
+        assert before.get_contents().get_data() == after.get_contents().get_data()  # type: ignore[union-attr]
+        assert before.extract_text() == after.extract_text()
+        assert sorted(cast(Any, before["/Resources"])) == sorted(cast(Any, after["/Resources"]))
+    root_before: Any = original.trailer["/Root"]
+    root_after: Any = slim.trailer["/Root"]
+    assert ("/OCProperties" in root_before) == ("/OCProperties" in root_after)
+    assert len(_template_bytes()) < (ASSETS / "templates" / "passport-official.pdf").stat().st_size

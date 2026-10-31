@@ -175,7 +175,8 @@ def test_unexpected_error_marks_only_that_student(monkeypatch: pytest.MonkeyPatc
 
 def test_supabase_student_lookup_includes_admin_managed_students() -> None:
     with patch("passport_api.sync.get_supabase") as db:
-        query = db.return_value.table.return_value.select.return_value
+        select = db.return_value.table.return_value.select.return_value
+        query = select.order.return_value.range.return_value
         query.execute.return_value.data = [
             {
                 "email": "luka@btu.edu.ge",
@@ -198,7 +199,8 @@ def test_supabase_student_lookup_includes_admin_managed_students() -> None:
 
 def test_supabase_student_lookup_flags_archived_students() -> None:
     with patch("passport_api.sync.get_supabase") as db:
-        query = db.return_value.table.return_value.select.return_value
+        select = db.return_value.table.return_value.select.return_value
+        query = select.order.return_value.range.return_value
         query.execute.return_value.data = [
             {
                 "email": "gone@btu.edu.ge",

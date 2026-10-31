@@ -6,50 +6,23 @@ import { AddStudentDialog } from '@/components/admin/add-student-dialog'
 import { HealthBanner } from '@/components/admin/health-banner'
 import {
   describeSyncResult,
-  fetchAdminFlags,
-  fetchAdminStudents,
-  fetchAdminPendingVersions,
-  fetchAdminSyncRuns,
+  fetchAdminStats,
   triggerAdminSync,
-  type AdminSyncRun,
+  type AdminStats,
 } from '@/lib/api/admin'
 
 export default function AdminDashboardPage() {
-  const [totalStudents, setTotalStudents] = useState<number | null>(null)
-  const [adminManagedCount, setAdminManagedCount] = useState<number>(0)
-  const [pendingAnchorsCount, setPendingAnchorsCount] = useState<number | null>(
-    null,
-  )
-  const [stuckAnchorsCount, setStuckAnchorsCount] = useState(0)
-  const [openFlags, setOpenFlags] = useState<number | null>(null)
-  const [syncRuns, setSyncRuns] = useState<AdminSyncRun[]>([])
+  const [stats, setStats] = useState<AdminStats | null>(null)
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
   const [showAdd, setShowAdd] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // One request carries every number on the page (students, anchors, flags, last runs).
   const loadData = async () => {
     setLoading(true)
     try {
-      const [studentsData, pendingData, runsData, flagsData] =
-        await Promise.all([
-          fetchAdminStudents({ limit: 100 }),
-          fetchAdminPendingVersions(),
-          fetchAdminSyncRuns(5),
-          fetchAdminFlags('open'),
-        ])
-      setOpenFlags(flagsData.open_count)
-      setTotalStudents(studentsData.total)
-      setAdminManagedCount(
-        studentsData.students.filter((s) => s.admin_managed).length,
-      )
-      setPendingAnchorsCount(pendingData.versions.length)
-      setStuckAnchorsCount(
-        pendingData.versions.filter(
-          (v) => v.anchor_status === 'failed_permanent',
-        ).length,
-      )
-      setSyncRuns(runsData.runs)
+      setStats(await fetchAdminStats())
       setError(null)
     } catch (err: unknown) {
       setError(
@@ -64,23 +37,9 @@ export default function AdminDashboardPage() {
     let ignore = false
     async function init() {
       try {
-        const [studentsData, pendingData, runsData] = await Promise.all([
-          fetchAdminStudents({ limit: 100 }),
-          fetchAdminPendingVersions(),
-          fetchAdminSyncRuns(5),
-        ])
+        const data = await fetchAdminStats()
         if (!ignore) {
-          setTotalStudents(studentsData.total)
-          setAdminManagedCount(
-            studentsData.students.filter((s) => s.admin_managed).length,
-          )
-          setPendingAnchorsCount(pendingData.versions.length)
-          setStuckAnchorsCount(
-            pendingData.versions.filter(
-              (v) => v.anchor_status === 'failed_permanent',
-            ).length,
-          )
-          setSyncRuns(runsData.runs)
+          setStats(data)
           setError(null)
         }
       } catch (err: unknown) {
@@ -102,6 +61,13 @@ export default function AdminDashboardPage() {
       ignore = true
     }
   }, [])
+
+  const totalStudents = stats?.total_students ?? null
+  const adminManagedCount = stats?.admin_managed_students ?? 0
+  const pendingAnchorsCount = stats?.pending_anchors ?? null
+  const stuckAnchorsCount = stats?.failed_anchors ?? 0
+  const openFlags = stats?.open_flags ?? null
+  const syncRuns = stats?.recent_runs ?? []
 
   const handleTriggerSync = async () => {
     try {
@@ -181,7 +147,14 @@ export default function AdminDashboardPage() {
           </p>
           <div className="mt-2 flex items-baseline gap-2">
             <span className="text-3xl font-extrabold text-slate-900">
-              {loading ? '—' : (totalStudents ?? 0)}
+              {loading ? (
+                <span
+                  aria-hidden="true"
+                  className="inline-block h-8 w-12 animate-pulse rounded bg-slate-200 align-middle"
+                />
+              ) : (
+                (totalStudents ?? 0)
+              )}
             </span>
             <span className="text-xs text-slate-500">issued passports</span>
           </div>
@@ -208,7 +181,14 @@ export default function AdminDashboardPage() {
                   : 'text-slate-900'
               }`}
             >
-              {loading ? '—' : (pendingAnchorsCount ?? 0)}
+              {loading ? (
+                <span
+                  aria-hidden="true"
+                  className="inline-block h-8 w-12 animate-pulse rounded bg-slate-200 align-middle"
+                />
+              ) : (
+                (pendingAnchorsCount ?? 0)
+              )}
             </span>
             <span className="text-xs text-slate-500">unconfirmed</span>
           </div>
@@ -242,7 +222,14 @@ export default function AdminDashboardPage() {
                 (openFlags ?? 0) > 0 ? 'text-rose-600' : 'text-slate-900'
               }`}
             >
-              {loading ? '—' : (openFlags ?? 0)}
+              {loading ? (
+                <span
+                  aria-hidden="true"
+                  className="inline-block h-8 w-12 animate-pulse rounded bg-slate-200 align-middle"
+                />
+              ) : (
+                (openFlags ?? 0)
+              )}
             </span>
             <span className="text-xs text-slate-500">from students</span>
           </div>

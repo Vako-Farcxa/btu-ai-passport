@@ -175,12 +175,12 @@ Run it by hand and check it, then restore: see [`docs/RESTORE.md`](docs/RESTORE.
 
 ## Testing
 
-About 1,000 automated tests run on every push and pull request (GitHub Actions, `.github/workflows/ci.yml`, no secrets needed):
+About 1,100 automated tests run on every push and pull request (GitHub Actions, `.github/workflows/ci.yml`, no secrets needed):
 
 | Suite | Count | What it covers | Run it locally |
 | --- | --- | --- | --- |
-| Backend (pytest) | 676 | API, sync, verification, on-chain check, PDFs, rate limits, security headers, health checks, backup and restore, and the real migrations plus sync function on a real Postgres (pgserver) | `cd backend && uv run pytest` |
-| Frontend unit (Vitest) | 300 | validation, formatting, headers policy, helpers, components | `cd frontend && npm test` |
+| Backend (pytest) | 746 | API, sync, verification, on-chain check, PDFs, rate limits, security headers, health checks, backup and restore, PDF size, caches, batched sync and the dashboard numbers, and the real migrations plus the SQL functions on a real Postgres (pgserver) | `cd backend && uv run pytest` |
+| Frontend unit (Vitest) | 307 | validation, formatting, headers policy, helpers, components | `cd frontend && npm test` |
 | End-to-end (Playwright, Chromium) | 43 | verify page and on-chain badge, English and Georgian, passport page, share links, keyboard use, reduced motion, security headers, rate-limit message, admin health banner | `cd frontend && npm run e2e` |
 
 The CI jobs, with the check names GitHub shows:
@@ -188,7 +188,7 @@ The CI jobs, with the check names GitHub shows:
 - **Backend:** `ruff format --check`, `ruff check`, `mypy` (strict) and `pytest`.
 - **Frontend:** `tsc`, ESLint, Prettier, Vitest and a production `next build` that must have an https API address.
 - **E2E (Playwright):** the specs against the production build, with every API call mocked in the browser.
-- **Migrations:** every file in `supabase/migrations` applied in order to an empty Postgres 17, and the newest one applied twice.
+- **Migrations:** every file in `supabase/migrations` applied in order to an empty Postgres 17, the newest one applied twice, and the sync and admin functions checked.
 - **Secret scan:** gitleaks over the full history, fails on any leaked key.
 
 Dependabot opens weekly pull requests for Python, npm and GitHub Actions updates (minor and patch updates are grouped).

@@ -3,6 +3,7 @@
 Nothing here reads or changes a passport, a hash or an anchor.
 """
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from typing import Annotated
 
@@ -123,8 +124,12 @@ def my_flags(
     flags: FlagStore = _store_dependency,
 ) -> StudentFlagList:
     email = email_from_authorization(authorization)
-    ensure_not_archived(email)
-    return _student_list(flags.for_student(email))
+    # The archive check and the flags query do not depend on each other: ask for both at once.
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        archived = pool.submit(ensure_not_archived, email)
+        records = pool.submit(flags.for_student, email)
+        archived.result()
+        return _student_list(records.result())
 
 
 @router.post("/me/flags/seen", response_model=StudentFlagList)

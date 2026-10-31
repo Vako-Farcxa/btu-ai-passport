@@ -1132,6 +1132,41 @@ button:disabled {
   color: var(--ink-600);
 }
 
+/* Placeholder shapes while the passport loads. Opacity only, and still when motion is reduced. */
+.skeleton-block {
+  display: grid;
+  gap: 12px;
+  margin: 8px 0 20px;
+}
+
+.skeleton {
+  display: block;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.08);
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+.skeleton-line {
+  height: 14px;
+}
+
+.skeleton-card {
+  height: 96px;
+  border-radius: 12px;
+}
+
+@keyframes skeleton-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+}
+
 .meta-line {
   margin: 0 0 8px;
   font-size: 14px;

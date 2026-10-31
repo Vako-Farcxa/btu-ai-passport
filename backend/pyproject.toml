@@ -44,6 +44,8 @@ ignore = []
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S101", "S608"]
+# Measurement harnesses (mock servers on localhost), not shipped code.
+"scripts/profile_*.py" = ["S101"]
 
 [tool.mypy]
 strict = true
@@ -52,6 +54,11 @@ plugins = ["pydantic.mypy"]
 [[tool.mypy.overrides]]
 module = ["reportlab", "reportlab.*"]
 ignore_missing_imports = true
+
+# The profiling harnesses patch internals on purpose and run against older code too.
+[[tool.mypy.overrides]]
+module = ["profile_perf", "profile_api"]
+ignore_errors = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

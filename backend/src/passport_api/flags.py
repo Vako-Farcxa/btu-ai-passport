@@ -11,6 +11,7 @@ from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from typing import Literal, Protocol, cast
 
+from postgrest import CountMethod
 from postgrest.exceptions import APIError as PostgrestError
 
 from passport_api.db import get_supabase
@@ -305,8 +306,15 @@ class SupabaseFlagStore:
         return [_record(row) for row in _rows(response.data)]
 
     def open_count(self) -> int:
-        response = get_supabase().table("flags").select("id").eq("status", "open").execute()
-        return len(_rows(response.data))
+        response = (
+            get_supabase()
+            .table("flags")
+            .select("id", count=CountMethod.exact)
+            .eq("status", "open")
+            .limit(1)
+            .execute()
+        )
+        return response.count or 0
 
     def get(self, flag_id: str) -> FlagRecord | None:
         response = (
