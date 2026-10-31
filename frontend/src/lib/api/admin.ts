@@ -262,10 +262,7 @@ export async function deleteAdminStudent(passportId: string): Promise<void> {
       headers: await getHeaders(),
     },
   )
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw new Error(err.code || `Failed to delete student`)
-  }
+  if (!res.ok) throw await failure(res, 'Failed to delete student')
 }
 
 async function postNoContent(path: string, fallback: string): Promise<void> {

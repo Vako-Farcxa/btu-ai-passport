@@ -8,6 +8,7 @@ import {
 } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { AdminFeedback } from '@/components/admin/admin-feedback'
 import * as api from '@/lib/api/admin'
 
 import AdminStudentsPage from './page'
@@ -29,6 +30,19 @@ vi.mock('@/components/admin/add-student-dialog', () => ({
     </div>
   ),
 }))
+
+function renderPage() {
+  return render(
+    <AdminFeedback>
+      <AdminStudentsPage />
+    </AdminFeedback>,
+  )
+}
+
+const firstArchiveButton = () =>
+  screen.getAllByRole('button', { name: 'Archive' })[0] as HTMLElement
+
+const confirmDialog = () => screen.findByRole('alertdialog')
 
 const student = (over: Partial<api.AdminStudent> = {}): api.AdminStudent => ({
   id: 's1',
@@ -69,7 +83,7 @@ afterEach(() => {
 
 describe('student directory', () => {
   it('lists active students and hides archived ones by default', async () => {
-    render(<AdminStudentsPage />)
+    renderPage()
     expect(await screen.findByText('Nino Beridze')).toBeInTheDocument()
     expect(screen.getByText('Gela Kapanadze')).toBeInTheDocument()
     expect(screen.queryByText('Old Student')).not.toBeInTheDocument()
@@ -79,7 +93,7 @@ describe('student directory', () => {
   })
 
   it('shows only admin managed students on that tab', async () => {
-    render(<AdminStudentsPage />)
+    renderPage()
     await screen.findByText('Nino Beridze')
     fireEvent.click(screen.getByRole('button', { name: 'Admin Managed Only' }))
     await waitFor(() =>
@@ -89,7 +103,7 @@ describe('student directory', () => {
   })
 
   it('asks the API for archived students and shows them with a Restore button', async () => {
-    render(<AdminStudentsPage />)
+    renderPage()
     await screen.findByText('Nino Beridze')
     fireEvent.click(
       screen.getByRole('button', { name: 'Archived / Soft-Deleted' }),
@@ -107,14 +121,14 @@ describe('student directory', () => {
       students: [],
       total: 0,
     })
-    render(<AdminStudentsPage />)
+    renderPage()
     expect(
       await screen.findByText('No students found matching your criteria.'),
     ).toBeVisible()
   })
 
   it('searches with the trimmed text', async () => {
-    render(<AdminStudentsPage />)
+    renderPage()
     await screen.findByText('Nino Beridze')
     fireEvent.change(screen.getByPlaceholderText('Search name or email...'), {
       target: { value: '  nino ' },
@@ -127,18 +141,46 @@ describe('student directory', () => {
     )
   })
 
-  it('archives only after the admin confirms, then reloads', async () => {
+  it('never uses the browser popups', async () => {
     vi.mocked(api.deleteAdminStudent).mockResolvedValue(undefined)
-    render(<AdminStudentsPage />)
+    renderPage()
+    await screen.findByText('Nino Beridze')
+    fireEvent.click(firstArchiveButton())
+    const dialog = await confirmDialog()
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Archive student' }),
+    )
+    await waitFor(() => expect(api.deleteAdminStudent).toHaveBeenCalled())
+    expect(window.confirm).not.toHaveBeenCalled()
+    expect(window.alert).not.toHaveBeenCalled()
+  })
+
+  it('asks in a danger dialog before archiving and names the student', async () => {
+    renderPage()
     await screen.findByText('Nino Beridze')
     const row = screen.getByText('Nino Beridze').closest('tr') as HTMLElement
-
-    vi.mocked(window.confirm).mockReturnValueOnce(false)
     fireEvent.click(within(row).getByRole('button', { name: 'Archive' }))
+    const dialog = await confirmDialog()
+    expect(dialog).toHaveAccessibleName('Archive Nino Beridze?')
+    expect(dialog).toHaveAccessibleDescription(/codes will verify as Revoked/)
+    expect(dialog.textContent).not.toMatch(/\u2014|\u2013/)
+    expect(
+      within(dialog).getByRole('button', { name: 'Archive student' }),
+    ).toHaveAttribute('data-variant', 'danger')
     expect(api.deleteAdminStudent).not.toHaveBeenCalled()
+  })
 
+  it('archives after the admin confirms, shows a toast and reloads', async () => {
+    vi.mocked(api.deleteAdminStudent).mockResolvedValue(undefined)
+    renderPage()
+    await screen.findByText('Nino Beridze')
+    const row = screen.getByText('Nino Beridze').closest('tr') as HTMLElement
     const before = vi.mocked(api.fetchAdminStudents).mock.calls.length
     fireEvent.click(within(row).getByRole('button', { name: 'Archive' }))
+    const dialog = await confirmDialog()
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Archive student' }),
+    )
     await waitFor(() =>
       expect(api.deleteAdminStudent).toHaveBeenCalledWith('BTU-A1'),
     )
@@ -147,39 +189,92 @@ describe('student directory', () => {
         vi.mocked(api.fetchAdminStudents).mock.calls.length,
       ).toBeGreaterThan(before),
     )
+    expect(
+      (await screen.findAllByText('Student archived')).length,
+    ).toBeGreaterThan(0)
+    await waitFor(() =>
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument(),
+    )
   })
 
-  it('tells the admin when archiving fails', async () => {
+  it('does nothing when the admin presses Cancel', async () => {
+    renderPage()
+    await screen.findByText('Nino Beridze')
+    fireEvent.click(firstArchiveButton())
+    const dialog = await confirmDialog()
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+    await waitFor(() =>
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument(),
+    )
+    expect(api.deleteAdminStudent).not.toHaveBeenCalled()
+  })
+
+  it('closes on Escape without archiving, and focus starts on Cancel', async () => {
+    renderPage()
+    await screen.findByText('Nino Beridze')
+    fireEvent.click(firstArchiveButton())
+    const dialog = await confirmDialog()
+    await waitFor(() =>
+      expect(
+        within(dialog).getByRole('button', { name: 'Cancel' }),
+      ).toHaveFocus(),
+    )
+    fireEvent.keyDown(document.activeElement ?? document.body, {
+      key: 'Escape',
+    })
+    await waitFor(() =>
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument(),
+    )
+    expect(api.deleteAdminStudent).not.toHaveBeenCalled()
+  })
+
+  it('tells the admin in an error toast when archiving fails', async () => {
     vi.mocked(api.deleteAdminStudent).mockRejectedValue(
       new Error('This student is already archived.'),
     )
-    render(<AdminStudentsPage />)
+    renderPage()
     await screen.findByText('Nino Beridze')
     const row = screen.getByText('Nino Beridze').closest('tr') as HTMLElement
     fireEvent.click(within(row).getByRole('button', { name: 'Archive' }))
-    await waitFor(() =>
-      expect(window.alert).toHaveBeenCalledWith(
-        'This student is already archived.',
-      ),
+    const dialog = await confirmDialog()
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Archive student' }),
     )
+    expect(
+      (await screen.findAllByText('This student is already archived.')).length,
+    ).toBeGreaterThan(0)
+    expect(
+      screen.getAllByText('Could not archive the student').length,
+    ).toBeGreaterThan(0)
+    expect(window.alert).not.toHaveBeenCalled()
   })
 
-  it('restores an archived student after confirmation', async () => {
+  it('restores an archived student after a normal (not danger) confirmation', async () => {
     vi.mocked(api.restoreAdminStudent).mockResolvedValue(undefined)
-    render(<AdminStudentsPage />)
+    renderPage()
     await screen.findByText('Nino Beridze')
     fireEvent.click(
       screen.getByRole('button', { name: 'Archived / Soft-Deleted' }),
     )
     await screen.findByText('Old Student')
     fireEvent.click(screen.getByRole('button', { name: 'Restore' }))
+    const dialog = await confirmDialog()
+    expect(dialog).toHaveAccessibleName('Restore Old Student?')
+    const confirmButton = within(dialog).getByRole('button', {
+      name: 'Restore student',
+    })
+    expect(confirmButton).toHaveAttribute('data-variant', 'default')
+    fireEvent.click(confirmButton)
     await waitFor(() =>
       expect(api.restoreAdminStudent).toHaveBeenCalledWith('BTU-A1'),
     )
+    expect(
+      (await screen.findAllByText('Student restored')).length,
+    ).toBeGreaterThan(0)
   })
 
   it('opens and closes the add student dialog', async () => {
-    render(<AdminStudentsPage />)
+    renderPage()
     await screen.findByText('Nino Beridze')
     fireEvent.click(screen.getByRole('button', { name: 'Add student' }))
     expect(screen.getByRole('dialog')).toBeInTheDocument()

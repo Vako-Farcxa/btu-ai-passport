@@ -7,6 +7,7 @@ import {
 } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { AdminFeedback } from '@/components/admin/admin-feedback'
 import * as api from '@/lib/api/admin'
 
 import AdminDashboardPage from './page'
@@ -100,5 +101,73 @@ describe('admin dashboard', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
     await waitFor(() => expect(screen.getByText('214')).toBeInTheDocument())
     expect(api.fetchAdminStats).toHaveBeenCalledTimes(2)
+  })
+
+  describe('Trigger Sync feedback', () => {
+    const run = async () => {
+      vi.mocked(api.fetchAdminStats).mockResolvedValue(stats)
+      vi.spyOn(window, 'alert').mockImplementation(() => undefined)
+      render(
+        <AdminFeedback>
+          <AdminDashboardPage />
+        </AdminFeedback>,
+      )
+      await screen.findByText('214')
+      fireEvent.click(screen.getByRole('button', { name: 'Trigger Sync' }))
+    }
+    const toastWith = async (title: string) =>
+      (await screen.findAllByTestId('toast')).find((el) =>
+        el.textContent?.includes(title),
+      )
+
+    it('confirms a finished sync with a success toast', async () => {
+      vi.mocked(api.triggerAdminSync).mockResolvedValue({
+        status: 'completed',
+        rows_read: 12,
+        versions_created: 2,
+        error: null,
+      })
+      await run()
+      const toast = await toastWith('Sync finished')
+      expect(toast).toHaveAttribute('data-type', 'success')
+      expect(toast).toHaveTextContent('Rows read: 12, new versions created: 2')
+      expect(window.alert).not.toHaveBeenCalled()
+    })
+
+    it('warns in a toast when another sync is already running', async () => {
+      vi.mocked(api.triggerAdminSync).mockResolvedValue({
+        status: 'skipped',
+        rows_read: 0,
+        versions_created: 0,
+        error: null,
+      })
+      await run()
+      const toast = await toastWith('Sync skipped')
+      expect(toast).toHaveAttribute('data-type', 'warning')
+      expect(toast).toHaveTextContent('another sync is already running')
+    })
+
+    it('shows a failed sync as an error toast', async () => {
+      vi.mocked(api.triggerAdminSync).mockResolvedValue({
+        status: 'failed',
+        rows_read: 3,
+        versions_created: 0,
+        error: 'sheet_unavailable',
+      })
+      await run()
+      const toast = await toastWith('Sync failed')
+      expect(toast).toHaveAttribute('data-type', 'error')
+      expect(toast).toHaveTextContent('sheet_unavailable')
+    })
+
+    it('shows a network error as an error toast, not a browser popup', async () => {
+      vi.mocked(api.triggerAdminSync).mockRejectedValue(
+        new Error('Failed to trigger sync: Bad Gateway'),
+      )
+      await run()
+      const toast = await toastWith('Sync failed')
+      expect(toast).toHaveTextContent('Failed to trigger sync: Bad Gateway')
+      expect(window.alert).not.toHaveBeenCalled()
+    })
   })
 })

@@ -10,6 +10,7 @@ import {
   triggerAdminSync,
   type AdminStats,
 } from '@/lib/api/admin'
+import { notify } from '@/lib/toast'
 
 export default function AdminDashboardPage() {
   const [stats, setStats] = useState<AdminStats | null>(null)
@@ -74,9 +75,17 @@ export default function AdminDashboardPage() {
       setSyncing(true)
       const res = await triggerAdminSync()
       await loadData()
-      if (res.status !== 'completed') alert(describeSyncResult(res).text)
+      const notice = describeSyncResult(res)
+      if (notice.kind === 'success')
+        notify.success('Sync finished', notice.text)
+      else if (notice.kind === 'warning')
+        notify.warning('Sync skipped', notice.text)
+      else notify.error('Sync failed', notice.text)
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Sync failed')
+      notify.error(
+        'Sync failed',
+        err instanceof Error ? err.message : 'Please try again.',
+      )
     } finally {
       setSyncing(false)
     }
