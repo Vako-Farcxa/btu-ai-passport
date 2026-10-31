@@ -27,6 +27,7 @@ from passport_api.fingerprint import (
 from passport_api.pdf import PassportPdf, get_storage, publish_pdfs
 from passport_api.schemas import Skill, SyncResult
 from passport_api.settings import email_domain_allowed, settings
+from passport_api.validation import PASSPORT_ID_INVALID, full_name_error, passport_id_error
 
 _log = logging.getLogger(__name__)
 _UNIQUE_VIOLATION = "23505"
@@ -95,6 +96,9 @@ STALE_LOCK_ERROR = "stale_lock"
 OPEN_ANCHOR = ("pending", "retrying", "failed")
 ANCHOR_LOCK_NAME = "reconciler"
 STUDENT_ARCHIVED = "student_archived"
+# Row error codes for Sheet values the sync refuses to guess about.
+INVALID_AWARDED_ON = "invalid_awarded_on"
+OTHER_ROW_INVALID = "other_row_invalid"
 # Row error codes for a unit the database refused. See supabase/migrations/0011_atomic_sync.sql.
 SYNC_STALE = "sync_stale"
 _UNIT_STALE = "PS001"
@@ -320,6 +324,8 @@ class _EmailGroup:
     rows: list[_SkillFact]
     indexes: list[int]
     passport_id: str = ""
+    # Positions in `indexes` of rows whose Date Earned is filled in but is not a real date.
+    bad_date_indexes: list[int] = dataclasses.field(default_factory=list)
 
 
 class SyncStore(Protocol):
@@ -1136,7 +1142,7 @@ def run_sync(store: SyncStore, sheet: Sheet, chain: AnchorChain | None = None) -
     try:
         raw_rows = sheet.read_rows()
     except Exception as exc:
-        print(f"sheet_read_failed: {type(exc).__name__}: {exc}", flush=True)
+        _log.warning("sheet_read_failed: %s", _error_label(exc))
         store.abort()
         return SyncResult(
             status="failed", rows_read=0, versions_created=0, error="sheet_unavailable"
@@ -1144,20 +1150,20 @@ def run_sync(store: SyncStore, sheet: Sheet, chain: AnchorChain | None = None) -
     outcomes: list[RowOutcome] = []
     try:
         created = _issue_versions(store, raw_rows, chain, outcomes, _read_tab_catalog(sheet))
-    except Exception:
+    except Exception as exc:
         # Release the run lock so the next scheduled sync is not blocked.
-        _log.exception("sync_failed")
+        _log.error("sync_failed: %s", _error_label(exc))
         store.abort("sync_failed")
         raise
     try:
         store.finish(len(raw_rows), created)
-    except Exception:
+    except Exception as exc:
         # Do not leave the run "running": that would block every later sync.
-        _log.exception("sync_finish_failed")
+        _log.error("sync_finish_failed: %s", _error_label(exc))
         try:
             store.abort("sync_finish_failed")
-        except Exception:
-            _log.exception("sync_abort_failed")
+        except Exception as abort_exc:
+            _log.error("sync_abort_failed: %s", _error_label(abort_exc))
         raise
     try:
         sheet.write_back(sorted(outcomes, key=lambda outcome: outcome.index))
@@ -1256,8 +1262,16 @@ def _issue_versions(
                 ]
             )
         )
-        fingerprint = skill_fingerprint(skills)
         state = states.get(email)
+        if group.bad_date_indexes:
+            # A date typed wrongly used to be stored as "no date" and anchored that way for good.
+            # Nothing is guessed: the student keeps what they have until the Sheet is fixed.
+            bad = set(group.bad_date_indexes)
+            for index in group.indexes:
+                code = INVALID_AWARDED_ON if index in bad else OTHER_ROW_INVALID
+                fail([index], code, state.passport_id if state is not None else "")
+            return None
+        fingerprint = skill_fingerprint(skills)
         if state is not None and state.archived:
             # An archived student is revoked. Restore them in the admin panel first.
             fail(group.indexes, STUDENT_ARCHIVED, state.passport_id)
@@ -1265,6 +1279,13 @@ def _issue_versions(
         if state is None:
             if not group.full_name:
                 fail(group.indexes, "missing_full_name")
+                return None
+            name_problem = full_name_error(group.full_name)
+            if name_problem is not None:
+                fail(group.indexes, name_problem)
+                return None
+            if group.passport_id and passport_id_error(group.passport_id) is not None:
+                fail(group.indexes, PASSPORT_ID_INVALID)
                 return None
             if group.passport_id and group.passport_id in passport_ids:
                 fail(group.indexes, "passport_id_taken")
@@ -1284,6 +1305,11 @@ def _issue_versions(
             # version 1 here instead of failing as a conflict on every run.
             passport_id = state.passport_id
             rename = bool(group.full_name) and group.full_name != state.full_name
+            if rename and (name_problem := full_name_error(group.full_name)) is not None:
+                # Only a name that would change something is checked: a student whose stored
+                # name is old and odd keeps syncing as long as the Sheet leaves it alone.
+                fail(group.indexes, name_problem, state.passport_id)
+                return None
             student_name = group.full_name if rename else state.full_name
             expected_latest = state.latest_version
             changed = state.latest_fingerprint != fingerprint
@@ -1332,7 +1358,7 @@ def _issue_versions(
             item = plan(email, group)
         except Exception as exc:
             # One student must not stop the run. Mark their rows and carry on.
-            _log.exception("student_sync_failed")
+            _log.error("student_sync_failed student=%s %s", _student_ref(email), _error_label(exc))
             fail(group.indexes, _failure_code(exc))
             continue
         if item is not None:
@@ -1345,7 +1371,9 @@ def _issue_versions(
                 raise outcome
             _check_snapshot(item.unit, outcome)
         except Exception as exc:
-            _log.error("student_sync_failed", exc_info=exc)
+            _log.error(
+                "student_sync_failed student=%s %s", _student_ref(item.email), _error_label(exc)
+            )
             fail(item.group.indexes, _failure_code(exc))
             continue
         if outcome.created_version:
@@ -1409,6 +1437,22 @@ def _without_versions(student: StudentRecord) -> StudentState:
         holder_name=student.full_name,
         archived=student.archived,
     )
+
+
+def _student_ref(email: str) -> str:
+    """A short stable tag for a student in the logs, so the address itself is never written."""
+    return hashlib.sha256(email.encode()).hexdigest()[:8]
+
+
+def _error_label(exc: BaseException) -> str:
+    """What is safe to log about an error: its type and, for a database error, its SQLSTATE.
+
+    The message is left out on purpose. A unique-violation message from Postgres quotes the
+    values that clashed, which for this app are email addresses."""
+    code = getattr(exc, "code", None)
+    if isinstance(exc, APIError) and isinstance(code, str):
+        return f"{type(exc).__name__} sqlstate={code}"
+    return type(exc).__name__
 
 
 def _failure_code(exc: Exception) -> str:
@@ -1783,15 +1827,17 @@ def _group_rows(
         if not email_domain_allowed(email):
             failures[index] = "email_domain_not_allowed"
             continue
+        awarded_on = normalize_awarded_on(row["awarded_on"])
         fact = _SkillFact(
             skill=skill,
             badge=row["badge"],
-            awarded_on=normalize_awarded_on(row["awarded_on"]),
+            awarded_on=awarded_on,
             raw_awarded_on=row["awarded_on"],
             description=row["description"],
             skill_id=row["skill_id"].upper(),
             category=row["skill_category"],
         )
+        bad_date = bool(row["awarded_on"]) and awarded_on is None
         group = groups.get(email)
         if group is None:
             groups[email] = _EmailGroup(
@@ -1799,6 +1845,7 @@ def _group_rows(
                 rows=[fact],
                 indexes=[index],
                 passport_id=row["passport_id"].upper(),
+                bad_date_indexes=[index] if bad_date else [],
             )
             continue
         if row["full_name"]:
@@ -1807,6 +1854,8 @@ def _group_rows(
             group.passport_id = row["passport_id"].upper()
         group.rows.append(fact)
         group.indexes.append(index)
+        if bad_date:
+            group.bad_date_indexes.append(index)
     return groups, failures
 
 

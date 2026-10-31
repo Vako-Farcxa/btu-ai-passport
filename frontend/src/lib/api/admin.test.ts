@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
   adminErrorMessage,
+  auditActionLabel,
+  fetchAdminAudit,
   describeSyncResult,
   fetchAdminHealth,
   fetchAdminStats,
@@ -162,6 +164,12 @@ describe('revocation calls', () => {
       'version_not_found',
       'sync_stale',
       'snapshot_mismatch',
+      'invalid_full_name',
+      'invalid_passport_id',
+      'invalid_awarded_on',
+      'other_row_invalid',
+      'invalid_request',
+      'audit_unavailable',
     ]) {
       expect(adminErrorMessage(code)).not.toBe(code)
     }
@@ -233,5 +241,61 @@ describe('fetchAdminStats', () => {
         .mockResolvedValue({ ok: false, status: 503, headers: new Headers() }),
     )
     await expect(fetchAdminStats()).rejects.toThrow(/503/)
+  })
+})
+
+describe('fetchAdminAudit', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('asks for the newest entries with the admin token and no cache', async () => {
+    const entries = [{ id: 'a1', action: 'sync.run' }]
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ entries }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    await expect(fetchAdminAudit(25)).resolves.toEqual(entries)
+    const [url, init] = fetchMock.mock.calls[0] as [
+      string,
+      { headers: Record<string, string>; cache: string },
+    ]
+    expect(url).toBe('http://localhost:8000/admin/audit?limit=25')
+    expect(init.headers.Authorization).toBe('Bearer tok')
+    expect(init.cache).toBe('no-store')
+  })
+
+  it('explains an unavailable log in plain words', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 503,
+        json: async () => ({ code: 'audit_unavailable' }),
+      }),
+    )
+    await expect(fetchAdminAudit()).rejects.toThrow(/activity log/)
+  })
+})
+
+describe('auditActionLabel', () => {
+  it('labels every action the API records and passes unknown ones through', () => {
+    for (const action of [
+      'student.archive',
+      'student.restore',
+      'version.revoke',
+      'version.unrevoke',
+      'sync.run',
+      'skill.create',
+      'skill.update',
+      'skill.award',
+      'anchor.retry',
+      'pdf.regenerate',
+      'flag.resolved',
+      'flag.dismissed',
+    ]) {
+      expect(auditActionLabel(action)).not.toBe(action)
+    }
+    expect(auditActionLabel('future.thing')).toBe('future.thing')
   })
 })

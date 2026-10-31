@@ -40,11 +40,15 @@ TABLES: tuple[str, ...] = (
     "sync_runs",
     "admin_users",
     "flags",
+    "admin_audit",
 )
 # Tables that are deliberately not saved. The anchor lock only holds "a run is in progress",
 # and migration 0010 creates its one row again. tests/test_backup.py checks that TABLES and
 # this tuple together cover every table the migrations create.
 SKIPPED_TABLES: tuple[str, ...] = ("anchor_reconcile_lock",)
+# Tables added after the first backups. A restore of an older backup has no file for them, which
+# is normal, so it skips them instead of stopping. Every other missing file is an error.
+ADDED_LATER_TABLES: tuple[str, ...] = ("admin_audit",)
 
 PAGE_SIZE = 1000
 RESTORE_BATCH = 500
@@ -224,6 +228,8 @@ def restore_database(
                 continue
             path = folder / "database" / f"{table}.jsonl"
             if not path.is_file():
+                if table in ADDED_LATER_TABLES:
+                    continue
                 raise BackupError(f"table {table}: file missing from the backup")
             count = 0
             for batch in _batches(path, RESTORE_BATCH):

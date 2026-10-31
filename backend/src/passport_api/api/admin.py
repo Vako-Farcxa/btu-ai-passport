@@ -4,7 +4,7 @@ Every route here sits behind the router-level `_admin_guard` dependency: a valid
 JWT with an allowed email that is listed in admin_users. The guard runs before request
 bodies are validated, so a caller without it gets 401 or 403 and nothing else.
 Sheet-managed students (admin_managed=False) are read-only from the admin
-panel's perspective — their skills can only be changed via the Google Sheet.
+panel's perspective, their skills can only be changed via the Google Sheet.
 """
 
 import logging
@@ -24,9 +24,11 @@ from passport_api.admin_health import load_admin_health
 from passport_api.admin_stats import load_admin_stats, sync_run_from_row
 from passport_api.anchoring import reconcile_anchors
 from passport_api.api.sync import get_sync_store
+from passport_api.audit import get_audit_store, record_admin_action
 from passport_api.auth import require_admin
 from passport_api.cache import TtlCache, clear_all_caches
 from passport_api.chain import chain_from_settings
+from passport_api.clock import local_today
 from passport_api.consistency import find_inconsistencies, load_students
 from passport_api.db import get_supabase
 from passport_api.errors import APIError
@@ -50,6 +52,7 @@ from passport_api.schemas import (
     AdminVersion,
     AdminVersionPending,
     AdminVersionPendingList,
+    AuditList,
     AwardRowResult,
     ConsistencyProblem,
     ConsistencyReport,
@@ -60,6 +63,7 @@ from passport_api.search import contains_filter
 from passport_api.settings import settings
 from passport_api.sheet_admin import (
     ALREADY_AWARDED,
+    SHEET_WRITE_LOCK,
     AdminGspreadSheet,
     AdminSheet,
     AwardInput,
@@ -92,6 +96,11 @@ _log = logging.getLogger(__name__)
 
 def _admin_guard(authorization: Annotated[str | None, Header()] = None) -> str:
     return require_admin(authorization)
+
+
+# The signed-in admin's email. FastAPI runs the guard once per request, so a route that asks for
+# it again (to write the audit log) gets the same answer without a second lookup.
+Actor = Annotated[str, Depends(_admin_guard)]
 
 
 _WRITE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
@@ -261,7 +270,7 @@ def _require_admin_student(passport_id: str) -> dict[str, object]:
 
 
 # ---------------------------------------------------------------------------
-# Students — read
+# Students: read
 # ---------------------------------------------------------------------------
 
 
@@ -343,13 +352,14 @@ def get_student(
 
 
 # ---------------------------------------------------------------------------
-# Students — write (new students are created by awarding a skill, see /admin/awards)
+# Students: write (new students are created by awarding a skill, see /admin/awards)
 # ---------------------------------------------------------------------------
 
 
 @router.delete("/students/{passport_id}", status_code=204)
 def delete_student(
     passport_id: str,
+    actor: Actor,
 ) -> Response:
     student = _require_admin_student(passport_id)
     if student.get("deleted_at") is not None:
@@ -357,12 +367,14 @@ def delete_student(
     get_supabase().table("students").update({"deleted_at": _now()}).eq(
         "id", str(student["id"])
     ).execute()
+    record_admin_action(actor, "student.archive", target_type="student", target=passport_id)
     return Response(status_code=204)
 
 
 @router.post("/students/{passport_id}/restore", status_code=204)
 def restore_student(
     passport_id: str,
+    actor: Actor,
 ) -> Response:
     """Un-archive a student: their codes verify again and they can open their passport."""
     student = _require_admin_student(passport_id)
@@ -371,6 +383,7 @@ def restore_student(
     get_supabase().table("students").update({"deleted_at": None}).eq(
         "id", str(student["id"])
     ).execute()
+    record_admin_action(actor, "student.restore", target_type="student", target=passport_id)
     return Response(status_code=204)
 
 
@@ -378,7 +391,7 @@ def _require_version(version_id: str) -> dict[str, object]:
     response = (
         get_supabase()
         .table("passport_versions")
-        .select("id, revoked_at")
+        .select("id, revoked_at, version_number, students(passport_id)")
         .eq("id", version_id)
         .limit(1)
         .execute()
@@ -389,9 +402,24 @@ def _require_version(version_id: str) -> dict[str, object]:
     return rows[0]
 
 
+def _version_detail(version: dict[str, object]) -> dict[str, str | int | bool | None]:
+    """Which student and version number a version id belongs to, for the audit log."""
+    owner = version.get("students")
+    if isinstance(owner, list):
+        owner = owner[0] if owner else None
+    number = version.get("version_number")
+    detail: dict[str, str | int | bool | None] = {}
+    if isinstance(owner, dict) and owner.get("passport_id"):
+        detail["passport_id"] = str(owner["passport_id"])
+    if isinstance(number, int):
+        detail["version"] = number
+    return detail
+
+
 @router.post("/versions/{version_id}/revoke", status_code=204)
 def revoke_version(
     version_id: str,
+    actor: Actor,
 ) -> Response:
     """Revoke one version. Its code verifies as Revoked and its PDF can no longer be
     downloaded. Newer and older versions are not touched."""
@@ -401,12 +429,20 @@ def revoke_version(
     get_supabase().table("passport_versions").update({"revoked_at": _now()}).eq(
         "id", version_id
     ).execute()
+    record_admin_action(
+        actor,
+        "version.revoke",
+        target_type="version",
+        target=version_id,
+        detail=_version_detail(version),
+    )
     return Response(status_code=204)
 
 
 @router.post("/versions/{version_id}/unrevoke", status_code=204)
 def unrevoke_version(
     version_id: str,
+    actor: Actor,
 ) -> Response:
     version = _require_version(version_id)
     if version.get("revoked_at") is None:
@@ -414,6 +450,13 @@ def unrevoke_version(
     get_supabase().table("passport_versions").update({"revoked_at": None}).eq(
         "id", version_id
     ).execute()
+    record_admin_action(
+        actor,
+        "version.unrevoke",
+        target_type="version",
+        target=version_id,
+        detail=_version_detail(version),
+    )
     return Response(status_code=204)
 
 
@@ -439,8 +482,29 @@ def list_sync_runs(
 
 
 @router.post("/sync", response_model=SyncResult)
-def trigger_sync() -> SyncResult:
-    return run_sync(SupabaseSyncStore(), GspreadSheet())
+def trigger_sync(actor: Actor) -> SyncResult:
+    result = run_sync(SupabaseSyncStore(), GspreadSheet())
+    record_admin_action(
+        actor,
+        "sync.run",
+        target_type="sync",
+        detail={
+            "status": result.status,
+            "rows_read": result.rows_read,
+            "versions_created": result.versions_created,
+        },
+    )
+    return result
+
+
+@router.get("/audit", response_model=AuditList)
+def list_audit(limit: int = Query(default=100, ge=1, le=500)) -> AuditList:
+    """The newest admin changes first."""
+    try:
+        return AuditList(entries=get_audit_store().recent(limit))
+    except Exception as exc:
+        _log.error("audit_read_failed error=%s", type(exc).__name__)
+        raise APIError(503, "audit_unavailable") from exc
 
 
 # ---------------------------------------------------------------------------
@@ -546,7 +610,17 @@ def list_skills() -> AdminCatalogSkillList:
 @router.post("/skills", response_model=AdminCatalogSkill, status_code=201)
 def create_skill(
     body: AdminCatalogSkillCreate,
+    actor: Actor,
     sheet: AdminSheet = _admin_sheet_dependency,
+) -> AdminCatalogSkill:
+    # The next skill ID is "highest in the tab and the database, plus one". Two saves at the
+    # same moment would pick the same one, so they take turns.
+    with SHEET_WRITE_LOCK:
+        return _create_skill(body, actor, sheet)
+
+
+def _create_skill(
+    body: AdminCatalogSkillCreate, actor: str, sheet: AdminSheet
 ) -> AdminCatalogSkill:
     name = _nfc(body.name)
     key = _name_key(name)
@@ -560,6 +634,13 @@ def create_skill(
     unfinished = next((skill for skill in tab if _name_key(skill.name) == key), None)
     if unfinished is not None:
         _upsert_skill(unfinished)
+        record_admin_action(
+            actor,
+            "skill.create",
+            target_type="skill",
+            target=unfinished.id,
+            detail={"name": unfinished.name, "finished_earlier_save": True},
+        )
         return _as_admin_skill(unfinished)
     skill = CatalogSkill(
         id=_next_skill_id([*(s.id for s in db_skills), *(s.id for s in tab)]),
@@ -572,6 +653,13 @@ def create_skill(
     with _sheet_errors():
         sheet.append_skill(skill)
     _upsert_skill(skill)
+    record_admin_action(
+        actor,
+        "skill.create",
+        target_type="skill",
+        target=skill.id,
+        detail={"name": skill.name, "category": skill.category},
+    )
     return _as_admin_skill(skill)
 
 
@@ -579,7 +667,15 @@ def create_skill(
 def update_skill(
     skill_id: str,
     body: AdminCatalogSkillUpdate,
+    actor: Actor,
     sheet: AdminSheet = _admin_sheet_dependency,
+) -> AdminCatalogSkill:
+    with SHEET_WRITE_LOCK:
+        return _update_skill(skill_id, body, actor, sheet)
+
+
+def _update_skill(
+    skill_id: str, body: AdminCatalogSkillUpdate, actor: str, sheet: AdminSheet
 ) -> AdminCatalogSkill:
     skill_id = skill_id.strip().upper()
     db_skills = _db_skills()
@@ -609,6 +705,14 @@ def update_skill(
         if not sheet.update_skill(merged):
             sheet.append_skill(merged)
     _upsert_skill(merged)
+    changed = sorted(field for field in body.model_fields_set if getattr(body, field) is not None)
+    record_admin_action(
+        actor,
+        "skill.update",
+        target_type="skill",
+        target=skill_id,
+        detail={"fields": ", ".join(changed)},
+    )
     return _as_admin_skill(merged)
 
 
@@ -639,6 +743,7 @@ class _RecordingSheet:
 @router.post("/awards", response_model=AdminAwardResponse)
 def award_skill(
     body: AdminAwardRequest,
+    actor: Actor,
     sheet: AdminSheet = _admin_sheet_dependency,
     store: SyncStore = _sync_store_dependency,
 ) -> AdminAwardResponse:
@@ -656,7 +761,7 @@ def award_skill(
     badge = badge_for_category(level)
     if not badge:
         raise APIError(422, "award_level_required")
-    awarded_on = (body.awarded_on or datetime.now(UTC).date()).isoformat()
+    awarded_on = (body.awarded_on or local_today()).isoformat()
 
     known = store.current_students()
     order: list[str] = []
@@ -740,6 +845,21 @@ def award_skill(
                     error=outcome.error,
                     passport_id=outcome.passport_id,
                 )
+    for email, row_result in results.items():
+        if row_result.status in ("synced", "pending"):
+            record_admin_action(
+                actor,
+                "skill.award",
+                target_type="student",
+                target=row_result.passport_id or email,
+                detail={
+                    "skill_id": skill.id,
+                    "level": level,
+                    "awarded_on": awarded_on,
+                    "status": row_result.status,
+                    "version": row_result.version,
+                },
+            )
     return AdminAwardResponse(rows=[results[email] for email in order], sync_result=sync_result)
 
 
@@ -815,6 +935,7 @@ def consistency_report() -> ConsistencyReport:
 @router.post("/versions/{version_id}/anchor", status_code=200)
 def retry_anchor(
     version_id: str,
+    actor: Actor,
 ) -> dict[str, str]:
     """Retry anchoring one version now.
 
@@ -839,6 +960,13 @@ def retry_anchor(
     if result.status == "skipped":
         raise APIError(409, "anchor_busy")
     status = normalize_anchor_status(record.anchor_status)
+    record_admin_action(
+        actor,
+        "anchor.retry",
+        target_type="version",
+        target=version_id,
+        detail={"status": status},
+    )
     response: dict[str, str] = {"status": status}
     if record.anchor_last_error and status != "confirmed":
         response["error"] = record.anchor_last_error
@@ -850,6 +978,7 @@ def retry_anchor(
 @router.post("/versions/{version_id}/pdf", status_code=200)
 def regenerate_pdf(
     version_id: str,
+    actor: Actor,
     force: bool = Query(default=False),
 ) -> dict[str, str]:
     resp = (
@@ -912,4 +1041,7 @@ def regenerate_pdf(
     get_supabase().table("passport_versions").update(
         {"pdf_en_path": en_path, "pdf_ka_path": ka_path}
     ).eq("id", version_id).execute()
+    record_admin_action(
+        actor, "pdf.regenerate", target_type="version", target=version_id, detail={"force": force}
+    )
     return {"en_path": en_path, "ka_path": ka_path}

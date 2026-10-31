@@ -149,7 +149,7 @@ export default function AdminSyncPage() {
           <p className="mt-1 text-sm font-bold text-slate-900">
             Every 15 minutes
           </p>
-          <p className="text-xs text-slate-400 mt-1">
+          <p className="text-xs text-slate-500 mt-1">
             Configured in .github/workflows/sync.yml
           </p>
         </div>
@@ -161,7 +161,7 @@ export default function AdminSyncPage() {
           <p className="mt-1 text-sm font-bold text-slate-900">
             Zero duplicate versions
           </p>
-          <p className="text-xs text-slate-400 mt-1">
+          <p className="text-xs text-slate-500 mt-1">
             keccak256 skill fingerprint verification
           </p>
         </div>
@@ -173,7 +173,7 @@ export default function AdminSyncPage() {
           <p className="mt-1 text-sm font-bold text-slate-900">
             Matched by email
           </p>
-          <p className="text-xs text-slate-400 mt-1">
+          <p className="text-xs text-slate-500 mt-1">
             A student already in the database gets a new version, never a
             duplicate
           </p>
@@ -218,7 +218,7 @@ export default function AdminSyncPage() {
                 <tr>
                   <td
                     colSpan={6}
-                    className="px-6 py-12 text-center text-slate-400 text-xs"
+                    className="px-6 py-12 text-center text-slate-500 text-xs"
                   >
                     Loading sync history...
                   </td>
@@ -227,7 +227,7 @@ export default function AdminSyncPage() {
                 <tr>
                   <td
                     colSpan={6}
-                    className="px-6 py-12 text-center text-slate-400 text-xs"
+                    className="px-6 py-12 text-center text-slate-500 text-xs"
                   >
                     No sync executions logged yet.
                   </td>
@@ -262,10 +262,10 @@ export default function AdminSyncPage() {
                         : 'In Progress'}
                     </td>
                     <td className="px-6 py-3.5 text-xs font-mono font-medium text-slate-800">
-                      {run.rows_read ?? '—'}
+                      {run.rows_read ?? 'N/A'}
                     </td>
                     <td className="px-6 py-3.5 text-xs font-mono font-semibold text-slate-900">
-                      {run.versions_created ?? '—'}
+                      {run.versions_created ?? 'N/A'}
                     </td>
                     <td className="px-6 py-3.5 text-xs text-slate-500 truncate max-w-sm">
                       {run.error ?? 'None (Successful)'}

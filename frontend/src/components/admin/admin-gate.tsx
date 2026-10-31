@@ -160,7 +160,7 @@ export function AdminIdentity() {
   const [busy, setBusy] = useState(false)
   if (!email) return null
   return (
-    <div className="text-[11px] text-slate-500 space-y-1">
+    <div className="text-[11px] text-slate-400 space-y-1">
       <div>
         Signed in as{' '}
         <span className="text-slate-300 font-mono break-all">{email}</span>

@@ -92,6 +92,8 @@ type Copy = {
   newReply: string
   pendingNotice: string
   tamperedNotice: string
+  notFoundNotice: string
+  skipToContent: string
   onchainVerified: string
   onchainVerifiedAtBlock: string
   onchainVerifiedNote: string
@@ -227,6 +229,9 @@ export const messages: Record<Locale, Copy> = {
     newReply: 'New reply',
     pendingNotice:
       'This code exists, but its record on the blockchain is not confirmed yet. This usually takes a few minutes. Check again later. Nothing is shown until it is confirmed.',
+    notFoundNotice:
+      'No passport matches this code. Check it for typing mistakes. A code looks like ABCD-EFGH-IJKL-MNOP. If it still fails, ask the holder to copy it again from their passport page.',
+    skipToContent: 'Skip to the main content',
     tamperedNotice:
       'The stored record for this code does not match what was written to the blockchain, so it may have been changed. No name or skills are shown and this passport must not be relied on. Contact the BTU AI Skills team.',
     onchainVerified: 'Verified on-chain',
@@ -371,6 +376,9 @@ export const messages: Record<Locale, Copy> = {
     newReply: 'ახალი პასუხი',
     pendingNotice:
       'ეს კოდი არსებობს, მაგრამ მისი ჩანაწერი ბლოკჩეინზე ჯერ არ დადასტურებულა. ეს ჩვეულებრივ რამდენიმე წუთს გრძელდება. სცადეთ მოგვიანებით. დადასტურებამდე არაფერი ნაჩვენებია.',
+    notFoundNotice:
+      'ამ კოდით პასპორტი ვერ მოიძებნა. შეამოწმეთ, ხომ არ არის შეცდომა. კოდი შედგება ოთხი ნაწილისგან, თითოეულში ოთხი სიმბოლოა, ნაწილები ტირეებით არის გამოყოფილი. თუ მაინც არ მუშაობს, სთხოვეთ მფლობელს, რომ პასპორტის გვერდიდან კოდი თავიდან დააკოპიროს.',
+    skipToContent: 'გადასვლა მთავარ შინაარსზე',
     tamperedNotice:
       'ამ კოდის შენახული ჩანაწერი არ ემთხვევა ბლოკჩეინზე ჩაწერილს, ამიტომ ის შესაძლოა შეცვლილია. სახელი და უნარები არ ჩანს და ამ პასპორტს ვერ დაეყრდნობით. დაუკავშირდით BTU-ის AI უნარების გუნდს.',
     onchainVerified: 'დადასტურებულია ბლოკჩეინზე',

@@ -207,7 +207,7 @@ export default function AdminStudentsPage() {
               className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
             />
             <svg
-              className="w-4 h-4 text-slate-400 absolute left-3 top-2.5"
+              className="w-4 h-4 text-slate-500 absolute left-3 top-2.5"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -251,7 +251,7 @@ export default function AdminStudentsPage() {
                 <tr>
                   <td
                     colSpan={7}
-                    className="px-6 py-12 text-center text-slate-400 text-xs"
+                    className="px-6 py-12 text-center text-slate-500 text-xs"
                   >
                     Loading student directory...
                   </td>
@@ -260,7 +260,7 @@ export default function AdminStudentsPage() {
                 <tr>
                   <td
                     colSpan={7}
-                    className="px-6 py-12 text-center text-slate-400 text-xs"
+                    className="px-6 py-12 text-center text-slate-500 text-xs"
                   >
                     No students found matching your criteria.
                   </td>
@@ -319,7 +319,7 @@ export default function AdminStudentsPage() {
                           {anchorStatusLabel(student.latest_anchor_status)}
                         </span>
                       ) : (
-                        <span className="text-slate-400">N/A</span>
+                        <span className="text-slate-500">N/A</span>
                       )}
                     </td>
                     <td className="px-6 py-4 text-right text-xs space-x-2">

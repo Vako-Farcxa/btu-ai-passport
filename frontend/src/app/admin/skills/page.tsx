@@ -238,7 +238,7 @@ export default function AdminSkillsPage() {
                 </option>
               ))}
             </select>
-            <p className="text-[11px] text-slate-400 mt-1">
+            <p className="text-[11px] text-slate-500 mt-1">
               The level decides the badge: AI Skill, AI Applied Skill or AI
               Advanced Skill.
             </p>
@@ -306,7 +306,7 @@ export default function AdminSkillsPage() {
                 <tr>
                   <td
                     colSpan={6}
-                    className="px-6 py-12 text-center text-slate-400 text-xs"
+                    className="px-6 py-12 text-center text-slate-500 text-xs"
                   >
                     Loading skills...
                   </td>
@@ -324,7 +324,7 @@ export default function AdminSkillsPage() {
                 <tr>
                   <td
                     colSpan={6}
-                    className="px-6 py-12 text-center text-slate-400 text-xs"
+                    className="px-6 py-12 text-center text-slate-500 text-xs"
                   >
                     No skills yet. Create the first one above.
                   </td>

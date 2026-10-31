@@ -49,7 +49,7 @@ jobs:
       # Includes the tests that run the real migrations on a real Postgres started by the
       # pgserver dev dependency (test_sync_postgres.py).
       - name: Tests (pytest)
-        run: uv run pytest -ra
+        run: uv run pytest -ra --cov=passport_api --cov-branch --cov-report=term
 
   frontend:
     name: Frontend
@@ -80,7 +80,7 @@ jobs:
         run: npm run format:check
 
       - name: Unit tests (vitest)
-        run: npm test
+        run: npm run test:coverage
 
       - name: Cache the Next.js build cache
         uses: actions/cache@v6

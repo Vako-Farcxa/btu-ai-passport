@@ -14,13 +14,15 @@ router = APIRouter(tags=["health"])
 _NO_STORE = {"Cache-Control": "no-store"}
 
 
-@router.api_route("/health", methods=["GET", "HEAD"])
+@router.get("/health")
+@router.head("/health", include_in_schema=False)
 def health() -> JSONResponse:
     """Liveness: the process is running. Touches no dependency, so it is always cheap."""
     return JSONResponse({"status": "ok"}, headers=_NO_STORE)
 
 
-@router.api_route("/health/ready", methods=["GET", "HEAD"])
+@router.get("/health/ready")
+@router.head("/health/ready", include_in_schema=False)
 def health_ready() -> JSONResponse:
     """Readiness: database, Google Sheet and Amoy RPC, each "ok", "down" or "not_configured".
 

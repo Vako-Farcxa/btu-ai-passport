@@ -97,7 +97,7 @@ function StudentDetailContent() {
 
   if (loading) {
     return (
-      <div className="py-24 text-center text-slate-400 text-sm">
+      <div className="py-24 text-center text-slate-500 text-sm">
         Loading student passport details...
       </div>
     )
@@ -183,7 +183,7 @@ function StudentDetailContent() {
                 {latestVersion.verification_code}
               </span>
               <svg
-                className="w-3.5 h-3.5 text-slate-400"
+                className="w-3.5 h-3.5 text-slate-500"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -274,7 +274,7 @@ function StudentDetailContent() {
         </h2>
 
         {student.versions.length === 0 ? (
-          <div className="p-8 bg-white rounded-2xl border border-slate-200 text-center text-slate-400 text-xs">
+          <div className="p-8 bg-white rounded-2xl border border-slate-200 text-center text-slate-500 text-xs">
             No versions issued for this student yet. Award a skill to create
             Version 1.
           </div>
@@ -411,7 +411,7 @@ function StudentDetailContent() {
                       <tr>
                         <td
                           colSpan={4}
-                          className="px-6 py-6 text-center text-slate-400"
+                          className="px-6 py-6 text-center text-slate-500"
                         >
                           No skills recorded on this version.
                         </td>
@@ -422,7 +422,7 @@ function StudentDetailContent() {
                           key={skill.id || sIdx}
                           className="hover:bg-slate-50/50"
                         >
-                          <td className="px-6 py-3 font-mono text-slate-400">
+                          <td className="px-6 py-3 font-mono text-slate-500">
                             {skill.position}
                           </td>
                           <td className="px-6 py-3 font-medium text-slate-900">
@@ -434,7 +434,7 @@ function StudentDetailContent() {
                                 {skill.badge}
                               </span>
                             ) : (
-                              '—'
+                              'N/A'
                             )}
                           </td>
                           <td className="px-6 py-3 text-slate-600">
@@ -458,7 +458,7 @@ export default function AdminStudentDetailPage() {
   return (
     <Suspense
       fallback={
-        <div className="py-24 text-center text-slate-400 text-sm">
+        <div className="py-24 text-center text-slate-500 text-sm">
           Loading student passport details...
         </div>
       }

@@ -250,7 +250,7 @@ export default function AdminDashboardPage() {
           </p>
           <div className="mt-2 flex items-baseline gap-2">
             <span className="text-xl font-bold capitalize text-slate-900">
-              {loading ? '—' : (lastSync?.status ?? 'No runs')}
+              {loading ? 'N/A' : (lastSync?.status ?? 'No runs')}
             </span>
           </div>
           <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
@@ -319,7 +319,7 @@ export default function AdminDashboardPage() {
                 <tr>
                   <td
                     colSpan={5}
-                    className="px-6 py-8 text-center text-slate-400 text-xs"
+                    className="px-6 py-8 text-center text-slate-500 text-xs"
                   >
                     No sync runs recorded yet.
                   </td>
@@ -349,10 +349,10 @@ export default function AdminDashboardPage() {
                       {new Date(run.started_at).toLocaleString()}
                     </td>
                     <td className="px-6 py-3.5 text-xs font-mono text-slate-700">
-                      {run.rows_read ?? '—'}
+                      {run.rows_read ?? 'N/A'}
                     </td>
                     <td className="px-6 py-3.5 text-xs font-mono font-medium text-slate-900">
-                      {run.versions_created ?? '—'}
+                      {run.versions_created ?? 'N/A'}
                     </td>
                     <td className="px-6 py-3.5 text-xs text-slate-500 truncate max-w-xs">
                       {run.error ?? 'None'}

@@ -151,7 +151,7 @@ export default function AdminAnchorsPage() {
           <p className="mt-1 text-sm font-bold text-slate-900">
             Polygon Amoy Testnet
           </p>
-          <p className="text-xs text-slate-400 mt-1">Chain ID: 80002</p>
+          <p className="text-xs text-slate-500 mt-1">Chain ID: 80002</p>
         </div>
 
         <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs">
@@ -161,7 +161,7 @@ export default function AdminAnchorsPage() {
           <p className="mt-1 text-sm font-bold text-slate-900">
             Zero PII On-Chain
           </p>
-          <p className="text-xs text-slate-400 mt-1">
+          <p className="text-xs text-slate-500 mt-1">
             Only content_hash & verification_id_hash
           </p>
         </div>
@@ -173,7 +173,7 @@ export default function AdminAnchorsPage() {
           <p className="mt-1 text-sm font-bold text-slate-900">
             {pending.length} versions
           </p>
-          <p className="text-xs text-slate-400 mt-1">
+          <p className="text-xs text-slate-500 mt-1">
             {attention > 0
               ? `${attention} need${attention === 1 ? 's' : ''} attention`
               : 'Checked automatically every 15 minutes'}
@@ -213,7 +213,7 @@ export default function AdminAnchorsPage() {
                 <tr>
                   <td
                     colSpan={7}
-                    className="px-6 py-12 text-center text-slate-400 text-xs"
+                    className="px-6 py-12 text-center text-slate-500 text-xs"
                   >
                     Checking queue...
                   </td>
@@ -222,7 +222,7 @@ export default function AdminAnchorsPage() {
                 <tr>
                   <td
                     colSpan={7}
-                    className="px-6 py-12 text-center text-slate-400 text-xs"
+                    className="px-6 py-12 text-center text-slate-500 text-xs"
                   >
                     All issued passport versions are fully confirmed on the
                     blockchain! 🎉
@@ -274,7 +274,7 @@ export default function AdminAnchorsPage() {
                         </div>
                       )}
                       {item.anchor_next_attempt_at && (
-                        <div className="mt-0.5 text-slate-400">
+                        <div className="mt-0.5 text-slate-500">
                           Next try after{' '}
                           {new Date(
                             item.anchor_next_attempt_at,
@@ -294,7 +294,7 @@ export default function AdminAnchorsPage() {
                             : 'Retry anchoring'}
                         </button>
                       ) : (
-                        <span className="text-xs text-slate-400">
+                        <span className="text-xs text-slate-500">
                           Waiting for the network
                         </span>
                       )}

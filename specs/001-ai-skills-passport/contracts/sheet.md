@@ -36,6 +36,9 @@ One row is one skill fact. The same email may appear on many rows and still prod
 - Blank email and blank skill (empty lines, notes below the data): ignored, nothing written.
 - Blank email, blank skill, or an email outside `ALLOWED_EMAIL_DOMAINS` (default `btu.edu.ge`): `FAILED` with `missing_email`, `missing_skill` or `email_domain_not_allowed`.
 - New student with no name: `FAILED` / `missing_full_name`.
+- New student, or a name that would change, where the name is not made of letters (Latin or Georgian, joined by a space, hyphen or apostrophe, no digits): `FAILED` / `invalid_full_name`. A stored name the Sheet does not touch is never checked again.
+- New student whose typed Passport ID is not capital letters, digits and hyphens (4 to 40 characters): `FAILED` / `invalid_passport_id`.
+- A `Date Earned` that is filled in but is not a real `YYYY-MM-DD` date (`soon`, `18/09/2026`, `2026-02-30`): that row is `FAILED` / `invalid_awarded_on`, and every other row of the same student is `FAILED` / `other_row_invalid`. Nothing is guessed and nothing is stored for that student until the cell is fixed or emptied. An empty date is allowed and means "no date".
 - New student whose existing Passport ID already belongs to another student: `FAILED` / `passport_id_taken`.
 - A repeated identical fact (`email`, `skill`, `badge`, raw `awarded_on`). It stays one skill entry.
 

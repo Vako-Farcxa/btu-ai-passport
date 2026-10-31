@@ -11,12 +11,12 @@ import { useCoverMotion, useOpenBookMotion } from '@/components/motion'
 export function BrandMark({ locale }: { locale: Locale }) {
   const name = messages[locale].universityName
   return (
-    <Link className="brand-mark" href="/" aria-label={name}>
+    <Link className="brand-mark" href="/">
       <span className="monogram" aria-hidden="true">
         B
       </span>
-      <span className="brand-word">
-        {locale === 'en' ? name.toUpperCase() : name}
+      <span className="brand-word" lang={locale}>
+        {name}
       </span>
     </Link>
   )
@@ -62,7 +62,7 @@ export function LandingDesk({
   const ref = useRef<HTMLElement>(null)
   useCoverMotion(ref)
   return (
-    <main ref={ref} className="desk landing">
+    <main ref={ref} id="main" tabIndex={-1} className="desk landing">
       <header className="topbar">
         <BrandMark locale={locale} />
         <LocaleSwitcher locale={locale} onChange={onLocale} />
@@ -90,7 +90,7 @@ export function OpenBook({
   const copy = messages[locale]
   useOpenBookMotion(ref)
   return (
-    <main ref={ref} className="desk inner-desk">
+    <main ref={ref} id="main" tabIndex={-1} className="desk inner-desk">
       <header className="topbar">
         <BrandMark locale={locale} />
         <LocaleSwitcher locale={locale} onChange={onLocale} />

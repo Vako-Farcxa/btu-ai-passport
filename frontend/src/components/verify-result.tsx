@@ -10,6 +10,7 @@ import type { Onchain, VerifyResult } from '@/lib/api/types'
 import {
   labelsFor,
   newerVersionNotice,
+  notFoundNotice,
   pendingNotice,
   revokedNotice,
   tamperedNotice,
@@ -45,6 +46,7 @@ export function VerifyResultCard({
   const revoked = revokedNotice(result, locale)
   const pending = pendingNotice(result, locale)
   const tampered = tamperedNotice(result, locale)
+  const notFound = notFoundNotice(result, locale)
   const found = result.outcome === 'valid' || result.outcome === 'outdated'
   const txUrl = 'tx_url' in result ? explorerTxUrl(result.tx_url) : null
 
@@ -84,6 +86,11 @@ export function VerifyResultCard({
       {tampered ? (
         <p className="tampered-notice" data-testid="tampered-notice">
           {tampered}
+        </p>
+      ) : null}
+      {notFound ? (
+        <p className="pending-notice" data-testid="not-found-notice">
+          {notFound}
         </p>
       ) : null}
       {revoked ? (

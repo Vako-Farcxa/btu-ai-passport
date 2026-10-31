@@ -2,7 +2,7 @@
 
 Every night at 02:05 Tbilisi time, `.github/workflows/backup.yml` saves:
 
-- **the database**: every table (`students`, `passport_versions`, `skill_entries`, `skills`, `source_records`, `sync_runs`, `admin_users`, `flags`) as one JSON Lines file each, and
+- **the database**: every table (`students`, `passport_versions`, `skill_entries`, `skills`, `source_records`, `sync_runs`, `admin_users`, `flags`, `admin_audit`) as one JSON Lines file each, and
 - **the Google Sheet**: every tab as a CSV file (the values as displayed; formatting, formulas and validation rules are not saved),
 
 packs them into one file, **encrypts it with AES-256**, and keeps it as a workflow artifact for **30 days**. The repository is public and anyone signed in to GitHub can download the artifacts of a public repository, so the file is only readable with the `BACKUP_PASSPHRASE` secret. Nothing readable is ever uploaded, and the job log shows only table names and row counts.
@@ -105,7 +105,7 @@ uv run python scripts/restore_backup.py ../restore-work --database --yes      # 
 
 ```sql
 truncate table flags, skill_entries, passport_versions, source_records,
-               students, skills, sync_runs, admin_users cascade;
+               students, skills, sync_runs, admin_users, admin_audit cascade;
 ```
 
 then run the two commands of case A.

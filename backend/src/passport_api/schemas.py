@@ -35,6 +35,8 @@ ErrorCode = Literal[
     "version_not_revoked",
     "health_unavailable",
     "stats_unavailable",
+    "invalid_request",
+    "audit_unavailable",
 ]
 
 
@@ -456,6 +458,26 @@ class HealthAlert(BaseModel):
     message: str
     reason: str | None = None
     count: int | None = None
+
+
+class AuditEntry(BaseModel):
+    """One admin change: who did what to what, and when."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    created_at: datetime
+    actor: str
+    action: str
+    target_type: str
+    target: str
+    detail: dict[str, str | int | bool | None]
+
+
+class AuditList(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    entries: list[AuditEntry]
 
 
 class AdminHealth(BaseModel):

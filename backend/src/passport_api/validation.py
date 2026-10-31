@@ -42,6 +42,29 @@ def name_error(value: str, code: str) -> str | None:
     return None
 
 
+FULL_NAME_INVALID = "invalid_full_name"
+PASSPORT_ID_INVALID = "invalid_passport_id"
+FULL_NAME_MAX = 2 * NAME_MAX + 1
+# A passport ID from the Sheet: capital letters, digits and hyphens, such as BTU-AI-000125.
+_PASSPORT_ID = re.compile(r"^[A-Z0-9][A-Z0-9-]{3,39}$")
+
+
+def full_name_error(value: str) -> str | None:
+    """`invalid_full_name` when a name read from the Sheet is not a plausible full name.
+
+    The same letters-only rule the admin form applies to a first and a last name, applied to
+    the whole name: at least two characters, at most a 50 character first and last name."""
+    name = clean_name(value)
+    if not NAME_MIN <= len(name) <= FULL_NAME_MAX or not _NAME.match(name):
+        return FULL_NAME_INVALID
+    return None
+
+
+def passport_id_error(value: str) -> str | None:
+    """`invalid_passport_id` when an ID typed into the Sheet could not be a passport ID."""
+    return None if _PASSPORT_ID.match(value) else PASSPORT_ID_INVALID
+
+
 def clean_email(value: str) -> str:
     return unicodedata.normalize("NFC", value).strip().lower()
 

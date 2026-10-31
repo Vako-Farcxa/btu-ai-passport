@@ -6,6 +6,7 @@ same layout the sync reads, and the sync then copies them into the database.
 
 import logging
 import re
+import threading
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from typing import Any, Protocol, cast
@@ -27,6 +28,11 @@ from passport_api.sync import (
 )
 
 _log = logging.getLogger(__name__)
+# Two admins writing at the same moment would both read the Sheet, both pick the same next
+# Student ID, Record ID or skill ID, and the second write would land on the first one's row.
+# Every write that picks a new ID or a new row holds this lock from the read to the write.
+# It covers one server process, which is what the Render free plan runs.
+SHEET_WRITE_LOCK = threading.RLock()
 _RECORD_ID = re.compile(r"^REC-(\d+)$", re.IGNORECASE)
 # Student IDs in the sheet look like BTU-T-0042. A new one is the highest number + 1.
 _STUDENT_ID = re.compile(r"^BTU-T-(\d+)$", re.IGNORECASE)
@@ -170,6 +176,12 @@ class AdminGspreadSheet(GspreadSheet):
         self, awards: list[AwardInput], known_emails: set[str]
     ) -> list[AwardPlacement]:
         """Append one row per award to the main worksheet, in the layout the sync reads."""
+        with SHEET_WRITE_LOCK:
+            return self._append_awards(awards, known_emails)
+
+    def _append_awards(
+        self, awards: list[AwardInput], known_emails: set[str]
+    ) -> list[AwardPlacement]:
         spreadsheet = open_spreadsheet()
         try:
             worksheet = spreadsheet.get_worksheet(0)

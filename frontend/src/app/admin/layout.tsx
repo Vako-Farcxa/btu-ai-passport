@@ -177,6 +177,27 @@ export default function AdminLayout({
                 </svg>
                 Flags
               </Link>
+
+              <Link
+                href="/admin/audit"
+                className="flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium text-slate-300 hover:text-white hover:bg-slate-800 transition-colors"
+              >
+                <svg
+                  className="w-4 h-4 text-slate-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
+                  />
+                </svg>
+                Activity
+              </Link>
             </nav>
           </div>
 
@@ -206,7 +227,11 @@ export default function AdminLayout({
         </aside>
 
         {/* Main Content Area */}
-        <main className="flex-1 flex flex-col min-w-0 overflow-y-auto">
+        <main
+          id="main"
+          tabIndex={-1}
+          className="flex-1 flex flex-col min-w-0 overflow-y-auto"
+        >
           <header className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between sticky top-0 z-10">
             <div className="flex items-center gap-3">
               <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
@@ -222,7 +247,7 @@ export default function AdminLayout({
                 Student Portal
               </Link>
               <span>•</span>
-              <span className="font-mono text-slate-400">
+              <span className="font-mono text-slate-600">
                 Polygon Amoy Testnet
               </span>
             </div>

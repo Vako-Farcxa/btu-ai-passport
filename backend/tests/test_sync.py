@@ -203,14 +203,14 @@ def test_rows_are_grouped_and_invalid_rows_are_ignored() -> None:
             "full_name": "Ada Lovelace",
             "skill": "Python",
             "badge": "",
-            "awarded_on": "soon",
+            "awarded_on": "",
         },
         {
             "email": "ada@btu.edu.ge",
             "full_name": "Ada Lovelace",
             "skill": "Python",
             "badge": "",
-            "awarded_on": "soon",
+            "awarded_on": "",
         },
         {
             "email": "ada@btu.edu.ge",
