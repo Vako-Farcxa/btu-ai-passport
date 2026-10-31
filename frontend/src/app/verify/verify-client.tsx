@@ -25,6 +25,9 @@ export default function VerifyClient() {
   const [waitFor, setWaitFor] = useState<number | null | undefined>(undefined)
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<VerifyResult | null>(null)
+  // The code the shown result belongs to. Typing in the input changes `code` only: the result
+  // card must keep showing (and keep its state) until the next submit.
+  const [checkedCode, setCheckedCode] = useState('')
   const copy = messages[locale]
 
   async function check(value: string) {
@@ -44,6 +47,7 @@ export default function VerifyClient() {
         setPrompt(true)
         return
       }
+      setCheckedCode(value)
       setResult(decision.body)
     } catch (error) {
       setResult(null)
@@ -128,7 +132,7 @@ export default function VerifyClient() {
         ) : null}
         {result ? (
           <VerifyResultCard
-            key={`${result.outcome}-${code}`}
+            key={`${result.outcome}-${checkedCode}`}
             locale={locale}
             result={result}
           />
