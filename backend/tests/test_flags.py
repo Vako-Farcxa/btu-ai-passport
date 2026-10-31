@@ -15,6 +15,7 @@ import passport_api.api.admin as admin_mod
 import passport_api.auth as auth
 from passport_api.flags import MemoryFlagStore, get_flag_store
 from passport_api.main import app
+from passport_api.settings import settings
 
 client = TestClient(app)
 
@@ -151,7 +152,12 @@ def test_a_new_flag_is_allowed_after_the_old_one_is_closed() -> None:
     flag()
 
 
-def test_rate_limit_is_five_flags_an_hour_per_student(env: MemoryFlagStore) -> None:
+def test_rate_limit_is_five_flags_an_hour_per_student(
+    env: MemoryFlagStore, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The per-minute burst limit (tests/test_rate_limit.py) has the same number, so it is
+    # switched off here to look at the hourly cap on its own.
+    monkeypatch.setattr(settings, "rate_limit_flags_per_minute", 0)
     for number in range(5):
         flag_id = flag(1 + number % 2, f"Problem number {number} with this version.")["id"]
         client.patch(f"/admin/flags/{flag_id}", headers=ADMIN, json={"status": "dismissed"})

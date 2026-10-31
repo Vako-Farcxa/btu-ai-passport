@@ -10,6 +10,7 @@ import { VerifyResultCard } from '@/components/verify-result'
 import { messages } from '@/i18n/messages'
 import { useLocale } from '@/i18n/use-locale'
 import { postVerify } from '@/lib/api/client'
+import { RateLimitedError, rateLimitMessage } from '@/lib/api/rate-limit'
 import { VerifyInputError, type VerifyResult } from '@/lib/api/types'
 import { submitDecision } from '@/lib/api/verify'
 import { codeFromParam } from '@/lib/share'
@@ -19,12 +20,16 @@ export default function VerifyClient() {
   const sharedCode = codeFromParam(useSearchParams().get('code'))
   const [code, setCode] = useState(sharedCode)
   const [prompt, setPrompt] = useState(false)
+  // Seconds to wait after a 429. Kept as a number so the sentence follows the language
+  // switch. `undefined` means no limit message is showing.
+  const [waitFor, setWaitFor] = useState<number | null | undefined>(undefined)
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<VerifyResult | null>(null)
   const copy = messages[locale]
 
   async function check(value: string) {
     setPrompt(false)
+    setWaitFor(undefined)
     try {
       const decision = await submitDecision(value, async (value) => {
         setLoading(true)
@@ -42,6 +47,10 @@ export default function VerifyClient() {
       setResult(decision.body)
     } catch (error) {
       setResult(null)
+      if (error instanceof RateLimitedError) {
+        setWaitFor(error.retryAfter)
+        return
+      }
       if (error instanceof VerifyInputError) {
         setPrompt(true)
         return
@@ -112,6 +121,11 @@ export default function VerifyClient() {
             </p>
           ) : null}
         </form>
+        {waitFor !== undefined ? (
+          <p className="page-alert" role="alert">
+            {rateLimitMessage(locale, waitFor)}
+          </p>
+        ) : null}
         {result ? (
           <VerifyResultCard
             key={`${result.outcome}-${code}`}

@@ -75,6 +75,8 @@ type Copy = {
   flagAlreadyOpen: string
   flagRateLimited: string
   flagError: string
+  rateLimited: string
+  rateLimitedSoon: string
   flagLoadError: string
   flagStatuses: Record<'open' | 'resolved' | 'dismissed', string>
   flagBadgeLabel: string
@@ -203,6 +205,9 @@ export const messages: Record<Locale, Copy> = {
     flagRateLimited:
       'You have sent several flags recently. Try again in an hour.',
     flagError: 'The flag could not be sent. Try again later.',
+    rateLimited:
+      'Too many requests. Please wait {seconds} seconds and try again.',
+    rateLimitedSoon: 'Too many requests. Please wait a moment and try again.',
     flagLoadError: 'Your flags could not be loaded.',
     flagStatuses: {
       open: 'Flag open',
@@ -342,6 +347,10 @@ export const messages: Record<Locale, Copy> = {
     flagRateLimited:
       'ახლახან რამდენიმე შეტყობინება გააგზავნეთ. სცადეთ ერთ საათში.',
     flagError: 'შეტყობინება ვერ გაიგზავნა. სცადეთ მოგვიანებით.',
+    rateLimited:
+      'ძალიან ბევრი მოთხოვნაა. დაელოდეთ {seconds} წამს და სცადეთ ხელახლა.',
+    rateLimitedSoon:
+      'ძალიან ბევრი მოთხოვნაა. დაელოდეთ ცოტა ხანს და სცადეთ ხელახლა.',
     flagLoadError: 'თქვენი შეტყობინებები ვერ ჩაიტვირთა.',
     flagStatuses: {
       open: 'შეტყობინება ღიაა',

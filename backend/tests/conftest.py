@@ -5,6 +5,7 @@ import pytest
 
 import passport_api.anchoring as anchoring
 import passport_api.auth as auth
+from passport_api.ratelimit import limits
 from passport_api.settings import Settings, settings
 
 # Tests that mint their own tokens put this project URL in `iss`: TEST_ISSUER.
@@ -22,8 +23,10 @@ def isolated_settings(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     # here, so nothing else treats Supabase as configured.
     monkeypatch.setattr(settings, "supabase_url", TEST_SUPABASE_URL)
     auth.clear_jwks_cache()
+    limits.reset()
     yield
     auth.clear_jwks_cache()
+    limits.reset()
 
 
 @pytest.fixture(autouse=True)

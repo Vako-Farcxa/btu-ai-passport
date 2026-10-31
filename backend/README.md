@@ -42,6 +42,37 @@ reconciler (`src/passport_api/anchoring.py`) keeps that reliable:
 - Needs migration `supabase/migrations/0010_anchor_reliability.sql`. No new environment
   variables.
 
+## Rate limits and security headers
+
+Light, free, in memory (Render's free plan is one process, a restart resets the counts).
+`src/passport_api/ratelimit.py`, one-minute sliding window, nothing is stored anywhere:
+
+| Route | Limit | Counted per |
+| --- | --- | --- |
+| `POST /verify` | 30 a minute | visitor IP |
+| `POST /flags` | 5 a minute (the hourly cap of 5 stays) | signed-in student |
+| admin `POST`, `PATCH`, `DELETE` (reads are free) | 30 a minute | admin email |
+| `/internal/*` | none, they need the sync token | n/a |
+
+Over the limit the API answers `429 {"code": "rate_limited"}` with a `Retry-After` header
+(whole seconds). CORS exposes `Retry-After`, and the frontend shows a friendly English or Georgian
+message with the wait. Change a limit with the env vars in `.env.example`, `0` turns one off,
+`RATE_LIMIT_ENABLED=false` turns all off.
+
+**Client IP behind Render.** Every proxy appends the address it saw to `X-Forwarded-For`, so
+the left side is whatever the visitor sent. `TRUSTED_PROXY_HOPS` says how many proxies are
+ours, and the visitor is the entry that many places from the right. On Render that is 3
+(`render.yaml` sets it). Locally it is 0 and the header is ignored. If the number is too small,
+visitors share one bucket and real users would hit the limit. Too big and a visitor who forges
+the header can dodge it. Check it after a deploy with the steps in the pull request. IPv6
+visitors are counted per /64.
+
+Every response also carries `X-Content-Type-Options`, `Strict-Transport-Security`,
+`Referrer-Policy`, `X-Frame-Options`, `Permissions-Policy` and a `default-src 'none'` CSP
+(`security_headers.py`; the CSP is skipped on `/docs` when docs are on). CORS only allows the
+origins in `CORS_ORIGINS`, the methods GET, POST, PATCH, DELETE and the headers `Authorization`
+and `Content-Type`, without credentials.
+
 ## On-chain verify
 
 `POST /verify` does not trust the database alone. For a confirmed code it (1) recomputes the

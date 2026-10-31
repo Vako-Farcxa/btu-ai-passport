@@ -14,7 +14,7 @@ from contextlib import contextmanager
 from datetime import UTC, datetime
 from typing import Annotated, Any, Literal, cast
 
-from fastapi import APIRouter, Depends, Header, Query
+from fastapi import APIRouter, Depends, Header, Query, Request
 from fastapi.responses import Response
 from postgrest import CountMethod
 
@@ -26,6 +26,7 @@ from passport_api.consistency import find_inconsistencies, load_students
 from passport_api.db import get_supabase
 from passport_api.errors import APIError
 from passport_api.pdf import PassportPdf, get_storage, publish_pdfs
+from passport_api.ratelimit import enforce
 from passport_api.schemas import (
     AdminAwardRequest,
     AdminAwardResponse,
@@ -50,6 +51,7 @@ from passport_api.schemas import (
     SyncResult,
 )
 from passport_api.search import contains_filter
+from passport_api.settings import settings
 from passport_api.sheet_admin import (
     ALREADY_AWARDED,
     AdminGspreadSheet,
@@ -84,7 +86,22 @@ def _admin_guard(authorization: Annotated[str | None, Header()] = None) -> str:
     return require_admin(authorization)
 
 
-router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(_admin_guard)])
+_WRITE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+
+
+def admin_write_limit(request: Request, email: Annotated[str, Depends(_admin_guard)]) -> None:
+    """Every admin write (not reads) counts against a per-admin limit, 30 a minute by default.
+
+    It runs after the guard, so only real admins are counted, by email and not by IP.
+    """
+    if request.method in _WRITE_METHODS:
+        enforce("admin_write", email, settings.rate_limit_admin_writes_per_minute)
+
+
+# Shared with the admin flags router so every /admin write has the same guard and limit.
+ADMIN_DEPENDENCIES = [Depends(_admin_guard), Depends(admin_write_limit)]
+
+router = APIRouter(prefix="/admin", tags=["admin"], dependencies=ADMIN_DEPENDENCIES)
 
 
 @router.get("/me", response_model=AdminMe)

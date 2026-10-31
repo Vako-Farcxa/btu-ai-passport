@@ -1,4 +1,9 @@
 import { apiBaseUrl } from '@/lib/api/base-url'
+import {
+  isRateLimited,
+  rateLimitMessage,
+  retryAfterOf,
+} from '@/lib/api/rate-limit'
 import { z } from 'zod'
 
 import type { Locale } from '@/i18n/messages'
@@ -33,17 +38,21 @@ export type FlagErrorCode =
   | 'invalid_comment'
   | 'flag_already_open'
   | 'flag_rate_limited'
+  | 'rate_limited'
   | 'unauthorized'
   | 'domain_not_allowed'
   | 'error'
 
 export class FlagRequestError extends Error {
   readonly code: FlagErrorCode
+  /** Seconds to wait, for the per-minute limit (code "rate_limited"). */
+  readonly retryAfter: number | null
 
-  constructor(code: FlagErrorCode) {
+  constructor(code: FlagErrorCode, retryAfter: number | null = null) {
     super(code)
     this.name = 'FlagRequestError'
     this.code = code
+    this.retryAfter = retryAfter
   }
 }
 
@@ -61,8 +70,13 @@ export function commentProblem(value: string, locale: Locale): string | null {
   return null
 }
 
-export function explainFlagError(code: FlagErrorCode, locale: Locale): string {
+export function explainFlagError(
+  code: FlagErrorCode,
+  locale: Locale,
+  retryAfter: number | null = null,
+): string {
   const copy = messages[locale]
+  if (code === 'rate_limited') return rateLimitMessage(locale, retryAfter)
   if (code === 'invalid_comment') return copy.flagTooShort
   if (code === 'flag_already_open') return copy.flagAlreadyOpen
   if (code === 'flag_rate_limited') return copy.flagRateLimited
@@ -109,6 +123,9 @@ async function request(
     cache: 'no-store',
   })
   const payload: unknown = await response.json().catch(() => null)
+  if (isRateLimited(response, payload)) {
+    throw new FlagRequestError('rate_limited', retryAfterOf(response))
+  }
   if (!response.ok) throw new FlagRequestError(code(payload))
   return payload
 }

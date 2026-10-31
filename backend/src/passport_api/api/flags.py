@@ -8,7 +8,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, Query
 
-from passport_api.api.admin import _admin_guard
+from passport_api.api.admin import ADMIN_DEPENDENCIES, _admin_guard
 from passport_api.api.me import ensure_not_archived, get_store, require_active_student
 from passport_api.auth import email_from_authorization
 from passport_api.errors import APIError
@@ -22,6 +22,7 @@ from passport_api.flags import (
     get_flag_store,
     note_valid,
 )
+from passport_api.ratelimit import enforce
 from passport_api.schemas import (
     AdminFlag,
     AdminFlagList,
@@ -31,9 +32,10 @@ from passport_api.schemas import (
     StudentFlag,
     StudentFlagList,
 )
+from passport_api.settings import settings
 
 router = APIRouter(tags=["flags"])
-admin_router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(_admin_guard)])
+admin_router = APIRouter(prefix="/admin", tags=["admin"], dependencies=ADMIN_DEPENDENCIES)
 
 _store_dependency = Depends(get_flag_store)
 
@@ -90,6 +92,8 @@ def create_flag(
     flags: FlagStore = _store_dependency,
 ) -> StudentFlag:
     email = email_from_authorization(authorization)
+    # A burst limit per student (5 a minute). The hourly cap below stays as it was.
+    enforce("flag_create", email, settings.rate_limit_flags_per_minute)
     comment = clean_comment(body.comment)
     if not comment_valid(comment):
         raise APIError(422, "invalid_comment")

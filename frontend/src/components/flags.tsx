@@ -104,7 +104,8 @@ export function FlagDialog({
       onSent()
     } catch (err) {
       const code = err instanceof FlagRequestError ? err.code : 'error'
-      setError(explainFlagError(code, locale))
+      const wait = err instanceof FlagRequestError ? err.retryAfter : null
+      setError(explainFlagError(code, locale, wait))
     } finally {
       setSending(false)
     }

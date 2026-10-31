@@ -1,5 +1,6 @@
 import type { AnchorStatus } from '@/lib/anchor-status'
 import { apiBaseUrl } from '@/lib/api/base-url'
+import { RateLimitedError, retryAfterOf } from '@/lib/api/rate-limit'
 import { readAccessToken } from '@/lib/supabase/client'
 
 export interface AdminSkillEntry {
@@ -148,6 +149,16 @@ export class AdminAccessError extends Error {
   }
 }
 
+/**
+ * fetch for the admin API: a 429 from the rate limiter becomes a RateLimitedError, whose
+ * message every admin page already shows as-is. The admin panel is in English.
+ */
+async function apiFetch(url: string, init?: RequestInit): Promise<Response> {
+  const res = await fetch(url, init)
+  if (res.status === 429) throw new RateLimitedError(retryAfterOf(res))
+  return res
+}
+
 async function getHeaders(): Promise<HeadersInit> {
   // Only the signed-in Supabase session is accepted. There is no demo token and no
   // fallback: without a session nothing is sent to the API.
@@ -161,7 +172,7 @@ async function getHeaders(): Promise<HeadersInit> {
 
 /** Asks the backend whether the signed-in user is an admin. Never guesses. */
 export async function fetchAdminMe(): Promise<{ email: string }> {
-  const res = await fetch(`${apiBaseUrl()}/admin/me`, {
+  const res = await apiFetch(`${apiBaseUrl()}/admin/me`, {
     headers: await getHeaders(),
     cache: 'no-store',
   })
@@ -192,7 +203,7 @@ export async function fetchAdminStudents(params?: {
   if (params?.offset !== undefined) query.set('offset', String(params.offset))
   if (params?.limit !== undefined) query.set('limit', String(params.limit))
 
-  const res = await fetch(
+  const res = await apiFetch(
     `${apiBaseUrl()}/admin/students?${query.toString()}`,
     {
       headers: await getHeaders(),
@@ -205,7 +216,7 @@ export async function fetchAdminStudents(params?: {
 export async function fetchAdminStudent(
   passportId: string,
 ): Promise<AdminStudentDetail> {
-  const res = await fetch(
+  const res = await apiFetch(
     `${apiBaseUrl()}/admin/students/${encodeURIComponent(passportId)}`,
     {
       headers: await getHeaders(),
@@ -216,7 +227,7 @@ export async function fetchAdminStudent(
 }
 
 export async function deleteAdminStudent(passportId: string): Promise<void> {
-  const res = await fetch(
+  const res = await apiFetch(
     `${apiBaseUrl()}/admin/students/${encodeURIComponent(passportId)}`,
     {
       method: 'DELETE',
@@ -230,7 +241,7 @@ export async function deleteAdminStudent(passportId: string): Promise<void> {
 }
 
 async function postNoContent(path: string, fallback: string): Promise<void> {
-  const res = await fetch(`${apiBaseUrl()}${path}`, {
+  const res = await apiFetch(`${apiBaseUrl()}${path}`, {
     method: 'POST',
     headers: await getHeaders(),
   })
@@ -263,7 +274,7 @@ export async function unrevokeAdminVersion(versionId: string): Promise<void> {
 export async function fetchAdminSyncRuns(
   limit = 50,
 ): Promise<AdminSyncRunList> {
-  const res = await fetch(`${apiBaseUrl()}/admin/sync-runs?limit=${limit}`, {
+  const res = await apiFetch(`${apiBaseUrl()}/admin/sync-runs?limit=${limit}`, {
     headers: await getHeaders(),
   })
   if (!res.ok) throw new Error(`Failed to load sync runs: ${res.statusText}`)
@@ -303,7 +314,7 @@ export function describeSyncResult(res: AdminSyncResult): SyncNotice {
 }
 
 export async function triggerAdminSync(): Promise<AdminSyncResult> {
-  const res = await fetch(`${apiBaseUrl()}/admin/sync`, {
+  const res = await apiFetch(`${apiBaseUrl()}/admin/sync`, {
     method: 'POST',
     headers: await getHeaders(),
   })
@@ -312,7 +323,7 @@ export async function triggerAdminSync(): Promise<AdminSyncResult> {
 }
 
 export async function fetchAdminPendingVersions(): Promise<AdminVersionPendingList> {
-  const res = await fetch(`${apiBaseUrl()}/admin/versions/pending`, {
+  const res = await apiFetch(`${apiBaseUrl()}/admin/versions/pending`, {
     headers: await getHeaders(),
   })
   if (!res.ok)
@@ -323,7 +334,7 @@ export async function fetchAdminPendingVersions(): Promise<AdminVersionPendingLi
 export async function retryAdminAnchor(
   versionId: string,
 ): Promise<{ status: string; error?: string }> {
-  const res = await fetch(
+  const res = await apiFetch(
     `${apiBaseUrl()}/admin/versions/${encodeURIComponent(versionId)}/anchor`,
     {
       method: 'POST',
@@ -392,7 +403,7 @@ async function failure(res: Response, fallback: string): Promise<Error> {
 }
 
 export async function fetchAdminSkills(): Promise<AdminCatalogSkill[]> {
-  const res = await fetch(`${apiBaseUrl()}/admin/skills`, {
+  const res = await apiFetch(`${apiBaseUrl()}/admin/skills`, {
     headers: await getHeaders(),
   })
   if (!res.ok) throw await failure(res, 'Failed to load skills')
@@ -403,7 +414,7 @@ export async function fetchAdminSkills(): Promise<AdminCatalogSkill[]> {
 export async function createAdminCatalogSkill(
   input: AdminCatalogSkillInput,
 ): Promise<AdminCatalogSkill> {
-  const res = await fetch(`${apiBaseUrl()}/admin/skills`, {
+  const res = await apiFetch(`${apiBaseUrl()}/admin/skills`, {
     method: 'POST',
     headers: await getHeaders(),
     body: JSON.stringify(input),
@@ -416,7 +427,7 @@ export async function updateAdminCatalogSkill(
   id: string,
   input: Partial<AdminCatalogSkillInput>,
 ): Promise<AdminCatalogSkill> {
-  const res = await fetch(
+  const res = await apiFetch(
     `${apiBaseUrl()}/admin/skills/${encodeURIComponent(id)}`,
     {
       method: 'PATCH',
@@ -434,7 +445,7 @@ export async function awardAdminSkill(input: {
   awarded_on: string | null
   students: AwardStudentInput[]
 }): Promise<AdminAwardResponse> {
-  const res = await fetch(`${apiBaseUrl()}/admin/awards`, {
+  const res = await apiFetch(`${apiBaseUrl()}/admin/awards`, {
     method: 'POST',
     headers: await getHeaders(),
     body: JSON.stringify(input),
@@ -514,7 +525,7 @@ export async function fetchAdminFlags(
   status?: AdminFlagStatus,
 ): Promise<AdminFlagList> {
   const query = status ? `?status=${status}` : ''
-  const res = await fetch(`${apiBaseUrl()}/admin/flags${query}`, {
+  const res = await apiFetch(`${apiBaseUrl()}/admin/flags${query}`, {
     headers: await getHeaders(),
     cache: 'no-store',
   })
@@ -526,7 +537,7 @@ export async function updateAdminFlag(
   id: string,
   input: { status: 'resolved' | 'dismissed'; admin_note: string },
 ): Promise<AdminFlag> {
-  const res = await fetch(
+  const res = await apiFetch(
     `${apiBaseUrl()}/admin/flags/${encodeURIComponent(id)}`,
     {
       method: 'PATCH',
