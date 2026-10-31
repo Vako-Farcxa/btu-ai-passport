@@ -82,3 +82,17 @@ export function newerVersionNotice(
     .replace('{version}', String(result.latest_version))
     .replace('{date}', date)
 }
+
+/** The "this was revoked" note, with the date when the backend sent a usable one. */
+export function revokedNotice(
+  result: VerifyResult,
+  locale: Locale,
+): string | null {
+  if (result.outcome !== 'revoked') return null
+  const copy = messages[locale]
+  const date = result.revoked_at
+    ? formatIssuedDate(result.revoked_at, locale)
+    : null
+  if (date === null) return copy.revokedNoticeNoDate
+  return copy.revokedNotice.replace('{date}', date)
+}

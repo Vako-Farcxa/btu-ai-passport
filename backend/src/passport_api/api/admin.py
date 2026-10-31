@@ -53,6 +53,7 @@ from passport_api.sheet_admin import (
     AwardInput,
 )
 from passport_api.sync import (
+    STUDENT_ARCHIVED,
     CatalogSkill,
     GspreadSheet,
     RowOutcome,
@@ -134,8 +135,15 @@ def _version_from_row(row: dict[str, object]) -> AdminVersion:
         issued_at=datetime.fromisoformat(str(issued_raw).replace("Z", "+00:00")),
         pdf_en_path=None if row.get("pdf_en_path") is None else str(row["pdf_en_path"]),
         pdf_ka_path=None if row.get("pdf_ka_path") is None else str(row["pdf_ka_path"]),
+        revoked_at=_optional_datetime(row.get("revoked_at")),
         skills=skills,
     )
+
+
+def _optional_datetime(value: object) -> datetime | None:
+    if value is None:
+        return None
+    return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
 
 
 def _student_row_to_summary(row: dict[str, object]) -> AdminStudent:
@@ -228,7 +236,7 @@ def get_student(
         .table("passport_versions")
         .select(
             "id, version_number, holder_name, verification_code, anchor_status, "
-            "tx_hash, issued_at, pdf_en_path, pdf_ka_path, "
+            "tx_hash, issued_at, pdf_en_path, pdf_ka_path, revoked_at, "
             "skill_entries(id, skill, badge, awarded_on, description, position)"
         )
         .eq("student_id", str(student["id"]))
@@ -268,6 +276,63 @@ def delete_student(
         raise APIError(409, "student_already_deleted")
     get_supabase().table("students").update({"deleted_at": _now()}).eq(
         "id", str(student["id"])
+    ).execute()
+    return Response(status_code=204)
+
+
+@router.post("/students/{passport_id}/restore", status_code=204)
+def restore_student(
+    passport_id: str,
+) -> Response:
+    """Un-archive a student: their codes verify again and they can open their passport."""
+    student = _require_admin_student(passport_id)
+    if student.get("deleted_at") is None:
+        raise APIError(409, "student_not_deleted")
+    get_supabase().table("students").update({"deleted_at": None}).eq(
+        "id", str(student["id"])
+    ).execute()
+    return Response(status_code=204)
+
+
+def _require_version(version_id: str) -> dict[str, object]:
+    response = (
+        get_supabase()
+        .table("passport_versions")
+        .select("id, revoked_at")
+        .eq("id", version_id)
+        .limit(1)
+        .execute()
+    )
+    rows = _table_rows(response.data)
+    if not rows:
+        raise APIError(404, "version_not_found")
+    return rows[0]
+
+
+@router.post("/versions/{version_id}/revoke", status_code=204)
+def revoke_version(
+    version_id: str,
+) -> Response:
+    """Revoke one version. Its code verifies as Revoked and its PDF can no longer be
+    downloaded. Newer and older versions are not touched."""
+    version = _require_version(version_id)
+    if version.get("revoked_at") is not None:
+        raise APIError(409, "version_already_revoked")
+    get_supabase().table("passport_versions").update({"revoked_at": _now()}).eq(
+        "id", version_id
+    ).execute()
+    return Response(status_code=204)
+
+
+@router.post("/versions/{version_id}/unrevoke", status_code=204)
+def unrevoke_version(
+    version_id: str,
+) -> Response:
+    version = _require_version(version_id)
+    if version.get("revoked_at") is None:
+        raise APIError(409, "version_not_revoked")
+    get_supabase().table("passport_versions").update({"revoked_at": None}).eq(
+        "id", version_id
     ).execute()
     return Response(status_code=204)
 
@@ -544,6 +609,8 @@ def award_skill(
         order.append(email)
         first_name, last_name = clean_name(student.first_name), clean_name(student.last_name)
         problem = email_error(email)
+        if problem is None and email in known and known[email].archived:
+            problem = STUDENT_ARCHIVED
         if problem is None and (first_name or last_name):
             # A name is optional only when neither part is given (an existing student).
             problem = name_error(first_name, FIRST_NAME_INVALID) or name_error(

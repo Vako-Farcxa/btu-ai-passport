@@ -48,6 +48,10 @@ const OUTDATED = found('outdated', {
 const RESULTS: Record<string, VerifyResult> = {
   valid: VALID,
   outdated: OUTDATED,
+  revoked: verifyResultSchema.parse({
+    outcome: 'revoked',
+    revoked_at: '2026-10-30T10:00:00+00:00',
+  }),
   not_found: { outcome: 'not_found' },
   error: { outcome: 'error' },
 }
@@ -124,6 +128,52 @@ describe('verify result card', () => {
       <VerifyResultCard locale="ka" result={OUTDATED} />,
     )
     expect(getByTestId('newer-notice')).toHaveTextContent('v3')
+  })
+})
+
+describe('revoked result', () => {
+  const REVOKED = verifyResultSchema.parse({
+    outcome: 'revoked',
+    revoked_at: '2026-10-30T10:00:00+00:00',
+  })
+
+  it('says Revoked, with the date, and never looks valid', () => {
+    const { getByTestId, queryByText } = render(
+      <VerifyResultCard locale="en" result={REVOKED} />,
+    )
+    const card = getByTestId('verify-result')
+    expect(card).toHaveAttribute('aria-label', 'Revoked')
+    expect(card).toHaveClass('outcome-revoked')
+    expect(card).not.toHaveClass('outcome-valid')
+    expect(getByTestId('revoked-notice')).toHaveTextContent('30 Oct 2026')
+    expect(queryByText(messages.en.outcomes.valid)).toBeNull()
+    expect(queryByText(messages.en.latest)).toBeNull()
+  })
+
+  it('shows no holder, skills or transaction link', () => {
+    const { container } = render(
+      <VerifyResultCard locale="en" result={REVOKED} />,
+    )
+    expect(container.querySelector('.holder')).toBeNull()
+    expect(container.querySelector('.transaction-link')).toBeNull()
+    expect(container.textContent).not.toContain(DATA.holder)
+  })
+
+  it('shows the date in Georgian', () => {
+    const { getByTestId } = render(
+      <VerifyResultCard locale="ka" result={REVOKED} />,
+    )
+    expect(getByTestId('revoked-notice')).toHaveTextContent('30 ოქტ. 2026')
+  })
+
+  it('still explains itself when the date is missing', () => {
+    const result = verifyResultSchema.parse({ outcome: 'revoked' })
+    const { getByTestId } = render(
+      <VerifyResultCard locale="en" result={result} />,
+    )
+    expect(getByTestId('revoked-notice')).toHaveTextContent(
+      messages.en.revokedNoticeNoDate,
+    )
   })
 })
 

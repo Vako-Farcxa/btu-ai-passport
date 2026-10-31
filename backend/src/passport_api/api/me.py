@@ -21,6 +21,17 @@ def get_store() -> MemoryStore | SupabaseStore:
     return MemoryStore(DEMO_VERSIONS)
 
 
+def require_active_student(versions: tuple[StoredVersion, ...]) -> None:
+    """Refuse an archived student. Archiving revokes the whole passport, so a signed-in
+    student who was archived gets a clear 403 instead of any of their data."""
+    if any(item.student_archived_at is not None for item in versions):
+        raise APIError(403, "passport_revoked")
+
+
+def ensure_not_archived(email: str) -> None:
+    require_active_student(get_store().versions_for_email(email))
+
+
 def passport_response(versions: tuple[StoredVersion, ...]) -> PassportResponse:
     if not versions:
         return PassportResponse(passport=None)
@@ -49,6 +60,7 @@ def _version(item: StoredVersion, current: int) -> PassportVersion:
         verification_code=item.verification_code,
         skills=list(item.skills),
         anchor=Anchor(status=item.anchor_status, tx_url=tx_url),
+        revoked_at=item.version_revoked_at,
     )
 
 
@@ -57,7 +69,9 @@ def my_passport(
     authorization: Annotated[str | None, Header()] = None,
 ) -> PassportResponse:
     email = email_from_authorization(authorization)
-    return passport_response(get_store().versions_for_email(email))
+    versions = get_store().versions_for_email(email)
+    require_active_student(versions)
+    return passport_response(versions)
 
 
 @router.get("/me/passport/versions/{version}/pdf")
@@ -69,12 +83,13 @@ def download_passport_pdf(
     if version < 1:
         raise APIError(404, "version_not_found")
     email = email_from_authorization(authorization)
-    match = next(
-        (item for item in get_store().versions_for_email(email) if item.version == version),
-        None,
-    )
+    versions = get_store().versions_for_email(email)
+    require_active_student(versions)
+    match = next((item for item in versions if item.version == version), None)
     if match is None:
         raise APIError(404, "version_not_found")
+    if match.version_revoked_at is not None:
+        raise APIError(403, "version_revoked")
     path = match.pdf_en_path if lang == "en" else match.pdf_ka_path
     if path is None:
         raise APIError(409, "pdf_not_ready")

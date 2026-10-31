@@ -1,5 +1,6 @@
 import { apiBaseUrl } from '@/lib/api/base-url'
 import { messages, type Locale } from '@/i18n/messages'
+import { formatIssuedDate } from '@/lib/api/verify'
 import {
   passportResponseSchema,
   type PassportResponse,
@@ -9,7 +10,22 @@ import {
 export type { PassportResponse } from '@/lib/api/types'
 
 export type PassportErrorCode =
-  'domain_not_allowed' | 'unauthorized' | 'pdf_not_ready' | 'error'
+  | 'domain_not_allowed'
+  | 'unauthorized'
+  | 'pdf_not_ready'
+  | 'passport_revoked'
+  | 'version_revoked'
+  | 'error'
+
+/** What a 403 means: the API sends a code for a revoked passport or version. */
+function forbiddenCode(payload: unknown): PassportErrorCode {
+  const code =
+    typeof payload === 'object' && payload !== null && 'code' in payload
+      ? payload.code
+      : null
+  if (code === 'passport_revoked' || code === 'version_revoked') return code
+  return 'domain_not_allowed'
+}
 
 export class PassportRequestError extends Error {
   readonly code: PassportErrorCode
@@ -29,6 +45,8 @@ export function explainPassportError(
   if (code === 'domain_not_allowed') return copy.domainNotAllowed
   if (code === 'unauthorized') return copy.signInRequired
   if (code === 'pdf_not_ready') return copy.pdfNotReady
+  if (code === 'passport_revoked') return copy.passportRevoked
+  if (code === 'version_revoked') return copy.versionRevokedPdf
   return copy.passportError
 }
 
@@ -47,8 +65,10 @@ export async function downloadPassportPdf(
     cache: 'no-store',
   })
   if (response.status === 409) throw new PassportRequestError('pdf_not_ready')
-  if (response.status === 403)
-    throw new PassportRequestError('domain_not_allowed')
+  if (response.status === 403) {
+    const payload: unknown = await response.json().catch(() => null)
+    throw new PassportRequestError(forbiddenCode(payload))
+  }
   if (response.status === 401) throw new PassportRequestError('unauthorized')
   if (!response.ok) throw new PassportRequestError('error')
   return response.blob()
@@ -71,6 +91,7 @@ export function renderPassportLines(
   for (const version of orderedVersions(body)) {
     lines.push(copy.versionLabel, String(version.version))
     if (version.is_current) lines.push(copy.currentVersion)
+    if (version.revoked_at) lines.push(copy.versionRevokedBadge)
     lines.push(
       version.holder_name,
       copy.verificationCode,
@@ -95,8 +116,20 @@ export async function getMyPassport(token: string): Promise<PassportResponse> {
   })
   const payload: unknown = await response.json().catch(() => null)
   if (response.status === 403)
-    throw new PassportRequestError('domain_not_allowed')
+    throw new PassportRequestError(forbiddenCode(payload))
   if (response.status === 401) throw new PassportRequestError('unauthorized')
   if (!response.ok) throw new PassportRequestError('error')
   return passportResponseSchema.parse(payload)
+}
+
+/** The note under a revoked version. Falls back to a dateless sentence. */
+export function revokedVersionNote(
+  version: PassportVersion,
+  locale: Locale,
+): string | null {
+  if (!version.revoked_at) return null
+  const copy = messages[locale]
+  const date = formatIssuedDate(version.revoked_at, locale)
+  if (date === null) return copy.versionRevokedPdf
+  return copy.versionRevokedNote.replace('{date}', date)
 }

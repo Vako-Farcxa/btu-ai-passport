@@ -172,6 +172,8 @@ components:
             - version_not_found
             - pdf_not_ready
             - sync_unauthorized
+            - passport_revoked
+            - version_revoked
     Skill:
       type: object
       additionalProperties: false
@@ -288,6 +290,19 @@ components:
         outcome:
           type: string
           const: not_found
+    VerifyRevoked:
+      type: object
+      additionalProperties: false
+      required: [outcome, revoked_at]
+      description: >
+        The version was revoked, or its student was archived. No name, skills or
+        transaction link are returned.
+      properties:
+        outcome:
+          type: string
+          const: revoked
+        revoked_at:
+          type: string
     VerifyError:
       type: object
       additionalProperties: false
@@ -299,6 +314,7 @@ components:
     VerifyResult:
       oneOf:
         - $ref: "#/components/schemas/VerifyFound"
+        - $ref: "#/components/schemas/VerifyRevoked"
         - $ref: "#/components/schemas/VerifyNotFound"
         - $ref: "#/components/schemas/VerifyError"
       discriminator:
@@ -306,6 +322,7 @@ components:
         mapping:
           valid: "#/components/schemas/VerifyFound"
           outdated: "#/components/schemas/VerifyFound"
+          revoked: "#/components/schemas/VerifyRevoked"
           not_found: "#/components/schemas/VerifyNotFound"
           error: "#/components/schemas/VerifyError"
     SyncResult:

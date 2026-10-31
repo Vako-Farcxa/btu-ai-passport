@@ -20,6 +20,7 @@ export interface AdminVersion {
   issued_at: string
   pdf_en_path: string | null
   pdf_ka_path: string | null
+  revoked_at: string | null
   skills: AdminSkillEntry[]
 }
 
@@ -221,6 +222,37 @@ export async function deleteAdminStudent(passportId: string): Promise<void> {
   }
 }
 
+async function postNoContent(path: string, fallback: string): Promise<void> {
+  const res = await fetch(`${apiBaseUrl()}${path}`, {
+    method: 'POST',
+    headers: await getHeaders(),
+  })
+  if (!res.ok) throw await failure(res, fallback)
+}
+
+/** Un-archive a student: their codes verify again and they can open their passport. */
+export async function restoreAdminStudent(passportId: string): Promise<void> {
+  await postNoContent(
+    `/admin/students/${encodeURIComponent(passportId)}/restore`,
+    'Failed to restore student',
+  )
+}
+
+/** Revoke one version: its code shows Revoked and its PDF is refused. */
+export async function revokeAdminVersion(versionId: string): Promise<void> {
+  await postNoContent(
+    `/admin/versions/${encodeURIComponent(versionId)}/revoke`,
+    'Failed to revoke version',
+  )
+}
+
+export async function unrevokeAdminVersion(versionId: string): Promise<void> {
+  await postNoContent(
+    `/admin/versions/${encodeURIComponent(versionId)}/unrevoke`,
+    'Failed to restore version',
+  )
+}
+
 export async function fetchAdminSyncRuns(
   limit = 50,
 ): Promise<AdminSyncRunList> {
@@ -324,6 +356,14 @@ const ERROR_MESSAGES: Record<string, string> = {
   student_conflict:
     'This email already exists in the database in a way the sync could not merge. Ask a developer to check it.',
   sync_error: 'The sync could not process this student. Try again later.',
+  student_archived:
+    'This student is archived. Restore them in the Student Directory before awarding.',
+  student_not_deleted: 'This student is not archived.',
+  student_already_deleted: 'This student is already archived.',
+  student_not_found: 'That student was not found.',
+  version_not_found: 'That version was not found.',
+  version_already_revoked: 'This version is already revoked.',
+  version_not_revoked: 'This version is not revoked.',
   missing_skill: 'A skill is required.',
 }
 

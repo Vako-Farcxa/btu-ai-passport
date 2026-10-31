@@ -4,6 +4,8 @@ import { messages } from '@/i18n/messages'
 import {
   downloadPassportPdf,
   explainPassportError,
+  getMyPassport,
+  revokedVersionNote,
   passportPdfPath,
   renderPassportLines,
   type PassportResponse,
@@ -132,6 +134,75 @@ describe('passport view', () => {
       expect.objectContaining({
         headers: { Authorization: 'Bearer token' },
       }),
+    )
+  })
+})
+
+describe('revoked passports', () => {
+  const forbidden = (code: string) =>
+    vi.fn().mockResolvedValue({
+      ok: false,
+      status: 403,
+      json: async () => ({ code }),
+      blob: async () => new Blob(),
+    })
+
+  it('reports a revoked passport instead of a wrong-domain message', async () => {
+    vi.stubGlobal('fetch', forbidden('passport_revoked'))
+    await expect(getMyPassport('token')).rejects.toMatchObject({
+      code: 'passport_revoked',
+    })
+  })
+
+  it('still reports a wrong domain for any other 403', async () => {
+    vi.stubGlobal('fetch', forbidden('domain_not_allowed'))
+    await expect(getMyPassport('token')).rejects.toMatchObject({
+      code: 'domain_not_allowed',
+    })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 403,
+        json: async () => {
+          throw new Error('not json')
+        },
+      }),
+    )
+    await expect(getMyPassport('token')).rejects.toMatchObject({
+      code: 'domain_not_allowed',
+    })
+  })
+
+  it('refuses the PDF of a revoked version or passport with its own message', async () => {
+    vi.stubGlobal('fetch', forbidden('version_revoked'))
+    await expect(downloadPassportPdf('token', 1, 'en')).rejects.toMatchObject({
+      code: 'version_revoked',
+    })
+    vi.stubGlobal('fetch', forbidden('passport_revoked'))
+    await expect(downloadPassportPdf('token', 1, 'ka')).rejects.toMatchObject({
+      code: 'passport_revoked',
+    })
+    expect(explainPassportError('version_revoked', 'en')).toBe(
+      messages.en.versionRevokedPdf,
+    )
+    expect(explainPassportError('passport_revoked', 'ka')).toBe(
+      messages.ka.passportRevoked,
+    )
+  })
+
+  it('writes the revoked date under a revoked version, with a fallback', () => {
+    const base = callerOldestFirst.passport?.versions[0]
+    if (!base) throw new Error('fixture')
+    expect(revokedVersionNote(base, 'en')).toBeNull()
+    expect(
+      revokedVersionNote({ ...base, revoked_at: '2026-10-29T08:30:00Z' }, 'en'),
+    ).toContain('29 Oct 2026')
+    expect(
+      revokedVersionNote({ ...base, revoked_at: '2026-10-29T08:30:00Z' }, 'ka'),
+    ).toContain('29 ოქტ. 2026')
+    expect(revokedVersionNote({ ...base, revoked_at: 'garbage' }, 'en')).toBe(
+      messages.en.versionRevokedPdf,
     )
   })
 })

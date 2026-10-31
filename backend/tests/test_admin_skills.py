@@ -1027,3 +1027,35 @@ def test_existing_student_needs_no_name(
     seed_skill(db)
     body = post_award([{"email": "ada@btu.edu.ge"}]).json()["rows"][0]
     assert body["status"] == "synced"
+
+
+def test_award_refuses_an_archived_student_and_writes_nothing(
+    env: tuple[FakeDb, FakeAdminSheet, MemorySyncStore],
+) -> None:
+    db, sheet, store = env
+    seed_skill(db)
+    store.students.append(
+        StudentRecord(
+            email="gone@btu.edu.ge",
+            full_name="Gone Student",
+            passport_id="BTU-GONE000001",
+            archived=True,
+        )
+    )
+    before = len(sheet.grid)
+    response = client.post(
+        "/admin/awards",
+        headers=AUTH,
+        json={"skill_id": "SKL-002", "students": [{"email": "gone@btu.edu.ge"}]},
+    )
+    assert response.status_code == 200
+    assert response.json()["rows"] == [
+        {
+            "email": "gone@btu.edu.ge",
+            "status": "failed",
+            "error": "student_archived",
+            "passport_id": "",
+            "version": "",
+        }
+    ]
+    assert len(sheet.grid) == before

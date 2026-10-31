@@ -88,6 +88,7 @@ class CatalogSkill:
 # example by a deploy) and is released so it cannot block every later sync.
 STALE_LOCK_AFTER = timedelta(minutes=10)
 STALE_LOCK_ERROR = "stale_lock"
+STUDENT_ARCHIVED = "student_archived"
 
 SKILLS_TAB = "Skills"
 SKILLS_HEADER = ("skill_id", "name_en", "name_ka", "category", "description")
@@ -191,6 +192,7 @@ class StudentRecord:
     email: str
     full_name: str
     passport_id: str
+    archived: bool = False
 
 
 @dataclass
@@ -240,6 +242,8 @@ class StudentState:
     latest_version: int
     latest_fingerprint: str
     holder_name: str
+    # Archived students are listed so sync and awards can say so, but never get new versions.
+    archived: bool = False
 
 
 @dataclass
@@ -465,6 +469,8 @@ class MemorySyncStore:
         for student in self.students:
             latest_version = latest.get(student.email)
             if latest_version is None:
+                if student.archived:
+                    states[student.email] = _archived_without_versions(student)
                 continue
             states[student.email] = StudentState(
                 email=student.email,
@@ -473,6 +479,7 @@ class MemorySyncStore:
                 latest_version=latest_version.version_number,
                 latest_fingerprint=latest_version.skill_fingerprint,
                 holder_name=latest_version.holder_name,
+                archived=student.archived,
             )
         return states
 
@@ -623,16 +630,26 @@ class SupabaseSyncStore:
             get_supabase()
             .table("students")
             .select(
-                "email, full_name, passport_id, "
+                "email, full_name, passport_id, deleted_at, "
                 "passport_versions(version_number, skill_fingerprint, holder_name)"
             )
-            .is_("deleted_at", "null")
             .execute()
         )
         states: dict[str, StudentState] = {}
         for row in _table_rows(response.data):
+            archived = row.get("deleted_at") is not None
             versions = _nested_rows(row.get("passport_versions"))
             if not versions:
+                if archived:
+                    states[str(row["email"])] = StudentState(
+                        email=str(row["email"]),
+                        full_name=str(row["full_name"]),
+                        passport_id=str(row["passport_id"]),
+                        latest_version=0,
+                        latest_fingerprint="",
+                        holder_name=str(row["full_name"]),
+                        archived=True,
+                    )
                 continue
             latest = max(versions, key=lambda item: _as_int(item["version_number"]))
             email = str(row["email"])
@@ -643,6 +660,7 @@ class SupabaseSyncStore:
                 latest_version=_as_int(latest["version_number"]),
                 latest_fingerprint=str(latest["skill_fingerprint"]),
                 holder_name=str(latest["holder_name"]),
+                archived=archived,
             )
         return states
 
@@ -963,6 +981,10 @@ def _issue_versions(
         )
         fingerprint = skill_fingerprint(skills)
         state = states.get(email)
+        if state is not None and state.archived:
+            # An archived student is revoked. Restore them in the admin panel first.
+            fail(group.indexes, STUDENT_ARCHIVED, state.passport_id)
+            return
         if state is None:
             if not group.full_name:
                 fail(group.indexes, "missing_full_name")
@@ -1028,6 +1050,18 @@ def _issue_versions(
     _fill_pending_pdfs(store, emails)
     _anchor_pending(store, emails, chain)
     return created
+
+
+def _archived_without_versions(student: StudentRecord) -> StudentState:
+    return StudentState(
+        email=student.email,
+        full_name=student.full_name,
+        passport_id=student.passport_id,
+        latest_version=0,
+        latest_fingerprint="",
+        holder_name=student.full_name,
+        archived=True,
+    )
 
 
 def _failure_code(exc: Exception) -> str:

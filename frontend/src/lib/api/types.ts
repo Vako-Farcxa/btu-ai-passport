@@ -32,6 +32,7 @@ export const verifyResultSchema = z.discriminatedUnion('outcome', [
     latest_version: z.number().int().positive().nullish(),
     latest_issued_at: z.string().nullish(),
   }),
+  z.object({ outcome: z.literal('revoked'), revoked_at: z.string().nullish() }),
   z.object({ outcome: z.literal('not_found') }),
   z.object({ outcome: z.literal('error') }),
 ])
@@ -47,6 +48,8 @@ export const passportVersionSchema = z.object({
     status: z.enum(['pending', 'confirmed', 'failed']),
     tx_url: explorerLinkSchema.nullable(),
   }),
+  // Added by newer backends. Null or missing means the version is in good standing.
+  revoked_at: z.string().nullish(),
 })
 
 export const passportResponseSchema = z.object({

@@ -26,6 +26,11 @@ ErrorCode = Literal[
     "flag_already_open",
     "flag_rate_limited",
     "flag_not_found",
+    "passport_revoked",
+    "version_revoked",
+    "student_not_deleted",
+    "version_already_revoked",
+    "version_not_revoked",
 ]
 
 
@@ -65,6 +70,8 @@ class PassportVersion(BaseModel):
     verification_code: str
     skills: list[Skill]
     anchor: Anchor
+    # Set when an admin revoked this version. None for a version in good standing.
+    revoked_at: str | None = None
 
 
 class Passport(BaseModel):
@@ -117,6 +124,7 @@ class AdminVersion(BaseModel):
     issued_at: datetime
     pdf_en_path: str | None
     pdf_ka_path: str | None
+    revoked_at: datetime | None = None
     skills: list[AdminSkillEntry]
 
 
