@@ -4,6 +4,7 @@ import type { ReactNode } from 'react'
 import { preconnect } from 'react-dom'
 
 import { LocaleLang } from '@/components/locale-lang'
+import { SkipLink } from '@/components/skip-link'
 
 import { SITE_NAME, SITE_URL } from '@/lib/site'
 
@@ -72,6 +73,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     >
       <body className="flex min-h-full flex-col">
         <LocaleLang />
+        <SkipLink />
         {children}
       </body>
     </html>

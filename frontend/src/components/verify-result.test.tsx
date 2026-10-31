@@ -457,3 +457,29 @@ describe('translations', () => {
     expect(container.textContent).not.toMatch(/@|BTU-[A-Z0-9]{6,}/)
   })
 })
+
+describe('not found result', () => {
+  const NOT_FOUND = verifyResultSchema.parse({ outcome: 'not_found' })
+
+  it.each(['en', 'ka'] as const)(
+    'tells the visitor what to try next in %s',
+    (locale) => {
+      const { getByTestId, container } = render(
+        <VerifyResultCard locale={locale} result={NOT_FOUND} />,
+      )
+      expect(getByTestId('verify-result')).toHaveClass('outcome-not_found')
+      expect(getByTestId('not-found-notice')).toHaveTextContent(
+        messages[locale].notFoundNotice,
+      )
+      // Nothing about a holder is invented for a code that matches nobody.
+      expect(container.querySelector('.holder')).toBeNull()
+    },
+  )
+
+  it('does not show the notice for a valid result', () => {
+    const { queryByTestId } = render(
+      <VerifyResultCard locale="en" result={found('valid')} />,
+    )
+    expect(queryByTestId('not-found-notice')).toBeNull()
+  })
+})

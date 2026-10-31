@@ -12,7 +12,9 @@ export const metadata: Metadata = {
 // useSearchParams needs a Suspense boundary so the rest of the route can prerender.
 export default function VerifyPage() {
   return (
-    <Suspense fallback={<main className="desk inner-desk" aria-busy="true" />}>
+    <Suspense
+      fallback={<main id="main" className="desk inner-desk" aria-busy="true" />}
+    >
       <VerifyClient />
     </Suspense>
   )

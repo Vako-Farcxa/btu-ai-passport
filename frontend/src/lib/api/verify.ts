@@ -114,3 +114,12 @@ export function tamperedNotice(
   if (result.outcome !== 'tampered') return null
   return messages[locale].tamperedNotice
 }
+
+/** What to try when no passport matches the code, or null for every other outcome. */
+export function notFoundNotice(
+  result: VerifyResult,
+  locale: Locale,
+): string | null {
+  if (result.outcome !== 'not_found') return null
+  return messages[locale].notFoundNotice
+}

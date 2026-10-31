@@ -6,6 +6,7 @@ import {
   formatIssuedDate,
   labelsFor,
   newerVersionNotice,
+  notFoundNotice,
   pendingNotice,
   presentSkills,
   revokedNotice,
@@ -166,5 +167,16 @@ describe('revoked notice', () => {
       ].map((code) => labelsFor(code as 'valid', locale))
       expect(new Set(labels).size).toBe(6)
     }
+  })
+})
+
+describe('notFoundNotice', () => {
+  it('is only shown for a code that matched nothing', () => {
+    expect(
+      notFoundNotice(verifyResultSchema.parse({ outcome: 'not_found' }), 'en'),
+    ).toBe(messages.en.notFoundNotice)
+    expect(
+      notFoundNotice(verifyResultSchema.parse({ outcome: 'error' }), 'en'),
+    ).toBeNull()
   })
 })

@@ -62,7 +62,7 @@ export function LandingDesk({
   const ref = useRef<HTMLElement>(null)
   useCoverMotion(ref)
   return (
-    <main ref={ref} className="desk landing">
+    <main ref={ref} id="main" tabIndex={-1} className="desk landing">
       <header className="topbar">
         <BrandMark locale={locale} />
         <LocaleSwitcher locale={locale} onChange={onLocale} />
@@ -90,7 +90,7 @@ export function OpenBook({
   const copy = messages[locale]
   useOpenBookMotion(ref)
   return (
-    <main ref={ref} className="desk inner-desk">
+    <main ref={ref} id="main" tabIndex={-1} className="desk inner-desk">
       <header className="topbar">
         <BrandMark locale={locale} />
         <LocaleSwitcher locale={locale} onChange={onLocale} />
